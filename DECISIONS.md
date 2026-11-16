@@ -3,6 +3,87 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: track A messaging, channels, claims, images
+
+- **`ResolveChannel` returns the channel's binding patterns** (ids and
+  globs), not the ids they match now. The log tools and the hub match
+  patterns themselves, so a stream that appears during a `wait_for`
+  (a glob binding) is still seen. `Service.BoundStreams` gives the
+  matched ids; log attachments in channel form store those. CONTRACTS
+  1.9 comment updated; the comment in `internal/deps` (track 0) still
+  says "match now".
+- **`follows` has a `followed` column** (migration 0010). A row with
+  `followed = 0` is an explicit unfollow, so humans can follow every
+  channel by default without a row per channel, and pin/mute survive an
+  unfollow. Agents auto-follow (create, send, `channel=` read) only when
+  no row exists, so an explicit unfollow sticks.
+- **Three config sections** (`messaging:`, `images:`, `channels:`), as the
+  task asked. `channels:` is `messaging.Channels`, a struct around the
+  list with its own YAML (un)marshalling, because the loader only calls
+  `Validate` on structs; unknown keys inside it are still errors.
+- **One Register line, `api.RegisterMessages(mux, mcp, d, msg)`,** in
+  `internal/web/api` (allowed to import messaging). It adds the MCP tools
+  and resources, the janitor tasks and the routes, and returns the
+  service's `Start` (auto-archive every hour, resource notifications).
+  `messaging.New` runs before `mcpserver.New`, makes sure `general`
+  exists (source `config`, so it is never renamed or deleted) and
+  reapplies config channels; it writes no entry, as the writer is not
+  running yet. A config channel dropped from the file becomes a runtime
+  one.
+- **`internal/mcpserver` extensions,** none changing an existing tool:
+  a tool output implementing `ExtraContent` adds content after the text
+  (the images of `get_message`); the principal is also put in the
+  handler's context (`auth.WithPrincipal`); `ClaimSource` lets
+  `list_streams` show claim holders; `AddResource`, `AddResourceTemplate`,
+  `SetSubscriptions` and `ResourceUpdated` add resources. **SDK servers
+  are now per principal** (key: name + scopes) instead of per scope set:
+  `ResourceUpdated` on a shared server would tell every principal's
+  sessions that "the inbox" changed, which leaks when someone else gets a
+  direct message.
+- **Subscriptions** work on `cafard://inbox` and `cafard://stream/{id}`,
+  throttled to one notification per 2 s per URI and principal, with a
+  trailing one. Templates use `{+id}` so ids with `:` match.
+- **Renaming a channel moves its messages** to `chan:<new>` (an
+  `UPDATE entries` run through `writer.W.Exec`, like deletes), and moves
+  follows. Deleting runs through the writer too. Rename markers are
+  written like binding markers.
+- **Log attachments:** "expired" means every line of the reference is
+  gone (no entry of its streams left in its seq range up to its send-time
+  `last_ts`); partial loss is not flagged. A snapshot is read back by
+  parsing the `Format` text into entries, so collapsed repeats come back
+  as one line. If the blob size limit removed a snapshot, reads fall back
+  to the stream.
+- **Questions** carry `meta.choices` (an empty array for a free-text
+  `ask_human`); that key is what makes a message a question. A reply's
+  `choice` must be one of them; a choice-only reply gets the choice as its
+  text.
+- **`wait_message` acks what it returns** (`ack: false` to keep it), or
+  a second call would return the same message forever. It returns stored
+  unacked matches first, then waits.
+- **Claims:** default TTL 15 min, max 24 h; claiming again renews (and
+  writes a "renewed" marker). An admin may release someone else's claim.
+  Expiry is found by the janitor or lazily by the next claim/release on
+  that resource, whichever comes first; `DELETE ... RETURNING` makes sure
+  only one writes the "expired" marker.
+- **Blobs:** any unreferenced blob is kept for 1 hour (uploads in flight,
+  staged shares), then deleted; the size limit deletes the oldest
+  originals with their variants. Uploaded files are always sniffed and
+  must be png, jpeg, webp, gif or heic. `/blob` also sends
+  `Content-Security-Policy: default-src 'none'; sandbox`. Decoding runs
+  in a pool of `NumCPU/2` workers (1 to 4).
+- **Hooks for later tracks:** `Service.SetStagedLookup` (the share
+  target's `staged` ids, track D), `Service.OnAck` (SSE `seen`, track C),
+  `Service.Holds` (`serial_write`, track E2), `Service.EntryDTO`,
+  `ChannelChat`, `DirectChat`, `Timeline`/`TimelineDTO`, `SetPrefs`,
+  `AckUpTo` for the chat JSON API.
+- **`POST /api/messages`** is bearer-only for now; the handler reads its
+  principal from the context, answers JSON with `X-Cafard: 1` or
+  `Accept: application/json`, else 303 to the chat (or back with
+  `?error=<code>`). It also takes a urlencoded form. Files are streamed
+  part by part into the blob store, not buffered by `ParseMultipartForm`.
+- **New dependency:** `golang.org/x/image` v0.46.0 (scaling, webp), pure
+  Go, named in the task.
+
 ## 2026-11-16: track E1 serial ingest and push
 
 - **The `serial:` section is `serial.Config`, a struct holding `Ports

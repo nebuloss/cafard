@@ -79,7 +79,7 @@ type BlobStore interface {
 type Messaging interface {
 	Send(ctx context.Context, from auth.Principal, m dto.SendRequest) (dto.Entry, error)
 	Visible(ctx context.Context, p auth.Principal, e store.Entry) bool
-	// ResolveChannel returns the streams a channel's bindings match now.
+	// ResolveChannel returns the channel's binding patterns (ids and globs).
 	ResolveChannel(ctx context.Context, name string) (streams []string, err error)
 	// ChatOf is "chan:x", "dm:a~b" or "" for an entry.
 	ChatOf(e store.Entry) string

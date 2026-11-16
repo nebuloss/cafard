@@ -206,7 +206,11 @@ func (s *Server) listStreams(ctx context.Context, _ *Call, in listStreamsIn) (st
 		if st.LastActivity != nil {
 			last = st.LastActivity.UTC().Format("2006-01-02 15:04:05Z")
 		}
-		fmt.Fprintf(&b, "%s %s %.1f/min last=%s last_seq=%d dropped=%d\n", st.ID, st.Status, st.RatePerMin, last, st.LastSeq, st.Dropped)
+		claim := ""
+		if st.Claim != nil {
+			claim = fmt.Sprintf(" claimed_by=%s until %s", st.Claim.Principal, st.Claim.ExpiresAt.UTC().Format("15:04:05Z"))
+		}
+		fmt.Fprintf(&b, "%s %s %.1f/min last=%s last_seq=%d dropped=%d%s\n", st.ID, st.Status, st.RatePerMin, last, st.LastSeq, st.Dropped, claim)
 	}
 	return b.String(), out, nil
 }
@@ -247,7 +251,24 @@ func (s *Server) streams(ctx context.Context) ([]dto.Stream, error) {
 		}
 	}
 	slices.SortFunc(out, func(a, b dto.Stream) int { return strings.Compare(a.ID, b.ID) })
+	if cs, ok := s.deps.Messaging.(ClaimSource); ok {
+		claims, err := cs.ActiveClaims(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for i := range out {
+			if c, ok := claims[out[i].ID]; ok {
+				out[i].Claim = &c
+			}
+		}
+	}
 	return out, nil
+}
+
+// ClaimSource is implemented by deps.Messaging when it holds the claims,
+// so list_streams can show who holds each stream.
+type ClaimSource interface {
+	ActiveClaims(ctx context.Context) (map[string]dto.Claim, error)
 }
 
 func clampLimit(n, def, max int) int {

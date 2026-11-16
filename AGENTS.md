@@ -131,6 +131,22 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   struct with its own `UnmarshalYAML` (see `serial.Config`), or `Validate`
   is never called. `cafard push` takes the spool location from the
   injected `getenv`, so tests never touch the real `~/.cache`.
+- **Track A: build messaging before `mcpserver.New`.** `New` copies
+  `deps.Deps`, so `d.Messaging` and `d.Blobs` must be set first or the
+  log tools never see `channel=` (`cmd/cafard/serve.go`).
+- **Track A: the send rate limit (burst 10) runs on the injected clock.**
+  A test that sends more than 10 messages as one principal must advance
+  its fake clock (2 s per message) or it gets `rate_limited`.
+- **Track A: `textclean.Format` collapses identical lines,** so a test
+  that wants a big log snapshot must make its lines differ.
+- **Track A: an empty `hub.Filter.Streams` is every log stream; `*` is
+  not** (a glob stops at `/`). Message streams match only `chan:*` and
+  `dm:*` patterns.
+- **Track A: MCP resource templates use `{+id}`,** or a stream id with
+  `:` does not match the template.
+- **Track A: MCP SDK servers are per principal** (not per scope set), so
+  a resource notification such as "your inbox changed" reaches only that
+  principal's sessions.
 
 ## Rules that are easy to break
 

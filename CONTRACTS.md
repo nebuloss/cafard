@@ -274,7 +274,7 @@ type BlobStore interface {
 type Messaging interface {
 	Send(ctx context.Context, from auth.Principal, m dto.SendRequest) (dto.Entry, error)
 	Visible(ctx context.Context, p auth.Principal, e store.Entry) bool
-	ResolveChannel(ctx context.Context, name string) (streams []string, err error) // bound streams now
+	ResolveChannel(ctx context.Context, name string) (streams []string, err error) // binding patterns (ids, globs)
 	ChatOf(e store.Entry) string                                                   // "chan:x" | "dm:a~b" | ""
 }
 ```

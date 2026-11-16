@@ -69,6 +69,13 @@ func (c *Call) Progress(ctx context.Context, progress float64, message string) {
 // see as is.
 type Handler[In, Out any] func(ctx context.Context, c *Call, in In) (text string, out Out, err error)
 
+// ExtraContent is implemented by a tool output that carries content
+// besides its text, such as the images of get_message. The structured
+// content is still the output's JSON.
+type ExtraContent interface {
+	ExtraContent() []mcp.Content
+}
+
 type toolDef struct {
 	scope   auth.Scope
 	tool    *mcp.Tool
@@ -81,15 +88,17 @@ type Server struct {
 	deps deps.Deps
 	cfg  Config
 
-	mu      sync.Mutex
-	tools   []toolDef
-	servers map[string]*mcp.Server
-	sealed  bool
+	mu        sync.Mutex
+	tools     []toolDef
+	resources []resourceDef
+	subs      Subscriptions
+	servers   map[string]*principalServer
+	sealed    bool
 }
 
 // New builds the server with the log tools registered.
 func New(d deps.Deps, cfg Config) *Server {
-	s := &Server{deps: d, cfg: cfg, servers: map[string]*mcp.Server{}}
+	s := &Server{deps: d, cfg: cfg, servers: map[string]*principalServer{}}
 	registerLogTools(s)
 	return s
 }
@@ -124,6 +133,9 @@ func AddTool[In, Out any](s *Server, scope auth.Scope, t mcp.Tool, h Handler[In,
 				return toolError(dto.Errorf(dto.CodeBadRequest, "The arguments of %s are not valid: %v.", t.Name, err)), nil
 			}
 		}
+		// The principal rides in the context too, for code behind deps
+		// interfaces (channel= auto-follows the agent that reads it).
+		ctx = auth.WithPrincipal(ctx, p)
 		text, out, err := h(ctx, &Call{Principal: p, Req: req}, in)
 		if err != nil {
 			var apiErr *dto.APIError
@@ -136,7 +148,11 @@ func AddTool[In, Out any](s *Server, scope auth.Scope, t mcp.Tool, h Handler[In,
 			s.deps.Log.Error("tool failed", "tool", t.Name, "principal", p.Name, "err", err)
 			return toolError(dto.Errorf("internal", "%s failed inside cafard; the server log has the details.", t.Name)), nil
 		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}, StructuredContent: out}, nil
+		content := []mcp.Content{&mcp.TextContent{Text: text}}
+		if extra, ok := any(out).(ExtraContent); ok {
+			content = append(content, extra.ExtraContent()...)
+		}
+		return &mcp.CallToolResult{Content: content, StructuredContent: out}, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -186,24 +202,42 @@ func (s *Server) ToolNames(scopes auth.ScopeSet) []string {
 	return names
 }
 
-func (s *Server) serverFor(scopes auth.ScopeSet) *mcp.Server {
+// serverFor is the SDK server of one principal with its scopes. Servers
+// are per principal, not per scope set, so a resource notification (an
+// inbox changed) reaches only that principal's sessions.
+func (s *Server) serverFor(p auth.Principal) *mcp.Server {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sealed = true
-	key := scopes.String()
-	if srv, ok := s.servers[key]; ok {
-		return srv
+	key := p.Name + "\x00" + p.Scopes.String()
+	if ps, ok := s.servers[key]; ok {
+		return ps.srv
 	}
-	srv := mcp.NewServer(&mcp.Implementation{Name: "cafard", Version: s.deps.Version}, &mcp.ServerOptions{
+	opts := &mcp.ServerOptions{
 		Instructions: Instructions,
 		Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}},
-	})
+	}
+	if s.subs != nil {
+		opts.SubscribeHandler = func(ctx context.Context, req *mcp.SubscribeRequest) error {
+			return s.subs.Subscribe(ctx, p, req.Params.URI)
+		}
+		opts.UnsubscribeHandler = func(ctx context.Context, req *mcp.UnsubscribeRequest) error {
+			s.subs.Unsubscribe(p, req.Params.URI)
+			return nil
+		}
+	}
+	srv := mcp.NewServer(&mcp.Implementation{Name: "cafard", Version: s.deps.Version}, opts)
 	for _, t := range s.tools {
-		if scopes.Has(t.scope) {
+		if p.Scopes.Has(t.scope) {
 			srv.AddTool(t.tool, t.handler)
 		}
 	}
-	s.servers[key] = srv
+	for _, r := range s.resources {
+		if p.Scopes.Has(r.scope) {
+			r.add(srv)
+		}
+	}
+	s.servers[key] = &principalServer{principal: p.Name, srv: srv}
 	return srv
 }
 
@@ -219,7 +253,7 @@ func (s *Server) Handler() http.Handler {
 		if !ok {
 			return nil
 		}
-		return s.serverFor(p.Scopes)
+		return s.serverFor(p)
 	}, &mcp.StreamableHTTPOptions{
 		SessionTimeout: time.Hour,
 		Logger:         s.deps.Log.With("component", "mcp"),

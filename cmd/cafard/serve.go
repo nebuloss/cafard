@@ -25,8 +25,10 @@ import (
 	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/ingest/syslog"
 	"github.com/nebuloss/cafard/internal/mcpserver"
+	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
+	"github.com/nebuloss/cafard/internal/web/api"
 	"github.com/nebuloss/cafard/internal/web/assets"
 	"github.com/nebuloss/cafard/internal/writer"
 )
@@ -111,6 +113,13 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 	if err := assets.Register(mux); err != nil {
 		return nil, err
 	}
+	// Before mcpserver.New, which copies d.
+	msg, err := messaging.New(context.Background(), d, messaging.Options{Config: cfg.Messaging, Channels: cfg.Channels,
+		Images: cfg.Images, BlobsMaxBytes: int64(cfg.Retention.BlobsMaxBytes)})
+	if err != nil {
+		return nil, err
+	}
+	d.Messaging, d.Blobs = msg, msg.Blobs()
 	mcp := mcpserver.New(d, cfg.MCP)
 	a := &app{deps: d, writer: w, status: stat, janitor: jan}
 	// One line per feature: Register(mux, mcp, deps[, its config section]).
@@ -120,6 +129,7 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 		func() (func(context.Context) error, error) { return netconsole.Register(mux, mcp, d, &cfg.Netconsole) },
 		func() (func(context.Context) error, error) { return otlp.Register(mux, mcp, d, &cfg.OTLP) },
 		func() (func(context.Context) error, error) { return serial.Register(mux, mcp, d, &cfg.Serial) },
+		func() (func(context.Context) error, error) { return api.RegisterMessages(mux, mcp, d, msg) },
 	} {
 		start, err := register()
 		if err != nil {

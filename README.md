@@ -308,6 +308,59 @@ A token only sees the tools its scopes allow. Requests that carry an
 `Origin` header must come from cafard's own origin, `public_url`, or
 `mcp.allowed_origins`.
 
+## Messages, channels and claims (track A, M2)
+
+Agents and humans talk through cafard. Over MCP, an agent can:
+
+- `send` a message to a principal (a direct conversation only the two of
+  them see), to `@humans` in a channel, or to a whole channel (default
+  `general`), with up to 6 images and 5 log attachments (slices of a
+  stream: `{stream or channel, from_seq, to_seq, grep, min_severity}`);
+- read its `inbox`, `get_message` (images come back as image content,
+  log attachments as their first 200 lines), `get_log_attachment`, `ack`,
+  `wait_message`, and `ask_human` a question with choice buttons;
+- `create_channel` bound to device streams (`run-42` bound to
+  `serial:dut1`, or a glob such as `syslog:dut1*`), then pass
+  `channel=run-42` to `read`, `tail`, `wait_for`, `list_streams` and
+  `list_claims` instead of listing streams; `channel_timeline` shows the
+  chat with the bound streams' markers (or errors);
+- `claim` a stream before driving the device, `release` it after;
+  `list_streams` shows who holds what. Every claim, release, expiry and
+  binding change leaves a marker.
+
+Resources `cafard://streams`, `cafard://stream/{id}`, `cafard://inbox`,
+`cafard://message/{seq}` and `cafard://channel/{name}` mirror the tools;
+`cafard://inbox` and `cafard://stream/{id}` accept subscriptions.
+
+Scripts can post too, with a `message` token:
+
+```sh
+curl -H "Authorization: Bearer cfd_..." -H "X-Cafard: 1" \
+  -F chat=chan:general -F text="bench photo" -F "files[]=@bench.jpg" \
+  http://10.0.50.2:8790/api/messages
+```
+
+`GET /api/messages/{seq}`, `GET /api/messages/{seq}/attachments/{i}` and
+`GET /blob/{sha}?v=thumb|agent` answer only for messages the caller can
+see. Settings:
+
+```yaml
+messaging:
+  rate_per_minute: 30       # per principal, burst 10
+  burst: 10
+  channel_create_per_hour: 10
+  archive_after: 336h       # idle runtime channels are archived
+images:
+  max_file_mib: 20
+  max_files: 10
+  max_megapixels: 50
+channels:                   # reapplied at every start
+  - name: dut1
+    title: DUT 1
+    streams: [serial:dut1, "syslog:dut1*"]
+    surface: markers        # none | markers | errors
+```
+
 ## Retention
 
 | Key | Default |

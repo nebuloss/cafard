@@ -85,20 +85,22 @@ otlp:
   enabled: true
   max_body_mib: 8
 
-# --- messaging: available once messaging lands (track A) ---------------------
-# messaging:
-#   rate_per_minute: 30
-#   burst: 10
-#   channel_create_per_hour: 10
-#   archive_after: 336h             # runtime channels idle this long are archived
+# --- messaging --------------------------------------------------------------
+messaging:
+  rate_per_minute: 30             # per principal, token bucket
+  burst: 10
+  channel_create_per_hour: 10
+  archive_after: 336h             # runtime channels idle this long are archived
 
-# --- images: available once image uploads land (track A) ---------------------
-# images:
-#   max_file_mib: 20
-#   max_files: 10
-#   max_megapixels: 50
+# --- images -----------------------------------------------------------------
+images:
+  max_file_mib: 20
+  max_files: 10
+  max_megapixels: 50              # larger images are refused (decompression bombs)
 
-# --- channels: available once messaging lands (track A) ----------------------
+# --- channels ---------------------------------------------------------------
+# Config channels cannot be renamed or deleted; their title, topic, bindings
+# and surface can be edited until the next start.
 # Reapplied at every start.
 # channels:
 #   - name: general                 # may set title and topic only
