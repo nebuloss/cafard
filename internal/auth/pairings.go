@@ -92,8 +92,7 @@ func (p *Pairings) Create(ctx context.Context, principal, newName string, scopes
 	if err := ValidateName(name); err != nil {
 		return PairingRow{}, "", fmt.Errorf("%w: %v", ErrBadPairing, err)
 	}
-	var kind string
-	err := p.db.QueryRowContext(ctx, `SELECT kind FROM principals WHERE name = ?`, name).Scan(&kind)
+	kind, err := principalKind(ctx, p.db, name)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		if principal != "" {
@@ -216,8 +215,8 @@ func (p *Pairings) Redeem(ctx context.Context, code, userAgent string) (SessionR
 			return SessionRow{}, "", err
 		}
 	}
-	var kind string
-	if err := p.db.QueryRowContext(ctx, `SELECT kind FROM principals WHERE name = ?`, who).Scan(&kind); err != nil {
+	kind, err := principalKind(ctx, p.db, who)
+	if err != nil {
 		return SessionRow{}, "", err
 	}
 	if kind != KindHuman {
