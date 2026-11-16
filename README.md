@@ -92,6 +92,31 @@ A token only sees the tools its scopes allow. Requests that carry an
 `Origin` header must come from cafard's own origin, `public_url`, or
 `mcp.allowed_origins`.
 
+## Web UI (track C)
+
+Open `public_url` (or `http://<host>:8790`) in a browser:
+
+- **Sign in** at `/signin` by pasting the admin token printed on first
+  start, or any token of a person (`--kind human`). It opens a session in
+  that browser; the token is not stored there.
+- **Pair a phone** at `/pair` (admin): choose a person or type a new name,
+  and scan the QR code with the phone within 5 minutes. Each code works
+  once. The page also lists signed-in browsers, each with a revoke button.
+- **Sources** (`/streams`) shows every source with its status, kind and
+  transport, rate, last activity, last line and drops, and updates live.
+- **Live** (`/live`) shows the last 500 lines (or the range in
+  `?from_seq=&to_seq=`) with ANSI colours, filters in the URL (`streams`,
+  `sev`, `re`, `kinds`), and follows new lines; scroll up to pause, `f` to
+  toggle.
+- **Agents** (`/agents`, admin) lists principals and tokens, creates a
+  token (shown once, with ready-to-paste Claude Code, Codex, MCP JSON,
+  OpenTelemetry and `cafard push` snippets) and revokes them.
+- The theme (system, light, dark) and sign out are under "More".
+
+Pages work without JavaScript; live updates need it. Set `secure: true`
+behind HTTPS so the session cookie is HTTPS-only. Without the bundle
+(`npm run build` before `go build`), the pages still render.
+
 ## Retention
 
 | Key | Default |

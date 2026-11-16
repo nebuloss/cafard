@@ -81,7 +81,7 @@ func twinsOf(body string) map[string]string {
 	return out
 }
 
-var scriptTag = regexp.MustCompile(`<script type="module" src="/app/main.js"></script>\n?`)
+var scriptTag = regexp.MustCompile(`<script type="module" src="/app/main.js"></script>`)
 
 // TestEveryPageCarriesItsTwins is the template test of CONTRACTS.md 6.4.
 // It also writes the pages for the TypeScript renderer tests.
@@ -450,5 +450,32 @@ func TestTheExposureGuardCountsAdminSessions(t *testing.T) {
 	e.Session("admin", auth.ScopeRead, auth.ScopeAdmin)
 	if err := guard(); err != nil {
 		t.Errorf("an admin session does not count: %v", err)
+	}
+}
+
+// Every icon a template names is in the sprite, and the root files are served.
+func TestIconsAndRootFilesAreServed(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	sprite := e.Do("GET", "/icons.svg", nil, nil)
+	if sprite.Code != 200 || !strings.HasPrefix(sprite.Header().Get("Content-Type"), "image/svg+xml") {
+		t.Fatalf("/icons.svg: %d %s", sprite.Code, sprite.Header().Get("Content-Type"))
+	}
+	if rec := e.Do("GET", "/static/icons.svg", nil, nil); rec.Code != 200 {
+		t.Errorf("/static/icons.svg: %d", rec.Code)
+	}
+	if rec := e.Do("GET", "/manifest.webmanifest", nil, nil); rec.Code != 200 || rec.Header().Get("Content-Type") != "application/manifest+json" {
+		t.Errorf("manifest: %d %s", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	cookie := e.Admin()
+	used := map[string]bool{}
+	for _, path := range []string{"/streams", "/live", "/agents", "/pair", "/"} {
+		for _, m := range regexp.MustCompile(`icons\.svg#([a-z_]+)`).FindAllStringSubmatch(e.Do("GET", path, cookie, nil).Body.String(), -1) {
+			used[m[1]] = true
+		}
+	}
+	for id := range used {
+		if !strings.Contains(sprite.Body.String(), `<symbol id="`+id+`"`) {
+			t.Errorf("icon %q is not in the sprite", id)
+		}
 	}
 }

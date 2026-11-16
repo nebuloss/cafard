@@ -97,6 +97,26 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
 - **`scripts/check-sinks.sh` greps comments and strings too.** Do not name
   the forbidden sinks anywhere in `src/`, tests included.
 
+- **Templates cannot use functions.** `assets_test` parses every
+  template with an empty FuncMap, so a `{{myFunc}}` anywhere breaks it.
+  Build strings in Go (`internal/web/pages/views.go`) and pass fields or
+  methods. A page file's body is its content (`pages.New` defines
+  `content` per page); do not `{{define "content"}}` in a page.
+- **A new `<template>` twin is declared in Go** with `Site.AddTwin(id,
+  partial, zero value)` and listed by the page's `Render` call; the
+  template test (`internal/web/web_test.go`, `twinSlots` and
+  `pageTwins`) checks its slots. Add your pages and twins to those maps.
+- **Rendered pages are fixtures.** `go test ./internal/web -update`
+  rewrites `internal/web/testdata/pages/*.html`, which the TypeScript
+  renderer tests load; `go test ./internal/web/view -update` rewrites the
+  ANSI vectors both parsers are checked against. Commit both.
+- **TS tests load pages without HTML sinks**: `src/testing/pages.ts` parses
+  the file in a separate happy-dom page (`page.content = ...`) and imports
+  its nodes. Do not reach for the forbidden setters to build fixtures.
+- **Message visibility in SSE is checked twice**: by the hub's viewer
+  filter and by `Messaging.Visible` in the handler. Keep both; a test
+  runs the hub wide open to pin the second.
+
 ## Rules that are easy to break
 
 - **No `innerHTML` and its relatives in `src/`.** Log lines and messages come

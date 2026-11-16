@@ -138,5 +138,21 @@
         "text": "café → 🐞"
       }
     ]
+  },
+  {
+    "in": "\u001bétwo-char escape before a non-ASCII letter",
+    "out": [
+      {
+        "text": "two-char escape before a non-ASCII letter"
+      }
+    ]
+  },
+  {
+    "in": "\u001b(Bcharset \u001b=keypad",
+    "out": [
+      {
+        "text": "charset keypad"
+      }
+    ]
   }
 ]

@@ -176,8 +176,13 @@ func escape(text string, i int, cur *sgr) int {
 			}
 		}
 		return len(text)
+	case '(', ')', '*', '+':
+		// Character set designation: ESC ( B.
+		return min(i+3, len(text))
 	}
-	return i + 2
+	// A two-character sequence: skip the whole character after ESC.
+	_, size := utf8.DecodeRuneInString(text[i+1:])
+	return i + 1 + size
 }
 
 func parseParams(s string) []int {

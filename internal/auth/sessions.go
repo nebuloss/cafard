@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nebuloss/cafard/internal/clock"
@@ -38,16 +39,20 @@ type SessionRow struct {
 	ExpiresAt time.Time
 }
 
-// Sessions owns the sessions table. It keeps no state of its own, so any
-// number of values over the same database agree.
+// Sessions owns the sessions table. Its only memory is when each session
+// last bumped its principal's last_seen, so values over the same database
+// agree on everything that matters.
 type Sessions struct {
 	db    *sql.DB
 	clock clock.Clock
+
+	mu      sync.Mutex
+	touched map[int64]time.Time
 }
 
 // NewSessions wraps the database.
 func NewSessions(db *sql.DB, c clock.Clock) *Sessions {
-	return &Sessions{db: db, clock: c}
+	return &Sessions{db: db, clock: c, touched: map[int64]time.Time{}}
 }
 
 func newSessionSecret() (string, error) {
@@ -129,8 +134,17 @@ func (s *Sessions) Lookup(ctx context.Context, cookie string) (Principal, error)
 		// Best effort: a lost renewal is retried on the next request.
 		_, _ = s.db.ExecContext(ctx, `UPDATE sessions SET expires_at = ? WHERE id = ?`, now.Add(SessionTTL).UnixNano(), p.SessionID)
 	}
-	_, _ = s.db.ExecContext(ctx, `UPDATE principals SET last_seen = ? WHERE name = ? AND (last_seen IS NULL OR last_seen < ?)`,
-		now.UnixNano(), p.Name, now.Add(-touchEvery).UnixNano())
+	s.mu.Lock()
+	last, seen := s.touched[p.SessionID]
+	due := !seen || now.Sub(last) >= touchEvery
+	if due {
+		s.touched[p.SessionID] = now
+	}
+	s.mu.Unlock()
+	if due {
+		// A page load is not a write, except about once a minute.
+		_, _ = s.db.ExecContext(ctx, `UPDATE principals SET last_seen = ? WHERE name = ?`, now.UnixNano(), p.Name)
+	}
 	return p, nil
 }
 
@@ -186,6 +200,9 @@ func (s *Sessions) Revoke(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
+	s.mu.Lock()
+	delete(s.touched, id)
+	s.mu.Unlock()
 	if n, _ := res.RowsAffected(); n == 0 {
 		return fmt.Errorf("%w: session %d", ErrNotFound, id)
 	}

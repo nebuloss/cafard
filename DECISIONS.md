@@ -3,6 +3,76 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: track C web foundation
+
+- **Sessions and pairings** are migration `0020_c_sessions.sql`. Sessions
+  are hashed like tokens (`cfs_` prefix, so a pasted cookie is not taken
+  for a token), copy the scopes of the token or pairing that made them,
+  and last 30 days, renewed when used with less than 15 days left. The
+  cookie itself is HttpOnly, SameSite=Lax, `Secure` with `secure`, and
+  kept 400 days; the server decides when a session ends. `pairings` has
+  an `id` (for `/pair/{id}/qr.svg`) and a `created_by` beside the
+  columns of PLAN 4.
+- **The clear code of a pending pairing is kept in memory** for its 5
+  minutes, so `/pair` can draw the QR again on reload; only its hash is
+  stored. After a restart the page says so and the admin makes a new one.
+  Redemption is one `UPDATE ... RETURNING`, so two phones scanning the same
+  code cannot both win.
+- **Signing in needs a token of a human principal** (the admin token is
+  one); an agent or device token is refused with a sentence saying why.
+- **`web.Register` builds its own `auth.Sessions`** (it is stateless but
+  for a last-seen throttle), so the Register signature stays the
+  contract's. `serve.go` builds another for `TokenAuthenticator.Sessions`
+  and for the exposure guard counter (`Sessions.CountAdmin`, live admin
+  sessions only).
+- **`assets.Layout` gained the shell's fields** (theme, active nav item,
+  user, badges, rendered twins, notice, error, back, path), and
+  `assets.Register` serves `/manifest.webmanifest`, `/sw.js` and
+  `/icons.svg` from `static/` when the file exists (CONTRACTS 2.2). Both
+  are track 0's file; the shell is track C's, and needs them.
+- **No template functions.** `assets_test` parses every template with an
+  empty FuncMap, so templates only use fields and methods; wording and
+  formatting are built in Go (`pages/views.go`). Each page file's body is
+  its content: `pages.New` clones the set per page and defines `content`
+  as that file. Twins are declared with `Site.AddTwin(id, partial, zero)`;
+  track D declares its own the same way.
+- **ANSI colours are rendered on the server too** (`view.ANSI`), into
+  the same fixed classes as `render/AnsiParser.ts`, so no-JS and live
+  lines look alike. Both are checked against
+  `internal/web/testdata/ansi/vectors.json` (`go test ./internal/web/view
+  -update`). Stream tag tones are FNV-1a mod 8 on both sides.
+- **Log times are shown in UTC** with milliseconds, on the server and in
+  the bundle, as agents see them; the Sources page says so.
+- **Palette:** no Material tool runs offline, so `scripts/palette.py`
+  ports the needed part of material-color-utilities (CAM16, HCT by tone,
+  tonal spot, 2023 role tones). Its error role is M3's `#ba1a1a`. It also
+  picks the ANSI and stream tag colours by contrast and writes the ratios.
+- **Messaging extension points for track A** (optional interfaces, checked
+  with a type assertion on `deps.Messaging`): `view.Counter` fills the chat
+  badges of `counts`; `view.Presenter` turns a message into its full DTO
+  for a viewer. Without them SSE sends `sources_down` only, and a message
+  as one text segment with `chat = ChatOf(e)`. SSE checks
+  `Messaging.Visible` on every message itself, whatever the hub lets
+  through, and sends no message when `Messaging` is nil.
+- **SSE details:** `scope=home` carries every message visible to the
+  viewer until follows exist; `chat=` needs messaging (404 before);
+  `since_seq` wins over `Last-Event-ID`; a replay past 5000 entries, or a
+  lagged subscriber, gets `reset` and the stream ends. The bundle's
+  `LiveFeed` replaces EventSource's own retry with a backoff (1 s to 30 s)
+  and resumes with `since_seq`, since EventSource cannot set
+  `Last-Event-ID` on a new connection.
+- **New request DTOs without fixtures** (`dto.TokenCreate`,
+  `PairingCreate`, `MarkCreate`, `MarkCreated` in `internal/dto/web_c.go`):
+  the fixture test's stale-file check only knows `fixtures()`, so a
+  second fixture list in a new test file would be reported stale.
+  A one-line hook in `fixtures_test.go` would fix it; that file is track
+  0's. The pairing fixture's `url`/`qr_url` are examples; real values are
+  `<base>/p/<code>` and `/pair/<id>/qr.svg`.
+- **`POST /api/marks` answers 201** with `{seq}`.
+- **Pages carry a strict CSP** (`default-src 'self'`, no inline script or
+  style) and `Cache-Control: no-store`.
+- **New dependency:** `rsc.io/qr` v0.2.0, named in PLAN 2, pure Go.
+
 ## 2026-11-16: M1 store, ingest and core MCP
 
 - **`Deps` carries root settings (`deps.Server`), not `*config.Config`,

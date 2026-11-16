@@ -31,6 +31,8 @@ var ansiInputs = []string{
 	"unterminated \x1b[31",
 	"\x1b[0;35;100mmagenta on grey\x1b[49m",
 	"caf\u00e9 \u2192 \U0001F41E",
+	"\x1b\u00e9two-char escape before a non-ASCII letter",
+	"\x1b(Bcharset \x1b=keypad",
 }
 
 type vector struct {
