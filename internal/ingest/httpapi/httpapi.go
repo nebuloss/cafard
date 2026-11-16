@@ -19,10 +19,10 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/ingest/ingestutil"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
-	"github.com/nebuloss/cafard/internal/textclean"
 	"github.com/nebuloss/cafard/internal/writer"
 )
 
@@ -41,9 +41,9 @@ func Register(mux *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(contex
 
 type handler struct{ d deps.Deps }
 
-// StreamID turns a name into a stream id: "push:<name>" unless the name
+// streamID turns a name into a stream id: "push:<name>" unless the name
 // already has a kind prefix. Message streams are refused.
-func StreamID(name string) (string, error) {
+func streamID(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", errors.New("a stream name is required (?stream=<name>)")
@@ -71,7 +71,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	def := defaults{host: q.Get("host"), app: q.Get("app"), severity: store.DefaultSeverity}
 	if s := q.Get("stream"); s != "" {
-		id, err := StreamID(s)
+		id, err := streamID(s)
 		if err != nil {
 			dto.WriteError(w, dto.Errorf(dto.CodeBadRequest, "%v.", err))
 			return
@@ -169,27 +169,22 @@ func lineEntry(def defaults, text string, at time.Time) store.Entry {
 }
 
 func parseText(body io.Reader, def defaults, now time.Time) ([]store.Entry, error) {
-	var entries []store.Entry
-	sp := textclean.NewSplitter(time.Hour, textclean.MaxLineBytes, func(line string, _ time.Time) {
-		entries = append(entries, lineEntry(def, line, now))
-	})
-	buf := make([]byte, 64<<10)
-	total := 0
-	for {
-		n, err := body.Read(buf)
-		total += n
-		if total > MaxBody {
-			return nil, errTooLarge
-		}
-		sp.Write(buf[:n], now)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
+	b, err := io.ReadAll(io.LimitReader(body, MaxBody+1))
+	if err != nil {
+		return nil, err
 	}
-	sp.Close()
+	if len(b) > MaxBody {
+		return nil, errTooLarge
+	}
+	// An empty body is no lines, not one empty line.
+	if len(b) == 0 {
+		return nil, nil
+	}
+	lines := ingestutil.SplitLines(b)
+	entries := make([]store.Entry, len(lines))
+	for i, line := range lines {
+		entries[i] = lineEntry(def, line, now)
+	}
 	return entries, nil
 }
 
@@ -227,7 +222,7 @@ func parseNDJSON(body io.Reader, def defaults, now time.Time) ([]store.Entry, er
 		}
 		d := def
 		if l.Stream != "" {
-			id, err := StreamID(l.Stream)
+			id, err := streamID(l.Stream)
 			if err != nil {
 				return nil, dto.Errorf(dto.CodeBadRequest, "Line %d: %v.", n, err)
 			}
@@ -258,15 +253,8 @@ func parseNDJSON(body io.Reader, def defaults, now time.Time) ([]store.Entry, er
 			t = t.UTC()
 			src = &t
 		}
-		sp := textclean.NewSplitter(time.Hour, textclean.MaxLineBytes, func(line string, _ time.Time) {
+		for _, line := range ingestutil.SplitLines([]byte(*l.Text)) {
 			e := lineEntry(d, line, now)
-			e.SrcTS = src
-			entries = append(entries, e)
-		})
-		sp.Write([]byte(*l.Text), now)
-		sp.Close()
-		if *l.Text == "" {
-			e := lineEntry(d, "", now)
 			e.SrcTS = src
 			entries = append(entries, e)
 		}

@@ -140,8 +140,7 @@ the next push to the same server and stream.
 
 func cmdPush(ctx context.Context, e env, args []string) error {
 	set := flag.NewFlagSet("cafard push", flag.ContinueOnError)
-	server := set.String("server", e.getenv("CAFARD_SERVER"), "server URL")
-	token := set.String("token", "", "bearer token (default $CAFARD_TOKEN)")
+	rf := addRemoteFlags(set, e, "server URL")
 	stream := set.String("stream", "", "stream name")
 	echo := set.Bool("echo", false, "also print what is read")
 	device := set.String("serial", "", "serial port to read (COM5, /dev/ttyUSB0)")
@@ -153,9 +152,6 @@ func cmdPush(ctx context.Context, e env, args []string) error {
 	set.Usage = func() { fmt.Fprint(e.stderr, pushUsage) }
 	if help, err := parseFlags(set, e, args); help || err != nil {
 		return err
-	}
-	if *token == "" {
-		*token = e.getenv("CAFARD_TOKEN")
 	}
 	given := map[string]bool{}
 	set.Visit(func(f *flag.Flag) { given[f.Name] = true })
@@ -170,25 +166,15 @@ func cmdPush(ctx context.Context, e env, args []string) error {
 		return fmt.Errorf("--from-start goes with --follow")
 	}
 	log := newLogger(e, "info")
-	opts := push.Options{Server: *server, Token: *token, Stream: *stream, Log: log, Version: version}
+	opts := push.Options{Server: rf.server, Token: rf.bearer(), Stream: *stream, Log: log, Version: version}
 	if *echo {
 		opts.Echo = e.stdout
 	}
-	if _, err := push.New(opts); err != nil {
-		return err // the flags are wrong: say so before touching the spool
-	}
-	sp, err := openSpool(e, log, *spoolPath, *server, *stream)
+	p, closeSpool, err := newPusher(e, opts, *spoolPath)
 	if err != nil {
 		return err
 	}
-	if sp != nil {
-		defer sp.Close()
-		opts.Spool = sp
-	}
-	p, err := push.New(opts)
-	if err != nil {
-		return err
-	}
+	defer closeSpool()
 
 	var src io.Reader = e.stdin
 	switch {
@@ -217,6 +203,52 @@ func cmdPush(ctx context.Context, e env, args []string) error {
 		return nil
 	}
 	return err
+}
+
+// remoteFlags are --server and --token, shared by the commands that talk
+// to a server.
+type remoteFlags struct {
+	server, token string
+	getenv        func(string) string
+}
+
+func addRemoteFlags(set *flag.FlagSet, e env, serverUsage string) *remoteFlags {
+	rf := &remoteFlags{getenv: e.getenv}
+	set.StringVar(&rf.server, "server", e.getenv("CAFARD_SERVER"), serverUsage)
+	// Not a flag default, so -help never prints the token.
+	set.StringVar(&rf.token, "token", "", "bearer token (default $CAFARD_TOKEN)")
+	return rf
+}
+
+// bearer is --token, else CAFARD_TOKEN.
+func (rf *remoteFlags) bearer() string {
+	if rf.token != "" {
+		return rf.token
+	}
+	return rf.getenv("CAFARD_TOKEN")
+}
+
+// newPusher builds the pusher of cafard push and cafard term, with its
+// spool. The returned func closes the spool.
+func newPusher(e env, opts push.Options, spoolPath string) (*push.Pusher, func(), error) {
+	if _, err := push.New(opts); err != nil {
+		return nil, nil, err // the flags are wrong: say so before touching the spool
+	}
+	sp, err := openSpool(e, opts.Log, spoolPath, opts.Server, opts.Stream)
+	if err != nil {
+		return nil, nil, err
+	}
+	closeSpool := func() {}
+	if sp != nil {
+		opts.Spool = sp
+		closeSpool = func() { sp.Close() }
+	}
+	p, err := push.New(opts)
+	if err != nil {
+		closeSpool()
+		return nil, nil, err
+	}
+	return p, closeSpool, nil
 }
 
 // openSpool opens the spool of a push: path, "off" (nil), or "" for the

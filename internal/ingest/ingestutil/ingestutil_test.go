@@ -93,4 +93,14 @@ func TestSplitLines(t *testing.T) {
 	if strings.Join(got, "|") != "a|b|c|\uFFFD" {
 		t.Errorf("%q", got)
 	}
+	if got := SplitLines(nil); len(got) != 1 || got[0] != "" {
+		t.Errorf("empty input gave %q, want one empty line", got)
+	}
+}
+
+func TestAnyMap(t *testing.T) {
+	got := AnyMap(map[string]string{"a": "b"})
+	if len(got) != 1 || got["a"] != "b" {
+		t.Errorf("%v", got)
+	}
 }

@@ -103,9 +103,6 @@ func (m *Manager) Run(ctx context.Context) error {
 	return nil
 }
 
-// Ports lists the handles in config order.
-func (m *Manager) Ports() []*Handle { return append([]*Handle(nil), m.ports...) }
-
 // Lookup finds a port by stream id ("serial:dut1").
 func (m *Manager) Lookup(stream string) (*Handle, error) {
 	h, ok := m.byStream[stream]

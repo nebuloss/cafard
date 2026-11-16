@@ -79,7 +79,6 @@ type Spool struct {
 	size    int64
 	pos     int64
 	dropped int
-	now     func() time.Time
 }
 
 // OpenSpool opens the spool at path. Lines left by an earlier run are
@@ -89,7 +88,7 @@ func OpenSpool(path string, max int64) (*Spool, error) {
 	if max <= 0 {
 		max = DefaultSpoolMax
 	}
-	s := &Spool{path: path, max: max, now: time.Now}
+	s := &Spool{path: path, max: max}
 	f, err := os.OpenFile(path, os.O_RDWR, 0o600)
 	if errors.Is(err, fs.ErrNotExist) {
 		return s, nil
@@ -196,7 +195,7 @@ func (s *Spool) Append(lines []Line) (dropped int, err error) {
 			break
 		}
 		if s.dropped > 0 {
-			note := encodeLine(Line{Text: fmt.Sprintf("cafard push: the spool was full (%d MiB), %d lines were dropped here", s.max>>20, s.dropped), At: s.now()})
+			note := encodeLine(Line{Text: fmt.Sprintf("cafard push: the spool was full (%d MiB), %d lines were dropped here", s.max>>20, s.dropped), At: time.Now()})
 			if s.size+int64(buf.Len()+len(note)+len(rec)) > s.max {
 				n := len(lines) - i
 				s.dropped += n

@@ -72,7 +72,7 @@ func Open(ctx context.Context, p Port, ev Events) (io.ReadWriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewRFC2217(ctx, c, p, ev)
+	return newRFC2217(ctx, c, p, ev)
 }
 
 // LocalPort is an open local serial port.
@@ -82,6 +82,16 @@ type LocalPort struct {
 	name    string
 	mu      sync.Mutex
 	initial status.LineState
+}
+
+// OpenLocalRW is OpenLocal as an io.ReadWriteCloser, nil on error rather
+// than a typed nil, for callers that only read and write.
+func OpenLocalRW(p Port) (io.ReadWriteCloser, error) {
+	l, err := OpenLocal(p)
+	if err != nil {
+		return nil, err
+	}
+	return l, nil
 }
 
 // OpenLocal opens p.Device with p's line settings. DTR and RTS come up
@@ -155,15 +165,15 @@ func (t *tcpLink) Describe() string {
 	return "raw TCP " + t.addr + " (line settings fixed on the far end)"
 }
 
-// RFC2217Port is a port reached through an RFC 2217 server.
-type RFC2217Port struct {
+// rfc2217Port is a port reached through an RFC 2217 server.
+type rfc2217Port struct {
 	*rfc2217.Conn
 	port Port
 }
 
-// NewRFC2217 negotiates COM-PORT-OPTION on conn and sends p's line
+// newRFC2217 negotiates COM-PORT-OPTION on conn and sends p's line
 // settings. A peer that refuses is kept as plain Telnet.
-func NewRFC2217(ctx context.Context, conn io.ReadWriteCloser, p Port, ev Events) (*RFC2217Port, error) {
+func newRFC2217(ctx context.Context, conn io.ReadWriteCloser, p Port, ev Events) (*rfc2217Port, error) {
 	p.setDefaults()
 	var parity byte
 	switch p.Parity {
@@ -211,11 +221,11 @@ func NewRFC2217(ctx context.Context, conn io.ReadWriteCloser, p Port, ev Events)
 		c.Close()
 		return nil, err
 	}
-	return &RFC2217Port{Conn: c, port: p}, nil
+	return &rfc2217Port{Conn: c, port: p}, nil
 }
 
 // Describe says whether line settings come from cafard.
-func (r *RFC2217Port) Describe() string {
+func (r *rfc2217Port) Describe() string {
 	if ok, reason := r.ComPort(); !ok {
 		return fmt.Sprintf("plain Telnet %s: %s, so baud, framing, DTR, RTS and break stay as set on the far end", r.port.RFC2217, reason)
 	}
@@ -223,14 +233,14 @@ func (r *RFC2217Port) Describe() string {
 }
 
 // ControlUnavailable is why line control is refused, or "".
-func (r *RFC2217Port) ControlUnavailable() string {
+func (r *rfc2217Port) ControlUnavailable() string {
 	if ok, reason := r.ComPort(); !ok {
 		return reason + ", so it is plain Telnet without line control"
 	}
 	return ""
 }
 
-func (r *RFC2217Port) control(ctx context.Context, v byte, what string) error {
+func (r *rfc2217Port) control(ctx context.Context, v byte, what string) error {
 	got, err := r.SetControl(ctx, v)
 	if err != nil {
 		return err
@@ -241,21 +251,21 @@ func (r *RFC2217Port) control(ctx context.Context, v byte, what string) error {
 	return nil
 }
 
-func (r *RFC2217Port) SetDTR(ctx context.Context, on bool) error {
+func (r *rfc2217Port) SetDTR(ctx context.Context, on bool) error {
 	if on {
 		return r.control(ctx, rfc2217.ControlDTROn, "DTR on")
 	}
 	return r.control(ctx, rfc2217.ControlDTROff, "DTR off")
 }
 
-func (r *RFC2217Port) SetRTS(ctx context.Context, on bool) error {
+func (r *rfc2217Port) SetRTS(ctx context.Context, on bool) error {
 	if on {
 		return r.control(ctx, rfc2217.ControlRTSOn, "RTS on")
 	}
 	return r.control(ctx, rfc2217.ControlRTSOff, "RTS off")
 }
 
-func (r *RFC2217Port) Break(ctx context.Context, d time.Duration) error {
+func (r *rfc2217Port) Break(ctx context.Context, d time.Duration) error {
 	if err := r.control(ctx, rfc2217.ControlBreakOn, "break on"); err != nil {
 		return err
 	}
@@ -269,7 +279,7 @@ func (r *RFC2217Port) Break(ctx context.Context, d time.Duration) error {
 	return r.control(context.WithoutCancel(ctx), rfc2217.ControlBreakOff, "break off")
 }
 
-func (r *RFC2217Port) SetBaud(ctx context.Context, baud int) error {
+func (r *rfc2217Port) SetBaud(ctx context.Context, baud int) error {
 	got, err := r.Conn.SetBaud(ctx, baud)
 	if err != nil {
 		return err

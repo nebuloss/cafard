@@ -3,6 +3,7 @@
 package syslog
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -178,18 +179,9 @@ func MessageEntries(m Message, ip netip.Addr, at time.Time) []store.Entry {
 	meta.Add("source_ip", ingestutil.AddrName(ip))
 	meta.Add("proc_id", m.ProcID)
 	meta.Add("msg_id", m.MsgID)
-	if len(m.SD) > 0 {
-		sd := make(map[string]any, len(m.SD))
-		for id, params := range m.SD {
-			sd[id] = params
-		}
-		meta.Add("sd", sd)
-	}
+	meta.Add("sd", ingestutil.AnyMap(m.SD))
 	raw := meta.JSON()
 	lines := ingestutil.SplitLines(m.Text)
-	if len(lines) == 0 {
-		lines = []string{""}
-	}
 	out := make([]store.Entry, len(lines))
 	for i, line := range lines {
 		out[i] = store.Entry{
@@ -223,25 +215,12 @@ func (s *Server) serveUDP(ctx context.Context, pc net.PacketConn) {
 			continue
 		}
 		at := s.d.Clock.Now()
-		for _, e := range s.entries(trimTrailing(buf[:n]), ip, at) {
+		// Senders append newlines and NULs to datagrams.
+		for _, e := range s.entries(bytes.TrimRight(buf[:n], "\r\n\x00"), ip, at) {
 			s.udp.Declare(e.Stream)
-			if err := s.d.Writer.Submit(ctx, e, true); err != nil {
-				if errors.Is(err, writer.ErrFull) {
-					s.d.Status.Dropped(e.Stream, 1)
-				} else if !errors.Is(err, writer.ErrClosed) {
-					s.log.Debug("syslog entry refused", "stream", e.Stream, "err", err)
-				}
-			}
+			ingestutil.SubmitLossy(ctx, s.d, s.log, e)
 		}
 	}
-}
-
-// trimTrailing drops the newlines and NULs senders append to datagrams.
-func trimTrailing(b []byte) []byte {
-	for len(b) > 0 && (b[len(b)-1] == '\n' || b[len(b)-1] == '\r' || b[len(b)-1] == 0) {
-		b = b[:len(b)-1]
-	}
-	return b
 }
 
 func (s *Server) serveTCP(ctx context.Context, ln net.Listener) {

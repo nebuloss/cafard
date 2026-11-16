@@ -97,9 +97,6 @@ func mapRecords(d decoded, now time.Time) []record {
 					text = lr.GetEventName()
 				}
 				lines := ingestutil.SplitLines([]byte(text))
-				if len(lines) == 0 {
-					lines = []string{""}
-				}
 				src := srcTime(lr)
 				sev := Severity(lr.GetSeverityNumber(), lr.GetSeverityText())
 				rec := record{entries: make([]store.Entry, len(lines))}
