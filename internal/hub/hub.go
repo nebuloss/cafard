@@ -45,7 +45,7 @@ type Memory struct {
 }
 
 // New returns a hub. visible decides message visibility for filters with a
-// Viewer; nil hides every message from such filters until messaging lands.
+// Viewer; nil hides every message from such filters.
 func New(visible VisibleFunc) *Memory {
 	if visible == nil {
 		visible = func(auth.Principal, store.Entry) bool { return false }

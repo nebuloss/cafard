@@ -38,7 +38,7 @@ func (b BearerOnly) FromRequest(r *http.Request) (Principal, error) {
 	return p, nil
 }
 
-// SessionLookup resolves a session cookie value. Track C provides it.
+// SessionLookup resolves a session cookie value (Sessions.Lookup).
 type SessionLookup func(ctx context.Context, cookie string) (Principal, error)
 
 // SessionCookie is the name of the browser session cookie.
@@ -183,7 +183,7 @@ type AdminCounter func(ctx context.Context) (int, error)
 
 // ExposureGuard refuses to listen on a routable address when no admin
 // token or session exists: nobody could then revoke a leaked token or pair
-// a phone. Each counter adds its rows (tokens now, sessions from track C).
+// a phone. Each counter adds its rows (tokens, sessions).
 func ExposureGuard(ctx context.Context, address string, counters ...AdminCounter) error {
 	if !IsRoutable(address) {
 		return nil

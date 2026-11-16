@@ -95,9 +95,8 @@ func New(st *store.Store, pub Publisher, seen Seer, c clock.Clock, log *slog.Log
 		queue: make(chan request, opts.QueueSize), stopped: make(chan struct{})}
 }
 
-// Prepare fills defaults and checks an entry. It is exported so callers can
-// reject bad input before queueing it.
-func (w *W) Prepare(e *store.Entry) error {
+// prepare fills defaults and checks an entry before it is queued.
+func (w *W) prepare(e *store.Entry) error {
 	if err := store.ValidateStreamID(e.Stream); err != nil {
 		return err
 	}
@@ -175,7 +174,7 @@ func (w *W) wait(ctx context.Context, reply chan result) (int64, error) {
 }
 
 func (w *W) Submit(ctx context.Context, e store.Entry, lossy bool) error {
-	if err := w.Prepare(&e); err != nil {
+	if err := w.prepare(&e); err != nil {
 		return err
 	}
 	return w.send(ctx, request{entries: []store.Entry{e}}, lossy)
@@ -191,7 +190,7 @@ func (w *W) CommitBatch(ctx context.Context, es []store.Entry) (int64, error) {
 	}
 	prepared := make([]store.Entry, len(es))
 	for i, e := range es {
-		if err := w.Prepare(&e); err != nil {
+		if err := w.prepare(&e); err != nil {
 			return 0, err
 		}
 		prepared[i] = e
