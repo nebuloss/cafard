@@ -22,6 +22,7 @@ import (
 	"github.com/nebuloss/cafard/internal/ingest/httpapi"
 	"github.com/nebuloss/cafard/internal/ingest/netconsole"
 	"github.com/nebuloss/cafard/internal/ingest/otlp"
+	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/ingest/syslog"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/status"
@@ -118,6 +119,7 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 		func() (func(context.Context) error, error) { return syslog.Register(mux, mcp, d, &cfg.Syslog) },
 		func() (func(context.Context) error, error) { return netconsole.Register(mux, mcp, d, &cfg.Netconsole) },
 		func() (func(context.Context) error, error) { return otlp.Register(mux, mcp, d, &cfg.OTLP) },
+		func() (func(context.Context) error, error) { return serial.Register(mux, mcp, d, &cfg.Serial) },
 	} {
 		start, err := register()
 		if err != nil {

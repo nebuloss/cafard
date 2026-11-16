@@ -16,6 +16,7 @@ import (
 
 	"github.com/nebuloss/cafard/internal/ingest/netconsole"
 	"github.com/nebuloss/cafard/internal/ingest/otlp"
+	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/ingest/syslog"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/store"
@@ -46,6 +47,7 @@ type Config struct {
 	Syslog     syslog.Config     `yaml:"syslog"`
 	Netconsole netconsole.Config `yaml:"netconsole"`
 	OTLP       otlp.Config       `yaml:"otlp"`
+	Serial     serial.Config     `yaml:"serial"`
 }
 
 // Validator is implemented by feature sub-structs that check themselves.

@@ -33,6 +33,11 @@ type Options struct {
 	BatchMax   int           // default 1000 lines
 	Client     *http.Client
 	Log        *slog.Logger
+	// Spool, when set, holds lines while the server is unreachable, and
+	// what an earlier run left there is sent first.
+	Spool *Spool
+	// RetryMin and RetryMax bound the backoff; default 1 s and 30 s.
+	RetryMin, RetryMax time.Duration
 	// Version goes into the User-Agent.
 	Version string
 }
@@ -71,6 +76,12 @@ func New(opts Options) (*Pusher, error) {
 	}
 	if opts.BatchMax <= 0 {
 		opts.BatchMax = 1000
+	}
+	if opts.RetryMin <= 0 {
+		opts.RetryMin = time.Second
+	}
+	if opts.RetryMax < opts.RetryMin {
+		opts.RetryMax = max(30*time.Second, opts.RetryMin)
 	}
 	if opts.Client == nil {
 		opts.Client = &http.Client{Timeout: 60 * time.Second}
@@ -165,7 +176,157 @@ type wireLine struct {
 }
 
 // send batches lines from p.lines and posts them until the channel closes.
+// With a spool, a batch the server cannot take goes to the spool, and so
+// does everything after it until the spool is replayed, so order holds.
 func (p *Pusher) send(ctx context.Context) error {
+	if p.opts.Spool == nil {
+		return p.sendDirect(ctx)
+	}
+	sp := p.opts.Spool
+	var (
+		batch []Line
+		retry <-chan time.Time
+		down  bool
+		delay = p.opts.RetryMin
+	)
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	if !sp.Empty() {
+		p.opts.Log.Info("replaying lines left in the spool", "path", sp.Path(), "bytes", sp.Pending())
+		retry = time.After(0)
+	}
+	failed := func(wait time.Duration, err error) {
+		if !down {
+			p.opts.Log.Warn("server unreachable, spooling lines", "path", sp.Path(), "err", err)
+		}
+		down = true
+		if wait <= 0 {
+			wait = jitter(delay)
+			delay = min(delay*2, p.opts.RetryMax)
+		}
+		retry = time.After(wait)
+	}
+	spool := func(lines []Line) error {
+		dropped, err := sp.Append(lines)
+		if dropped > 0 {
+			p.opts.Log.Warn("spool full, lines dropped", "path", sp.Path(), "dropped", dropped)
+		}
+		if err != nil {
+			return fmt.Errorf("spool %s: %w", sp.Path(), err)
+		}
+		if retry == nil {
+			retry = time.After(0)
+		}
+		return nil
+	}
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		lines := batch
+		batch = nil
+		if !down && sp.Empty() {
+			wait, err := p.postOnce(ctx, lines)
+			if err == nil {
+				p.sent += len(lines)
+				return nil
+			}
+			var perm *permanentError
+			if errors.As(err, &perm) || ctx.Err() != nil {
+				_ = spool(lines)
+				return err
+			}
+			failed(wait, err)
+		}
+		return spool(lines)
+	}
+	replay := func() error {
+		retry = nil
+		lines, next, err := sp.Peek(p.opts.BatchMax)
+		if err != nil {
+			return fmt.Errorf("spool %s: %w", sp.Path(), err)
+		}
+		if len(lines) > 0 {
+			wait, err := p.postOnce(ctx, lines)
+			if err != nil {
+				var perm *permanentError
+				if errors.As(err, &perm) || ctx.Err() != nil {
+					return err
+				}
+				failed(wait, err)
+				return nil
+			}
+			p.sent += len(lines)
+		}
+		if down {
+			p.opts.Log.Info("server reachable again, replaying the spool", "bytes", sp.Pending())
+		}
+		down, delay = false, p.opts.RetryMin
+		if err := sp.Advance(next); err != nil {
+			return fmt.Errorf("spool %s: %w", sp.Path(), err)
+		}
+		if !sp.Empty() {
+			retry = time.After(0)
+		}
+		return nil
+	}
+	stopped := func() error {
+		_ = spool(batch)
+		if sp.Empty() {
+			return ctx.Err()
+		}
+		p.opts.Log.Warn("lines wait in the spool for the next push", "path", sp.Path(), "bytes", sp.Pending())
+		return fmt.Errorf("%w; %d bytes wait in %s for the next push", ctx.Err(), sp.Pending(), sp.Path())
+	}
+	for {
+		select {
+		case l, ok := <-p.lines:
+			if !ok {
+				if err := flush(); err != nil {
+					return err
+				}
+				// Input ended: deliver what the spool holds before leaving.
+				for !sp.Empty() {
+					if retry == nil {
+						retry = time.After(0)
+					}
+					select {
+					case <-retry:
+						if err := replay(); err != nil {
+							return err
+						}
+					case <-ctx.Done():
+						return stopped()
+					}
+				}
+				return nil
+			}
+			if len(batch) == 0 {
+				timer.Reset(p.opts.BatchEvery)
+			}
+			batch = append(batch, l)
+			if len(batch) >= p.opts.BatchMax {
+				timer.Stop()
+				if err := flush(); err != nil {
+					return err
+				}
+			}
+		case <-timer.C:
+			if err := flush(); err != nil {
+				return err
+			}
+		case <-retry:
+			if err := replay(); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return stopped()
+		}
+	}
+}
+
+// sendDirect is send without a spool: a batch is retried until delivered.
+func (p *Pusher) sendDirect(ctx context.Context) error {
 	var batch []Line
 	timer := time.NewTimer(time.Hour)
 	timer.Stop()
@@ -209,28 +370,48 @@ func (p *Pusher) send(ctx context.Context) error {
 	}
 }
 
+func jitter(d time.Duration) time.Duration {
+	return d/2 + time.Duration(rand.Int64N(int64(d/2)+1))
+}
+
 // permanentError is a refusal that retrying cannot fix.
 type permanentError struct{ msg string }
 
 func (e *permanentError) Error() string { return e.msg }
 
-// post sends one batch, retrying with backoff from 1 s to 30 s while the
-// server is unreachable or busy.
-func (p *Pusher) post(ctx context.Context, batch []Line) error {
+func encodeBatch(batch []Line) ([]byte, error) {
 	var body bytes.Buffer
 	zw := gzip.NewWriter(&body)
-	enc := json.NewEncoder(zw)
 	for _, l := range batch {
-		if err := enc.Encode(wireLine{Text: l.Text, TS: l.At.UTC().Format(time.RFC3339Nano)}); err != nil {
-			return err
+		if _, err := zw.Write(encodeLine(l)); err != nil {
+			return nil, err
 		}
 	}
 	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return body.Bytes(), nil
+}
+
+// postOnce sends one batch once. wait is the server's Retry-After.
+func (p *Pusher) postOnce(ctx context.Context, batch []Line) (wait time.Duration, err error) {
+	body, err := encodeBatch(batch)
+	if err != nil {
+		return 0, &permanentError{err.Error()}
+	}
+	return p.try(ctx, body)
+}
+
+// post sends one batch, retrying with backoff from 1 s to 30 s while the
+// server is unreachable or busy.
+func (p *Pusher) post(ctx context.Context, batch []Line) error {
+	body, err := encodeBatch(batch)
+	if err != nil {
 		return err
 	}
-	delay := time.Second
+	delay := p.opts.RetryMin
 	for attempt := 1; ; attempt++ {
-		wait, err := p.try(ctx, body.Bytes())
+		wait, err := p.try(ctx, body)
 		if err == nil {
 			if attempt > 1 {
 				p.opts.Log.Info("server reachable again", "lines", len(batch))
@@ -242,8 +423,8 @@ func (p *Pusher) post(ctx context.Context, batch []Line) error {
 			return err
 		}
 		if wait <= 0 {
-			wait = delay/2 + time.Duration(rand.Int64N(int64(delay/2)+1))
-			delay = min(delay*2, 30*time.Second)
+			wait = jitter(delay)
+			delay = min(delay*2, p.opts.RetryMax)
 		}
 		p.opts.Log.Warn("push failed, retrying", "attempt", attempt, "in", wait.Round(time.Millisecond), "err", err)
 		select {

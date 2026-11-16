@@ -110,7 +110,6 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
 - **Stream names from the network are untrusted.** Pass hostnames and
   service names through `ingestutil.StreamName`, or the writer refuses
   the entry (glob characters, spaces, 200 bytes).
-
 - **`deploy/cafard.yaml.example` is tested** (`cmd/cafard/deploy_example_test.go`):
   it must load, equal the defaults, and mention every key `cafard config`
   prints. When your feature adds a config section, replace its commented
@@ -122,6 +121,16 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
 - **The systemd unit allows only ttyUSB, ttyACM and ttyS devices** and only
   `/var/lib/cafard` for writes. A feature that opens another device class
   or writes elsewhere must change `deploy/cafard.service`.
+- **Serial (track E1):** `net.Pipe` is synchronous, so a fake Telnet peer
+  must answer from another goroutine, never from inside its read loop, or
+  both ends block. Telnet BINARY can be switched on in the middle of a
+  read, so the RFC 2217 parser rereads the mode after every option command.
+  A value-receiver method such as `serial.Port.Stream()` copies the whole
+  struct, which races with a field another goroutine writes under a lock;
+  `Handle` keeps immutable copies instead. A config list section must be a
+  struct with its own `UnmarshalYAML` (see `serial.Config`), or `Validate`
+  is never called. `cafard push` takes the spool location from the
+  injected `getenv`, so tests never touch the real `~/.cache`.
 
 ## Rules that are easy to break
 

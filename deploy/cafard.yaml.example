@@ -108,7 +108,9 @@ otlp:
 #     streams: [serial:dut1, netconsole:dut1, "syslog:dut1*"]
 #     surface: markers
 
-# --- serial: available once serial ingest lands (track E) --------------------
+# --- serial -----------------------------------------------------------------
+# One entry per port: device (local), rfc2217 (host:port, line settings set
+# from here) or tcp (raw, settings fixed on the far end). See README.md.
 # The cafard user is in the dialout group, and the systemd unit allows
 # /dev/ttyUSB*, /dev/ttyACM* and /dev/ttyS*. In an LXC container the host must
 # pass the device through first (see deploy/README.md).
