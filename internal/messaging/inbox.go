@@ -134,6 +134,7 @@ func (s *Service) Ack(ctx context.Context, p auth.Principal, seqs []int64) (int,
 			for _, f := range listeners {
 				f(seq, p.Name)
 			}
+			s.emit(ChatEvent{Kind: EventSeen, Stream: e.Stream, Seq: seq, By: p.Name})
 		}
 	}
 	return n, nil

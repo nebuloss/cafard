@@ -1,0 +1,3 @@
+{{- /* A line or marker of a bound stream between messages (tpl-event-row):
+     one line, not a bubble. "open" leads to the logs. Data: EventRowView. */ -}}
+<div class="event-row" data-seq="{{.Seq}}" data-severity="{{.Severity}}" data-kind="{{.Kind}}"><time class="event-time" data-slot="time" datetime="{{.ISO}}">{{.Time}}</time><span class="event-stream" data-slot="stream">{{.Stream}}</span><span class="event-text" data-slot="text">{{.Text}}</span><a class="event-open" data-slot="open"{{if .Open}} href="{{.Open}}"{{end}}>logs</a></div>

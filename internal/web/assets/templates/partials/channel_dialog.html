@@ -1,0 +1,41 @@
+{{/* Channel settings (ChannelDialog): title, topic, bindings with a glob
+     preview, surface, mute, follow, pin, archive, rename and delete. It
+     needs the bundle, which sends it through the JSON API. Data: DialogView. */}}
+<dialog class="modal channel-dialog" data-component="ChannelDialog" data-channel="{{.Name}}" aria-labelledby="channel-dialog-title">
+  <form class="panel stack" method="dialog">
+    <h2 id="channel-dialog-title">#{{.Name}} settings</h2>
+    <div class="banner error" data-slot="error" role="alert" hidden></div>
+    <label class="ofield"><span>Title</span><input name="title" value="{{.Title}}" maxlength="200"></label>
+    <label class="ofield"><span>Topic</span><textarea name="topic" rows="2" maxlength="1000">{{.Topic}}</textarea></label>
+    <fieldset class="bindings">
+      <legend class="label">Bound streams</legend>
+      <ul class="pattern-list" data-slot="patterns">
+        {{range .Patterns}}<li data-pattern="{{.}}"><span class="mono">{{.}}</span><button class="btn text danger-text" type="button" data-action="unbind" data-pattern="{{.}}">Remove</button></li>{{end}}
+      </ul>
+      <label class="ofield"><span>Add a stream or a glob</span><input name="pattern" placeholder="serial:dut1, syslog:dut1*" autocomplete="off" spellcheck="false"></label>
+      <ul class="pattern-preview mono body-small" data-slot="preview" aria-live="polite"></ul>
+      <button class="btn tonal" type="button" data-action="bind">Bind</button>
+    </fieldset>
+    <label class="ofield"><span>Show in the chat</span><select name="surface">{{range .Surfaces}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+    <fieldset class="chips">
+      <legend class="visually-hidden">For me</legend>
+      <label class="chip filter"><input type="checkbox" name="followed"{{if .Followed}} checked{{end}}>Follow</label>
+      <label class="chip filter"><input type="checkbox" name="pinned"{{if .Pinned}} checked{{end}}>Pin</label>
+      <label class="chip filter"><input type="checkbox" name="muted"{{if .Muted}} checked{{end}}>Mute (no unread count)</label>
+    </fieldset>
+    {{if .CanManage}}
+    <fieldset class="stack manage">
+      <legend class="label">Manage</legend>
+      <label class="ofield"><span>Rename to</span><input name="rename" placeholder="{{.Name}}" pattern="[a-z0-9\-]{1,40}" autocomplete="off" spellcheck="false"></label>
+      <label class="chip filter"><input type="checkbox" name="archived"{{if .Archived}} checked{{end}}>Archived</label>
+      <button class="btn text danger-text" type="button" data-action="delete">Delete #{{.Name}} and its messages</button>
+    </fieldset>
+    {{else if .Config}}
+    <p class="help">#{{.Name}} comes from the configuration file, so it cannot be renamed, archived or deleted here.</p>
+    {{end}}
+    <div class="dialog-actions">
+      <button class="btn text" type="button" data-action="close">Cancel</button>
+      <button class="btn filled" type="button" data-action="save">Save</button>
+    </div>
+  </form>
+</dialog>

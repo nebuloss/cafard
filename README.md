@@ -431,6 +431,55 @@ Pages work without JavaScript; live updates need it. Set `secure: true`
 behind HTTPS so the session cookie is HTTPS-only. Without the bundle
 (`npm run build` before `go build`), the pages still render.
 
+## Chats (track D, M3)
+
+Home (`/`) is the chat list, with **Needs you** on top: questions agents
+asked you (`ask_human`, or addressed to you by name), each answerable
+right there with one button per choice or a free reply, then direct
+conversations with unread messages. Below come the channels (pinned
+first, then by last activity), the direct conversations, and **Show all**
+(channels you unfollowed) and **Archived**. On a wide screen the overview
+beside the list shows what needs you and the latest activity.
+
+- **A chat** is `/c/<channel>` or `/dm/<principal>`: the latest 50
+  messages, with **Older** for the ones before, filter chips (All,
+  Questions, Events, Mine, With images), markers of the bound streams as
+  one-line event rows (and error lines with the `errors` surface), and the
+  composer at the bottom: text, **photos** or the **camera**, paste and
+  drag and drop on a desktop, replies, and Ctrl+Enter to send. Photos are
+  resized to 2560 px JPEG in the browser (tick "Keep original" to send
+  them as they are), uploaded with progress, and queued in the browser
+  while offline, then sent when the network is back.
+- **Logs of a bound channel**: the "Logs" toggle (`?view=logs`) shows its
+  streams merged and live; on a screen 1200 px wide or more they sit in
+  a pane beside the chat, whose width you can drag. Tap a line for copy,
+  context, a marker, "attach this line", "attach from here on" or "select
+  a range"; shift-click selects a range on a desktop. **Attach** puts the
+  range in the composer as a chip, with the severity and regexp filters
+  you were looking at, so the agent reads exactly those lines. The `+`
+  menu of the composer attaches the last 200 lines of a bound stream, or
+  the stream from now on.
+- **Channel settings** (the gear): title, topic, bound streams (globs are
+  previewed as you type), what the chat shows from them, follow, pin,
+  mute, and for the creator or an admin rename, archive and delete.
+- **Quick drop**: the camera button on home opens a sheet with a chat
+  picker (it remembers the last chat), the camera and the photo picker:
+  a photo of a screen is two taps away. Without JavaScript it is the
+  `/drop` page.
+- **Share from Android**: install cafard as an app (the browser's "Install
+  app" or "Add to home screen", over HTTPS), then "Share -> cafard" from
+  any app opens the quick drop with the shared photos. iOS has no share
+  target; post to `/api/messages` from a Shortcut instead (multipart
+  `chat=chan:general`, `text`, `files[]`, with your token as a bearer).
+- Unread counts, question badges, the document title (`(2) cafard`) and
+  the app icon badge update live; a message counts as read once it has
+  been on screen for a second. **Keys** on a desktop: `/` focus, `g c`,
+  `g l`, `g s` to go to Chats, Live and Sources, `?` for the list, Esc.
+
+Without JavaScript the chats still work: answering, sending text and
+photos, older pages, filters and the logs view are links and plain
+forms, and a page you open counts as read.
+
 ## Retention
 
 | Key | Default |

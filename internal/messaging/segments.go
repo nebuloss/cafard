@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/textclean"
 )
 
 var linkRE = regexp.MustCompile(`https?://[^\s<>"'` + "`" + `]+`)
@@ -13,6 +14,7 @@ var linkRE = regexp.MustCompile(`https?://[^\s<>"'` + "`" + `]+`)
 // Segments parses a message's text into the pieces the web UI renders:
 // ``` fenced code blocks, `inline code`, http(s) links and plain text.
 func Segments(text string) []dto.Segment {
+	text = cleanLines(text)
 	var out []dto.Segment
 	for text != "" {
 		i := strings.Index(text, "```")
@@ -41,6 +43,17 @@ func Segments(text string) []dto.Segment {
 		text = text[i+3+end+3:]
 	}
 	return merge(out)
+}
+
+// cleanLines drops escape sequences and control characters line by line,
+// so a message cannot retitle a terminal or hide text, and keeps its line
+// breaks.
+func cleanLines(text string) string {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = textclean.StripANSI(l)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func inline(text string) []dto.Segment {

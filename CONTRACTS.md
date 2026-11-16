@@ -320,6 +320,7 @@ lands.
 | POST | `/theme` | session | - | SO | form `theme=system\|light\|dark`, cookie, 303 back |
 | POST | `/pair` | session | admin | SO | form `principal` or `new_name`; 303 to `/pair` |
 | POST | `/share` | session | message | SO | Web Share Target, multipart `text, title, url, files[]`; see 2.4 |
+| GET | `/seen` | session | message | same-origin `Sec-Fetch-Site` only | `?seqs=1,2`: the no-JS read beacon in `<noscript>` (a 1x1 GIF); acks those messages |
 | POST | `/tokens` | session | admin | SO | no-JS token creation; renders `/agents` showing the token once |
 | POST | `/tokens/{id}/revoke` | session | admin | SO | 303 to `/agents` |
 | POST | `/sessions/{id}/revoke` | session | admin, or own session | SO | 303 back |
@@ -545,6 +546,8 @@ Multipart form fields:
 | `logs` | JSON array of `{stream \| channel, from_seq, to_seq?, grep?, min_severity?, title?}`, at most 5 |
 | `files[]` | images, 10 files of 20 MiB at most |
 | `staged` | a share id from `/share`; its files are attached |
+| `back` | a same-origin path to return to with `?error=` (only its `share` parameter is kept), for forms not on the chat page (`/drop`, home) |
+| `next` | a same-origin path to go to once sent, instead of the chat (home's question cards) |
 
 - With `X-Cafard: 1` or `Accept: application/json`, the response is 201
   with the `Entry`, or an error DTO.
@@ -647,18 +650,18 @@ Each partial below is rendered twice:
 | `tpl-chat-row` | `partials/chat_row.html` | `name`, `preview`, `time`, `unread`, `questions`, `dots` | `href`, `data-chat`, `data-pinned`, `data-muted`, `data-archived` | home, chat |
 | `tpl-stream-dot` | `partials/stream_dot.html` | none | `data-status`, `title` | home, chat, streams |
 | `tpl-message` | `partials/message.html` | `sender`, `sender-kind`, `time`, `body`, `reply-quote`, `attachments`, `seen-by`, `menu` | `data-seq`, `data-mine`, `data-sender-kind`, `id` (`m<seq>`) | chat, home (overview) |
-| `tpl-question` | `partials/question.html` | `sender`, `time`, `body`, `choices`, `reply-form`, `answer` | `data-seq`, `data-open` | chat, home |
-| `tpl-choice` | inside `question.html` | `label` | `data-choice`, `disabled` | chat, home |
+| `tpl-question` | `partials/question.html` | `sender`, `time`, `body`, `choices`, `reply-form`, `answer` | `data-seq`, `data-open`, `id` (`m<seq>`); the hidden inputs (`data-field`) get their `value` | chat, home |
+| `tpl-choice` | inside `question.html` (`partials/choice`) | `label` | `data-choice`, `disabled`, `value` (the submit button's choice) | chat, home |
 | `tpl-event-row` | `partials/event_row.html` | `stream`, `time`, `text`, `open` | `data-seq`, `data-severity`, `data-kind`, `href` on `open` | chat, home |
-| `tpl-line` | `partials/line.html` | `time`, `stream`, `sev`, `text` | `data-seq`, `data-sev`, `data-tone` (0-7), `data-selected` | chat, live |
+| `tpl-line` | `partials/line.html` | `time`, `stream`, `sev`, `text` | `data-seq`, `data-sev`, `data-tone` (0-7), `data-selected` | chat, live, home (log attachment previews) |
 | `tpl-marker` | `partials/marker.html` | `time`, `text` | `data-seq` | chat, live |
-| `tpl-image` | `partials/image.html` | `img`, `more` | `src` (only `/blob/...`), `alt`, `width`, `height`, `data-sha` | chat, home, drop |
+| `tpl-image` | `partials/image.html` | `img`, `more` | `src` (only `/blob/...`), `alt`, `width`, `height`, `data-sha`, `href` on the root (only `/blob/...`) | chat, home, drop |
 | `tpl-log-attachment` | `partials/log_attachment.html` | `streams`, `title`, `lines`, `span`, `preview`, `open`, `state` | `href` on `open` (only `/live?...` or `#`), `data-snapshot`, `data-expired`, `data-open-ended` | chat, home |
 | `tpl-attachment-chip` | `partials/attachment_chip.html` | `label`, `remove` | `data-kind`, `data-index` | chat, home, drop, live |
 | `tpl-upload-status` | `partials/upload_status.html` | `label`, `progress`, `retry` | `data-state`, `value` on progress | all with a composer |
 | `tpl-toast` | `partials/toast.html` | `text`, `action` | `data-tone` | all |
 | `tpl-stream-card` | `partials/stream_card.html` | `name`, `status`, `transport`, `rate`, `last`, `preview`, `dropped`, `claim`, `line-state`, `open` | `data-stream`, `data-status`, `href` on `open` | streams |
-| `tpl-needs-you-question` | `partials/needs_you.html` (block `question`) | as `tpl-question` | as `tpl-question` | home |
+| `tpl-needs-you-question` | `partials/needs_you.html` (`partials/needs_you_question`) | as `tpl-question`, plus `chat` (link to the question in its chat) | as `tpl-question`, plus `href` on `chat` (same-origin) | home |
 
 ### 6.3 Server-only partials (no twin)
 

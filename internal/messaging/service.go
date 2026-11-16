@@ -67,6 +67,7 @@ type Service struct {
 	onAck  []func(seq int64, by string)
 	mcp    *mcpserver.Server
 	subsMu sync.Mutex
+	events chatEvents
 	subs   map[string]map[string]*subscription // uri -> principal
 }
 

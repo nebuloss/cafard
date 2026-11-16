@@ -1,0 +1,26 @@
+{{/* The quick drop (QuickDropSheet): a bottom sheet over home with a chat
+     picker, the camera and the photo picker; the Android share target
+     opens it filled with the shared files. The same form is the /drop page
+     without the bundle. Data: QuickDropView. */}}
+{{define "partials/drop_form"}}
+<form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="{{.MaxFiles}}">
+  <input type="hidden" name="back" value="{{.Back}}">
+  {{if .ShareID}}<input type="hidden" name="staged" value="{{.ShareID}}" data-field="staged">{{end}}
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required>{{range .Chats}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  {{if .Images}}<div class="images staged" data-count="{{len .Images}}">{{range .Images}}{{template "partials/image.html" .}}{{end}}</div>{{end}}
+  <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
+  <div class="upload-list" data-slot="uploads" aria-live="polite"></div>
+  <label class="ofield"><span>Message</span><textarea name="text" rows="3" maxlength="32768" placeholder="What is this?">{{.Text}}</textarea></label>
+  <div class="drop-pickers">
+    <label class="btn tonal file-btn"><input type="file" name="files[]" accept="image/*" capture="environment" data-field="camera"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg>Camera</label>
+    <label class="btn tonal file-btn"><input type="file" name="files[]" accept="image/*" multiple data-field="photos"><svg aria-hidden="true"><use href="/static/icons.svg#image"></use></svg>Photos</label>
+  </div>
+  <label class="keep-original only-scripted"><input type="checkbox" data-field="keep-original"> Keep original photos</label>
+  <button class="btn filled block" type="submit"><svg aria-hidden="true"><use href="/static/icons.svg#send"></use></svg>Send</button>
+</form>
+{{end}}
+<dialog class="sheet quick-drop" data-component="QuickDropSheet" aria-labelledby="quick-drop-title">
+  <div class="sheet-handle" aria-hidden="true"></div>
+  <div class="sheet-head"><h2 id="quick-drop-title">Quick drop</h2><button class="icon-btn" type="button" data-action="close" aria-label="Close"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></div>
+  {{template "partials/drop_form" .}}
+</dialog>

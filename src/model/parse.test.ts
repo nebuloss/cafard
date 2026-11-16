@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseAcked,
+  parseAnswered,
   parseAttachment,
+  parseChat,
+  parseOverview,
+  parseSeen,
+  parseShare,
   parseMarkCreated,
   parseCounts,
   parseEntry,
@@ -36,11 +42,21 @@ const parsers: Record<string, (raw: unknown) => unknown> = {
   pairing: parsePairing,
   page_entry: parseEntryPage,
   reset: parseReset,
+  chat_channel: (raw) => parseChat(raw),
+  chat_direct: (raw) => parseChat(raw),
+  overview: parseOverview,
+  share: parseShare,
+  seen: parseSeen,
+  answered: parseAnswered,
+  acked: parseAcked,
 };
 
-// Fixtures the bundle of track C does not read: request bodies, and the DTOs
-// of the chat pages, whose parsers come with track D.
-const notYet = new Set(['answered', 'seen', 'chat_channel', 'chat_direct', 'overview', 'share', 'channel_create', 'channel_update', 'send_request', 'log_accepted', 'token_create', 'pairing_create', 'mark_create']);
+// Fixtures the bundle never reads: request bodies, and what only programs
+// receive.
+const notYet = new Set([
+  'channel_create', 'channel_update', 'send_request', 'log_accepted', 'token_create', 'pairing_create', 'mark_create',
+  'chat_prefs', 'chat_read', 'ack_request',
+]);
 
 describe('parse', () => {
   it('reads every Go fixture back to the same value', () => {

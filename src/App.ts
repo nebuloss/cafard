@@ -12,6 +12,14 @@ import { LivePage } from '@/pages/LivePage.ts';
 import { PageRegistry } from '@/pages/PageRegistry.ts';
 import { PairPage } from '@/pages/PairPage.ts';
 import { StreamsPage } from '@/pages/StreamsPage.ts';
+import { ChatPage } from '@/pages/ChatPage.ts';
+import { DropPage } from '@/pages/DropPage.ts';
+import { HomePage } from '@/pages/HomePage.ts';
+import { KeepOriginal } from '@/media/KeepOriginal.ts';
+import { ResizeToJpeg } from '@/media/ResizeToJpeg.ts';
+import { jobRepository } from '@/upload/JobRepository.ts';
+import { XhrUploadClient } from '@/upload/UploadClient.ts';
+import { UploadQueue } from '@/upload/UploadQueue.ts';
 
 /** The services every page may receive. Built once, here. */
 export interface Services {
@@ -22,6 +30,8 @@ export interface Services {
   readonly eventSources: EventSourceFactory;
   /** A fresh backoff for each feed: SSE reconnects from 1 s to 30 s. */
   readonly backoff: () => Backoff;
+  /** The browser's queue of messages on their way (track D). */
+  readonly uploads: UploadQueue;
 }
 
 /**
@@ -39,19 +49,27 @@ export class App {
     services?: Partial<Services>,
   ) {
     const http = services?.http ?? new FetchHttpClient();
+    const clock = services?.clock ?? new SystemClock();
+    const keep = new KeepOriginal();
     this.services = {
-      clock: services?.clock ?? new SystemClock(),
+      clock,
       storage: services?.storage ?? new LocalStorageStore(),
       http,
       api: services?.api ?? new CafardApi(http),
       eventSources: services?.eventSources ?? browserEventSource,
       backoff: services?.backoff ?? (() => new Backoff({ baseMs: 1000, maxMs: 30000 })),
+      uploads:
+        services?.uploads ??
+        new UploadQueue(new XhrUploadClient(), jobRepository(root.defaultView ?? undefined), { resize: new ResizeToJpeg(keep), keep }, new Backoff({ baseMs: 2000, maxMs: 60000 }), clock),
     };
     this.pages = new PageRegistry();
     this.pages.register('live', (doc) => new LivePage(doc, this.services));
     this.pages.register('streams', (doc) => new StreamsPage(doc, this.services));
     this.pages.register('agents', (doc) => new AgentsPage(doc, this.services));
     this.pages.register('pair', (doc) => new PairPage(doc, this.services));
+    this.pages.register('home', (doc) => new HomePage(doc, this.services));
+    this.pages.register('chat', (doc) => new ChatPage(doc, this.services));
+    this.pages.register('drop', (doc) => new DropPage(doc, this.services));
   }
 
   start(): Disposable {

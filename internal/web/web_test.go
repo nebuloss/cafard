@@ -17,19 +17,32 @@ import (
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/mcpserver"
+	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/web"
+	"github.com/nebuloss/cafard/internal/web/api"
 	"github.com/nebuloss/cafard/internal/web/assets"
 	"github.com/nebuloss/cafard/internal/web/webtest"
 )
 
 var update = flag.Bool("update", false, "rewrite internal/web/testdata/pages/*.html")
 
-func newEnv(t *testing.T, o webtest.Options) *webtest.Env {
+// env is the web stack with the real messaging service (track D).
+type env struct {
+	*webtest.Env
+	svc *messaging.Service
+}
+
+func newEnv(t *testing.T, o webtest.Options) *env {
 	t.Helper()
-	e := webtest.New(t, o)
+	e := &env{Env: webtest.New(t, o)}
+	e.svc = e.StartMessaging()
 	if err := assets.Register(e.Mux); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := api.RegisterMessages(e.Mux, mcpserver.New(e.Deps, mcpserver.Config{}), e.Deps, e.svc); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := web.Register(e.Mux, nil, e.Deps); err != nil {
@@ -38,8 +51,9 @@ func newEnv(t *testing.T, o webtest.Options) *webtest.Env {
 	return e
 }
 
-// seed gives the pages something to show: two sources, lines, a marker.
-func seed(e *webtest.Env) {
+// seed gives the pages something to show: two sources, lines, a marker,
+// and the chats of seedChats.
+func seed(e *env) {
 	e.Status.Declare(status.Source{Stream: "serial:dut1", Transport: "rfc2217"})
 	e.Commit(
 		webtest.Line("serial:dut1", "U-Boot 2024.04 (Nov 16 2026)"),
@@ -47,6 +61,7 @@ func seed(e *webtest.Env) {
 		store.Entry{Stream: "serial:dut1", Kind: store.KindMarker, Severity: store.DefaultSeverity, Text: "codex-build: flashed linux-6.18-rc3", Sender: "codex-build"},
 		webtest.Line("syslog:bench-pi", "systemd[1]: Started cafard push."),
 	)
+	seedChats(e)
 }
 
 // The tpl-* twins each page lists, and the slots each twin carries
@@ -57,6 +72,17 @@ var twinSlots = map[string][]string{
 	"tpl-stream-dot":  {},
 	"tpl-stream-card": {"name", "status", "transport", "rate", "last", "preview", "dropped", "claim", "line-state", "open"},
 	"tpl-toast":       {"text", "action"},
+	// Track D.
+	"tpl-chat-row":           {"name", "preview", "time", "unread", "questions", "dots"},
+	"tpl-message":            {"sender", "sender-kind", "time", "body", "reply-quote", "attachments", "seen-by", "menu"},
+	"tpl-question":           {"sender", "time", "body", "choices", "reply-form", "answer"},
+	"tpl-choice":             {"label"},
+	"tpl-event-row":          {"stream", "time", "text", "open"},
+	"tpl-image":              {"img", "more"},
+	"tpl-log-attachment":     {"streams", "title", "lines", "span", "preview", "open", "state"},
+	"tpl-attachment-chip":    {"label", "remove"},
+	"tpl-upload-status":      {"label", "progress", "retry"},
+	"tpl-needs-you-question": {"sender", "time", "body", "choices", "reply-form", "answer", "chat"},
 }
 
 var pageTwins = map[string][]string{
@@ -65,10 +91,17 @@ var pageTwins = map[string][]string{
 	"agents":  {"tpl-toast"},
 	"pair":    {"tpl-toast"},
 	"live":    {"tpl-line", "tpl-marker", "tpl-toast"},
+	// Track D.
+	"home": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
+		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-toast"},
+	"chat": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
+		"tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
+	"drop": {"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
 }
 
 var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
+	"home": "/", "chat": "/c/dut1", "drop": "/drop",
 }
 
 var templateRE = regexp.MustCompile(`(?s)<template id="(tpl-[a-z-]+)">(.*?)</template>`)
@@ -151,12 +184,16 @@ var noBundle = map[string][]string{
 		"U-Boot 2024.04", `class="marker"`, "flashed linux-6.18-rc3", `<form class="filter-bar" method="get" action="/live"`,
 		"Live updates need JavaScript",
 	},
+	// Track D: the chats (noBundleChats in chat_test.go).
 }
 
 func TestThePageWorksWithoutTheBundle(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	seed(e)
 	cookie := e.Admin()
+	for path, wants := range noBundleChats(e) {
+		noBundle[path] = wants
+	}
 	for path, wants := range noBundle {
 		body := e.Do("GET", path, cookie, nil).Body.String()
 		for _, want := range wants {

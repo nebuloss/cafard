@@ -38,10 +38,9 @@ func RegisterMessages(mux *http.ServeMux, m *mcpserver.Server, d deps.Deps, svc 
 		}
 	}
 	h := &messagesAPI{d: d, svc: svc}
-	// Bearer only until browser sessions land (track D adds session auth
-	// with the same-origin check; the handler takes its principal from the
-	// context either way).
-	mux.Handle("POST /api/messages", auth.Require(auth.BearerOnly{Next: d.Auth}, auth.ScopeMessage, http.HandlerFunc(h.post)))
+	// A bearer token or a session; a session's post must be same-origin
+	// (the whole CSRF defence of a cookie).
+	mux.Handle("POST /api/messages", auth.RequireSameOrigin(auth.Require(d.Auth, auth.ScopeMessage, http.HandlerFunc(h.post))))
 	mux.Handle("GET /api/messages/{seq}", auth.Require(d.Auth, auth.ScopeRead, http.HandlerFunc(h.get)))
 	mux.Handle("GET /api/messages/{seq}/attachments/{index}", auth.Require(d.Auth, auth.ScopeRead, http.HandlerFunc(h.attachment)))
 	mux.Handle("GET /blob/{sha}", auth.Require(d.Auth, auth.ScopeRead, http.HandlerFunc(h.blob)))
@@ -94,12 +93,18 @@ func (h *messagesAPI) fail(w http.ResponseWriter, r *http.Request, err error, ba
 		dto.WriteError(w, apiErr)
 		return
 	}
-	http.Redirect(w, r, back+"?error="+url.QueryEscape(apiErr.Code), http.StatusSeeOther)
+	sep := "?"
+	if strings.Contains(back, "?") {
+		sep = "&"
+	}
+	http.Redirect(w, r, back+sep+"error="+url.QueryEscape(apiErr.Code), http.StatusSeeOther)
 }
 
 // form is what POST /api/messages carries.
 type form struct {
 	chat  string
+	back  string // a same-origin page to return to on error (the drop form)
+	next  string // a same-origin page to go to once sent (home's question cards)
 	in    messaging.SendInput
 	files int
 }
@@ -108,6 +113,10 @@ func (f *form) set(name, value string) error {
 	switch name {
 	case "chat":
 		f.chat = value
+	case "back":
+		f.back = safeBack(value)
+	case "next":
+		f.next = safeBack(value)
 	case "channel":
 		f.in.Channel = value
 	case "to":
@@ -145,11 +154,19 @@ func (h *messagesAPI) post(w http.ResponseWriter, r *http.Request) {
 	var f form
 	back := "/"
 	if err := h.readForm(r, &f); err != nil {
+		if f.back != "" {
+			back = f.back
+		} else if f.chat != "" {
+			back = ChatPath(f.chat)
+		}
 		h.fail(w, r, err, back)
 		return
 	}
 	if f.chat != "" {
 		back = ChatPath(f.chat)
+		if f.back != "" {
+			back = f.back
+		}
 		stream, err := messaging.StreamOfChat(p.Name, f.chat)
 		if err != nil {
 			h.fail(w, r, err, back)
@@ -175,7 +192,11 @@ func (h *messagesAPI) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !WantsJSON(r) {
-		http.Redirect(w, r, ChatPath(out.Chat), http.StatusSeeOther)
+		target := ChatPath(out.Chat)
+		if f.next != "" {
+			target = f.next
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 		return
 	}
 	dto.WriteJSON(w, http.StatusCreated, out)
@@ -262,6 +283,22 @@ func (h *messagesAPI) readPart(ctx context.Context, part *multipart.Part, f *for
 		return dto.Errorf(dto.CodeTooLarge, "The field %s is too long.", name)
 	}
 	return f.set(name, string(data))
+}
+
+// safeBack keeps a same-origin path, with only its share parameter (the
+// drop form keeps its staged files), or "".
+func safeBack(v string) string {
+	if !strings.HasPrefix(v, "/") || strings.HasPrefix(v, "//") || strings.HasPrefix(v, "/\\") {
+		return ""
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Host != "" || u.Scheme != "" {
+		return ""
+	}
+	if share := u.Query().Get("share"); share != "" {
+		return u.Path + "?share=" + url.QueryEscape(share)
+	}
+	return u.Path
 }
 
 // safeName is a file name fit to quote back in an error.

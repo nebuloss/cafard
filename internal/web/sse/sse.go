@@ -18,6 +18,7 @@ import (
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/hub"
+	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/web/view"
 )
@@ -125,6 +126,66 @@ func (h *Handler) chatSelection(ctx context.Context, chat string, p auth.Princip
 	return nil, dto.Errorf(dto.CodeBadRequest, "chat is chan:<name> or dm:<peer>, not %q.", chat)
 }
 
+// chatWatcher is what messaging offers for the seen, answered and chat
+// events (track D).
+type chatWatcher interface {
+	WatchChats(buffer int) (<-chan messaging.ChatEvent, func())
+	ChatOfStream(ctx context.Context, viewer auth.Principal, stream string) (dto.Chat, error)
+}
+
+// scope is what a connection shows: one chat's stream, or the home page.
+type scope struct {
+	chat string // stream id of the chat page, or ""
+	home bool
+}
+
+func scopeOf(r *http.Request, p auth.Principal) scope {
+	q := r.URL.Query()
+	if chat := q.Get("chat"); chat != "" {
+		stream, err := messaging.StreamOfChat(p.Name, chat)
+		if err != nil {
+			return scope{}
+		}
+		return scope{chat: stream}
+	}
+	return scope{home: q.Get("scope") == "home"}
+}
+
+// chatEvent turns a messaging event into the SSE event this connection
+// should get, if any. dirty reports whether the viewer's badges may have
+// changed.
+func (h *Handler) chatEvent(ctx context.Context, w chatWatcher, sc scope, p auth.Principal, ev messaging.ChatEvent) (name string, payload any, dirty bool) {
+	if ev.Only != "" && ev.Only != p.Name {
+		return "", nil, false
+	}
+	visible := h.d.Messaging.Visible(ctx, p, store.Entry{Stream: ev.Stream, Kind: store.KindMessage})
+	if !visible {
+		return "", nil, false
+	}
+	switch ev.Kind {
+	case messaging.EventSeen:
+		dirty = ev.By == p.Name
+		if sc.chat == ev.Stream {
+			return "seen", dto.Seen{Seq: ev.Seq, By: ev.By}, dirty
+		}
+	case messaging.EventAnswered:
+		if ev.Answer != nil && (sc.chat == ev.Stream || sc.home) {
+			return "answered", dto.Answered{Seq: ev.Seq, Answer: *ev.Answer}, true
+		}
+		return "", nil, true
+	case messaging.EventChat:
+		if ev.Gone || (sc.chat == "" && !sc.home) {
+			return "", nil, true
+		}
+		chat, err := w.ChatOfStream(ctx, p, ev.Stream)
+		if err != nil {
+			return "", nil, true
+		}
+		return "chat", chat, true
+	}
+	return "", nil, dirty
+}
+
 // since is where replay starts: since_seq, or one after Last-Event-ID.
 func since(r *http.Request) (int64, *dto.APIError) {
 	if s := r.URL.Query().Get("since_seq"); s != "" {
@@ -211,6 +272,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer stop()
 		statusCh = ch
 	}
+	watcher, _ := h.d.Messaging.(chatWatcher)
+	var chatEvents <-chan messaging.ChatEvent
+	if watcher != nil && h.d.Messaging != nil {
+		ch, stop := watcher.WatchChats(256)
+		defer stop()
+		chatEvents = ch
+	}
+	sc := scopeOf(r, p)
 	var countsSub hub.Subscription
 	if _, ok := h.d.Messaging.(view.Counter); ok && h.d.Messaging != nil {
 		// Any message the viewer can see may change the badges.
@@ -291,6 +360,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			countsSub.Close()
 			countsEntries, countsLagged = nil, nil
 			dirty = true
+		case ev := <-chatEvents:
+			name, payload, changed := h.chatEvent(ctx, watcher, sc, p, ev)
+			dirty = dirty || changed
+			if name != "" {
+				err = s.event(name, "", payload)
+			}
 		case <-countsTick.C:
 			if dirty {
 				dirty = false

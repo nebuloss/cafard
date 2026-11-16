@@ -30,10 +30,10 @@ describe('PageRegistry', () => {
 
 describe('App', () => {
   it('starts the registered page and disposes it on stop', () => {
-    document.body.dataset['page'] = 'home';
+    document.body.dataset['page'] = 'test-page';
     const stopped = vi.fn();
     const app = new App(document, { clock: new FakeClock(), storage: new MemoryStore() });
-    app.pages.register('home', () => ({ start: () => disposable(stopped) }));
+    app.pages.register('test-page', () => ({ start: () => disposable(stopped) }));
     const running = app.start();
     expect(document.documentElement.classList.contains('has-script')).toBe(true);
     running.dispose();

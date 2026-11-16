@@ -13,6 +13,7 @@ import { SlotTemplate } from '@/render/SlotTemplate.ts';
 import { FakeClock } from '@/testing/FakeClock.ts';
 import { fixture, loadPage } from '@/testing/pages.ts';
 import type { Services } from '@/App.ts';
+import type { UploadQueue } from '@/upload/UploadQueue.ts';
 
 describe('StreamsPage', () => {
   it('updates a server-rendered card and inserts a new one in order', () => {
@@ -73,6 +74,7 @@ describe('LivePage', () => {
       http: {} as HttpClient,
       api: new CafardApi({} as HttpClient),
       backoff: () => new Backoff({ baseMs: 1000, maxMs: 30000 }),
+      uploads: {} as UploadQueue,
       eventSources: (url) => {
         const listeners = new Map<string, (e: MessageEvent) => void>();
         const source = {
@@ -86,9 +88,10 @@ describe('LivePage', () => {
         return source;
       },
     };
+    const next = Number(document.querySelector('[data-component="LogView"]')?.getAttribute('data-next-seq'));
     const running = new LivePage(document, services).start();
-    expect(sources[0]?.url).toBe('/api/events?since_seq=5');
-    sources[0]?.source.emit('entry', { ...(fixture('entry_line') as object), seq: 5, text: 'from the feed' });
+    expect(sources[0]?.url).toBe(`/api/events?since_seq=${next}`);
+    sources[0]?.source.emit('entry', { ...(fixture('entry_line') as object), seq: next, text: 'from the feed' });
     clock.advance(50);
     const last = document.querySelector('.log-list')?.lastElementChild;
     expect(last?.querySelector('[data-slot="text"]')?.textContent).toBe('from the feed');

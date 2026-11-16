@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>Chats - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="home" class="shell">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="bar">
+    
+    <svg class="mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
+    
+    <h1>Chats</h1>
+    <span class="spacer"></span>
+    
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    <span class="avatar" title="admin (human)">A</span>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Main">
+  <a class="nav-item" href="/" aria-current="page">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats">2</span></span>
+    <span class="nav-label">Chats</span>
+  </a>
+  <a class="nav-item" href="/live">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
+    <span class="nav-label">Live</span>
+  </a>
+  <a class="nav-item" href="/streams">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Sources</span>
+  </a>
+  
+  <a class="nav-item rail-only" href="/agents">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
+    <span class="nav-label">Agents</span>
+  </a>
+  <a class="nav-item rail-only" href="/pair">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
+    <span class="nav-label">Pair</span>
+  </a>
+  
+  <details class="nav-more">
+    <summary class="nav-item">
+      <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></span>
+      <span class="nav-label">More</span>
+    </summary>
+    <div class="menu" role="menu">
+      
+      <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
+      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
+      
+      <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+        <input type="hidden" name="next" value="/">
+        <span class="menu-caption">Theme</span>
+        <span class="segmented">
+          <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
+          <button type="submit" name="theme" value="light" aria-pressed="false">Light</button>
+          <button type="submit" name="theme" value="dark" aria-pressed="false">Dark</button>
+        </span>
+      </form>
+      <form method="post" action="/signout">
+        <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out admin</button>
+      </form>
+    </div>
+  </details>
+</nav>
+
+
+<main id="main">
+
+
+<div class="home-layout" data-viewer="admin" data-viewer-kind="human">
+  <div class="pane-list">
+    <p class="list-actions only-scripted"><input class="list-search" type="search" placeholder="Filter chats" aria-label="Filter chats" data-slot="search"><button class="icon-btn" type="button" data-action="new-channel" aria-label="New channel" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></button></p>
+    
+<nav class="chat-list" data-component="ChatList" aria-label="Chats">
+  
+
+<section class="needs-you" data-component="NeedsYou" aria-labelledby="needs-you-title">
+  <h2 class="list-heading" id="needs-you-title">Needs you</h2>
+  <div class="needs-you-questions" data-slot="questions"><article class="question" id="m7" data-seq="7" data-open tabindex="-1">
+<header class="msg-head"><svg class="q-icon" aria-hidden="true"><use href="/static/icons.svg#help"></use></svg><span class="msg-sender" data-slot="sender">claude-laptop</span><a class="q-chat" data-slot="chat" href="/c/dut1#m7">in #dut1</a><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
+<div class="msg-body" data-slot="body">Power-cycle dut1?</div>
+<form class="q-form" method="post" action="/api/messages" enctype="multipart/form-data">
+<input type="hidden" name="chat" value="chan:dut1" data-field="chat"><input type="hidden" name="reply_to" value="7" data-field="reply_to"><input type="hidden" name="back" value="/" data-field="back"><input type="hidden" name="next" value="/" data-field="next">
+<div class="q-choices" data-slot="choices"><button class="btn tonal choice" type="submit" name="choice" value="done" data-choice="done"><span data-slot="label">done</span></button><button class="btn tonal choice" type="submit" name="choice" value="can&#39;t" data-choice="can&#39;t"><span data-slot="label">can&#39;t</span></button></div>
+<div class="q-reply" data-slot="reply-form"><input class="q-text" name="text" placeholder="Reply..." aria-label="Reply to the question" autocomplete="off" maxlength="32768"><button class="btn text" type="submit">Reply</button></div>
+</form>
+<p class="q-answer" data-slot="answer" role="status"></p>
+</article>
+</div>
+  <div class="chat-rows" data-slot="direct"><a class="chat-row" href="/dm/codex-build" data-chat="dm:codex-build"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">@codex-build</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">codex-build: Build 812 is green.</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">1</span></span></span></a>
+</div>
+</section>
+
+  <h2 class="list-heading">Channels</h2>
+  <div class="chat-rows" data-section="channels"><a class="chat-row" href="/c/dut1" data-chat="chan:dut1"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#dut1</span><span class="chat-dots" data-slot="dots">
+<span class="stream-dot" data-status="connected" title="serial:dut1: connected"></span>
+</span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: Power-cycle dut1?</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">2</span></span></span></a>
+<a class="chat-row" href="/c/general" data-chat="chan:general"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#general</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+</div>
+  
+  
+  <h2 class="list-heading">Direct</h2>
+  <div class="chat-rows" data-section="direct"><a class="chat-row" href="/dm/codex-build" data-chat="dm:codex-build"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">@codex-build</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">codex-build: Build 812 is green.</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">1</span></span></span></a>
+</div>
+  
+  <p class="list-more">
+    <a class="btn text" href="/?all=1">Show all</a>
+    <a class="btn text" href="/?archived=1">Archived</a>
+  </p>
+</nav>
+
+    
+  </div>
+  <div class="pane-overview">
+<section class="overview" data-component="Overview" aria-labelledby="overview-title">
+  <h2 id="overview-title" class="visually-hidden">Overview</h2>
+  
+  <h3>Needs you</h3>
+  <div class="overview-questions" data-slot="questions"><article class="question" id="m7" data-seq="7" data-open tabindex="-1">
+<header class="msg-head"><svg class="q-icon" aria-hidden="true"><use href="/static/icons.svg#help"></use></svg><span class="msg-sender" data-slot="sender">claude-laptop</span><a class="q-chat" data-slot="chat" href="/c/dut1#m7">in #dut1</a><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
+<div class="msg-body" data-slot="body">Power-cycle dut1?</div>
+<form class="q-form" method="post" action="/api/messages" enctype="multipart/form-data">
+<input type="hidden" name="chat" value="chan:dut1" data-field="chat"><input type="hidden" name="reply_to" value="7" data-field="reply_to"><input type="hidden" name="back" value="/" data-field="back"><input type="hidden" name="next" value="/" data-field="next">
+<div class="q-choices" data-slot="choices"><button class="btn tonal choice" type="submit" name="choice" value="done" data-choice="done"><span data-slot="label">done</span></button><button class="btn tonal choice" type="submit" name="choice" value="can&#39;t" data-choice="can&#39;t"><span data-slot="label">can&#39;t</span></button></div>
+<div class="q-reply" data-slot="reply-form"><input class="q-text" name="text" placeholder="Reply..." aria-label="Reply to the question" autocomplete="off" maxlength="32768"><button class="btn text" type="submit">Reply</button></div>
+</form>
+<p class="q-answer" data-slot="answer" role="status"></p>
+</article>
+</div>
+  
+  <h3>Recent activity</h3>
+  <div class="overview-recent timeline" data-slot="recent" aria-live="polite">
+    <div class="event-row" data-seq="3" data-severity="6" data-kind="marker"><time class="event-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="event-stream" data-slot="stream">serial:dut1</span><span class="event-text" data-slot="text">codex-build: flashed linux-6.18-rc3</span><a class="event-open" data-slot="open" href="/live?streams=serial%3Adut1&amp;to_seq=3">logs</a></div>
+<div class="event-row" data-seq="5" data-severity="6" data-kind="marker"><time class="event-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="event-stream" data-slot="stream">chan:dut1</span><span class="event-text" data-slot="text">admin bound serial:dut1</span><a class="event-open" data-slot="open">logs</a></div>
+<article class="message" id="m6" data-seq="6" data-sender-kind="agent">
+<header class="msg-head"><span class="sender-chip"><svg class="kind-icon kind-agent" aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg><svg class="kind-icon kind-human" aria-hidden="true"><use href="/static/icons.svg#person"></use></svg><svg class="kind-icon kind-device" aria-hidden="true"><use href="/static/icons.svg#memory"></use></svg><span class="msg-sender" data-slot="sender">codex-build</span><span class="visually-hidden" data-slot="sender-kind">agent</span></span><a class="msg-chat" href="/c/dut1#m6">#dut1</a><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
+<div class="msg-body" data-slot="body">image v42 ready, <code>dwc3</code> fails, see <a href="https://git.example.com/k/4a1f" rel="noopener noreferrer" target="_blank">https://git.example.com/k/4a1f</a></div>
+<div class="msg-attachments" data-slot="attachments"><div class="images" data-count="1"><a class="image" href="/blob/50941b0434a57d6e64c9a7dc8f0e7600610119850c8c5ba97cbc6a869e881ee8" data-sha="50941b0434a57d6e64c9a7dc8f0e7600610119850c8c5ba97cbc6a869e881ee8"><img data-slot="img" src="/blob/50941b0434a57d6e64c9a7dc8f0e7600610119850c8c5ba97cbc6a869e881ee8?v=thumb" alt="Photo" width="64" height="48" loading="lazy" decoding="async"><span class="image-more" data-slot="more"></span></a>
+</div><section class="log-card" data-snapshot>
+<header class="log-card-head"><svg class="log-icon" aria-hidden="true"><use href="/static/icons.svg#description"></use></svg><span class="log-streams mono" data-slot="streams">serial:dut1</span><span class="log-title" data-slot="title">boot</span></header>
+<p class="log-meta"><span data-slot="lines">2 lines</span><span class="log-span" data-slot="span">09:40:00.000 to 09:40:00.000</span><span class="log-state" data-slot="state">snapshot</span></p>
+<div class="log-preview log-list mono dense" role="list" aria-label="First lines" data-slot="preview">
+<div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
+
+<div class="line" role="listitem" data-seq="2" data-sev="3" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="ERR">E</abbr><span class="line-text" data-slot="text">dwc3 fe800000.usb: failed to initialize core: -110</span></div>
+</div>
+<a class="btn text log-open" data-slot="open" href="/live?from_seq=1&amp;streams=serial%3Adut1&amp;to_seq=2">Open</a>
+</section>
+</div>
+<p class="reply-quote" data-slot="reply-quote"></p>
+<p class="seen-by" data-slot="seen-by"></p>
+<div class="msg-menu only-scripted" data-slot="menu"><button class="icon-btn small" type="button" data-action="reply" aria-label="Reply"><svg aria-hidden="true"><use href="/static/icons.svg#reply"></use></svg></button><button class="icon-btn small" type="button" data-action="menu" aria-label="More actions" aria-haspopup="menu"><svg aria-hidden="true"><use href="/static/icons.svg#more_vert"></use></svg></button></div>
+</article>
+<article class="question" id="m7" data-seq="7" data-open tabindex="-1">
+<header class="msg-head"><svg class="q-icon" aria-hidden="true"><use href="/static/icons.svg#help"></use></svg><span class="msg-sender" data-slot="sender">claude-laptop</span><a class="q-chat" data-slot="chat" href="/c/dut1#m7">in #dut1</a><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
+<div class="msg-body" data-slot="body">Power-cycle dut1?</div>
+<form class="q-form" method="post" action="/api/messages" enctype="multipart/form-data">
+<input type="hidden" name="chat" value="chan:dut1" data-field="chat"><input type="hidden" name="reply_to" value="7" data-field="reply_to"><input type="hidden" name="back" value="/" data-field="back"><input type="hidden" name="next" value="/" data-field="next">
+<div class="q-choices" data-slot="choices"><button class="btn tonal choice" type="submit" name="choice" value="done" data-choice="done"><span data-slot="label">done</span></button><button class="btn tonal choice" type="submit" name="choice" value="can&#39;t" data-choice="can&#39;t"><span data-slot="label">can&#39;t</span></button></div>
+<div class="q-reply" data-slot="reply-form"><input class="q-text" name="text" placeholder="Reply..." aria-label="Reply to the question" autocomplete="off" maxlength="32768"><button class="btn text" type="submit">Reply</button></div>
+</form>
+<p class="q-answer" data-slot="answer" role="status"></p>
+</article>
+<article class="message" id="m8" data-seq="8" data-sender-kind="agent">
+<header class="msg-head"><span class="sender-chip"><svg class="kind-icon kind-agent" aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg><svg class="kind-icon kind-human" aria-hidden="true"><use href="/static/icons.svg#person"></use></svg><svg class="kind-icon kind-device" aria-hidden="true"><use href="/static/icons.svg#memory"></use></svg><span class="msg-sender" data-slot="sender">codex-build</span><span class="visually-hidden" data-slot="sender-kind">agent</span></span><a class="msg-chat" href="/dm/codex-build#m8">@codex-build</a><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
+<div class="msg-body" data-slot="body">Build 812 is green.</div>
+<div class="msg-attachments" data-slot="attachments"></div>
+<p class="reply-quote" data-slot="reply-quote"></p>
+<p class="seen-by" data-slot="seen-by"></p>
+<div class="msg-menu only-scripted" data-slot="menu"><button class="icon-btn small" type="button" data-action="reply" aria-label="Reply"><svg aria-hidden="true"><use href="/static/icons.svg#reply"></use></svg></button><button class="icon-btn small" type="button" data-action="menu" aria-label="More actions" aria-haspopup="menu"><svg aria-hidden="true"><use href="/static/icons.svg#more_vert"></use></svg></button></div>
+</article>
+
+  </div>
+  
+</section>
+</div>
+</div>
+
+<a class="fab extended quick-drop-fab" href="/drop" data-action="quick-drop"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg>Quick drop</a>
+
+
+<dialog class="sheet quick-drop" data-component="QuickDropSheet" aria-labelledby="quick-drop-title">
+  <div class="sheet-handle" aria-hidden="true"></div>
+  <div class="sheet-head"><h2 id="quick-drop-title">Quick drop</h2><button class="icon-btn" type="button" data-action="close" aria-label="Close"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></div>
+  
+<form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="10">
+  <input type="hidden" name="back" value="/">
+  
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><option value="chan:dut1">#dut1</option><option value="chan:general">#general</option><option value="dm:codex-build">@codex-build</option></select></label>
+  
+  <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
+  <div class="upload-list" data-slot="uploads" aria-live="polite"></div>
+  <label class="ofield"><span>Message</span><textarea name="text" rows="3" maxlength="32768" placeholder="What is this?"></textarea></label>
+  <div class="drop-pickers">
+    <label class="btn tonal file-btn"><input type="file" name="files[]" accept="image/*" capture="environment" data-field="camera"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg>Camera</label>
+    <label class="btn tonal file-btn"><input type="file" name="files[]" accept="image/*" multiple data-field="photos"><svg aria-hidden="true"><use href="/static/icons.svg#image"></use></svg>Photos</label>
+  </div>
+  <label class="keep-original only-scripted"><input type="checkbox" data-field="keep-original"> Keep original photos</label>
+  <button class="btn filled block" type="submit"><svg aria-hidden="true"><use href="/static/icons.svg#send"></use></svg>Send</button>
+</form>
+
+</dialog>
+
+<dialog class="modal new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
+  <form class="panel stack" method="dialog">
+    <h2 id="new-channel-title">New channel</h2>
+    <div class="banner error" data-slot="error" role="alert" hidden></div>
+    <label class="ofield"><span>Name</span><input name="name" required pattern="[a-z0-9\-]{1,40}" placeholder="dut1" autocomplete="off" spellcheck="false"></label>
+    <label class="ofield"><span>Title</span><input name="title" maxlength="200" placeholder="DUT 1 (x86 board)"></label>
+    <label class="ofield"><span>Bound streams (comma separated, globs allowed)</span><input name="patterns" placeholder="serial:dut1, syslog:dut1*" autocomplete="off" spellcheck="false"></label>
+    <div class="dialog-actions"><button class="btn text" type="button" data-action="close">Cancel</button><button class="btn filled" type="button" data-action="create">Create</button></div>
+  </form>
+</dialog>
+
+
+<dialog class="image-viewer" data-component="ImageViewer" aria-label="Photo">
+  <img data-slot="img" alt="">
+  <button class="icon-btn viewer-close" type="button" data-action="close" aria-label="Close"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button>
+  <button class="icon-btn viewer-prev" type="button" data-action="prev" aria-label="Previous photo"><svg aria-hidden="true"><use href="/static/icons.svg#chevron_left"></use></svg></button>
+  <button class="icon-btn viewer-next" type="button" data-action="next" aria-label="Next photo"><svg aria-hidden="true"><use href="/static/icons.svg#chevron_right"></use></svg></button>
+  <a class="btn text viewer-open" data-slot="open" href="#" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="/static/icons.svg#open_in_new"></use></svg>Original</a>
+</dialog>
+
+
+<dialog class="modal shortcuts" data-component="ShortcutsDialog" aria-labelledby="shortcuts-title">
+  <div class="panel">
+    <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+    <dl class="keys">
+      <dt><kbd>/</kbd></dt><dd>Focus the filter or the composer</dd>
+      <dt><kbd>g</kbd> <kbd>c</kbd></dt><dd>Go to Chats</dd>
+      <dt><kbd>g</kbd> <kbd>l</kbd></dt><dd>Go to Live</dd>
+      <dt><kbd>g</kbd> <kbd>s</kbd></dt><dd>Go to Sources</dd>
+      <dt><kbd>f</kbd></dt><dd>Follow or pause the logs</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close the sheet, dialog or viewer</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Send from the composer</dd>
+      <dt><kbd>?</kbd></dt><dd>This list</dd>
+    </dl>
+    <p class="help">Shortcuts wait while you type in a field, except Esc and Ctrl+Enter.</p>
+    <div class="dialog-actions"><button class="btn text" type="button" data-action="close">Close</button></div>
+  </div>
+</dialog>
+
+
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-chat-row"><a class="chat-row" href="" data-chat=""><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name"></span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime=""></time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+</template>
+<template id="tpl-stream-dot">
+<span class="stream-dot" data-status="" title=""></span>
+</template>
+<template id="tpl-message"><article class="message" id="" data-seq="0" data-sender-kind="">
+<header class="msg-head"><span class="sender-chip"><svg class="kind-icon kind-agent" aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg><svg class="kind-icon kind-human" aria-hidden="true"><use href="/static/icons.svg#person"></use></svg><svg class="kind-icon kind-device" aria-hidden="true"><use href="/static/icons.svg#memory"></use></svg><span class="msg-sender" data-slot="sender"></span><span class="visually-hidden" data-slot="sender-kind"></span></span><time class="msg-time" data-slot="time" datetime=""></time></header>
+<div class="msg-body" data-slot="body"></div>
+<div class="msg-attachments" data-slot="attachments"></div>
+<p class="reply-quote" data-slot="reply-quote"></p>
+<p class="seen-by" data-slot="seen-by"></p>
+<div class="msg-menu only-scripted" data-slot="menu"><button class="icon-btn small" type="button" data-action="reply" aria-label="Reply"><svg aria-hidden="true"><use href="/static/icons.svg#reply"></use></svg></button><button class="icon-btn small" type="button" data-action="menu" aria-label="More actions" aria-haspopup="menu"><svg aria-hidden="true"><use href="/static/icons.svg#more_vert"></use></svg></button></div>
+</article>
+</template>
+<template id="tpl-question"><article class="question" id="" data-seq="0" tabindex="-1">
+<header class="msg-head"><svg class="q-icon" aria-hidden="true"><use href="/static/icons.svg#help"></use></svg><span class="msg-sender" data-slot="sender"></span><time class="msg-time" data-slot="time" datetime=""></time></header>
+<div class="msg-body" data-slot="body"></div>
+<form class="q-form" method="post" action="/api/messages" enctype="multipart/form-data">
+<input type="hidden" name="chat" value="" data-field="chat"><input type="hidden" name="reply_to" value="" data-field="reply_to"><input type="hidden" name="back" value="" data-field="back"><input type="hidden" name="next" value="" data-field="next">
+<div class="q-choices" data-slot="choices"></div>
+<div class="q-reply" data-slot="reply-form"><input class="q-text" name="text" placeholder="Reply..." aria-label="Reply to the question" autocomplete="off" maxlength="32768"><button class="btn text" type="submit">Reply</button></div>
+</form>
+<p class="q-answer" data-slot="answer" role="status"></p>
+</article>
+</template>
+<template id="tpl-choice"><button class="btn tonal choice" type="submit" name="choice" value="" data-choice=""><span data-slot="label"></span></button></template>
+<template id="tpl-event-row"><div class="event-row" data-seq="0" data-severity="0" data-kind=""><time class="event-time" data-slot="time" datetime=""></time><span class="event-stream" data-slot="stream"></span><span class="event-text" data-slot="text"></span><a class="event-open" data-slot="open">logs</a></div>
+</template>
+<template id="tpl-line">
+<div class="line" role="listitem" data-seq="0" data-sev="0" data-tone="0"><time class="line-time" data-slot="time" datetime=""></time><span class="line-stream" data-slot="stream"></span><abbr class="line-sev" data-slot="sev" title=""></abbr><span class="line-text" data-slot="text"></span></div>
+</template>
+<template id="tpl-image"><a class="image" href="" data-sha=""><img data-slot="img" src="" alt="" loading="lazy" decoding="async"><span class="image-more" data-slot="more"></span></a>
+</template>
+<template id="tpl-log-attachment"><section class="log-card">
+<header class="log-card-head"><svg class="log-icon" aria-hidden="true"><use href="/static/icons.svg#description"></use></svg><span class="log-streams mono" data-slot="streams"></span><span class="log-title" data-slot="title"></span></header>
+<p class="log-meta"><span data-slot="lines"></span><span class="log-span" data-slot="span"></span><span class="log-state" data-slot="state"></span></p>
+<div class="log-preview log-list mono dense" role="list" aria-label="First lines" data-slot="preview"></div>
+<a class="btn text log-open" data-slot="open" href="">Open</a>
+</section>
+</template>
+<template id="tpl-attachment-chip"><span class="chip attachment-chip" data-kind="" data-index="0"><span class="chip-label" data-slot="label"></span><button class="chip-remove" type="button" data-slot="remove" aria-label="Remove"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></span>
+</template>
+<template id="tpl-upload-status"><div class="upload-status" data-state="" role="status"><span class="upload-label" data-slot="label"></span><progress class="upload-progress" data-slot="progress" max="100" value="0"></progress><button class="btn text upload-retry" type="button" data-slot="retry">Retry</button></div>
+</template>
+<template id="tpl-needs-you-question"><article class="question" id="" data-seq="0" tabindex="-1">
+<header class="msg-head"><svg class="q-icon" aria-hidden="true"><use href="/static/icons.svg#help"></use></svg><span class="msg-sender" data-slot="sender"></span><a class="q-chat" data-slot="chat" href=""></a><time class="msg-time" data-slot="time" datetime=""></time></header>
+<div class="msg-body" data-slot="body"></div>
+<form class="q-form" method="post" action="/api/messages" enctype="multipart/form-data">
+<input type="hidden" name="chat" value="" data-field="chat"><input type="hidden" name="reply_to" value="" data-field="reply_to"><input type="hidden" name="back" value="" data-field="back"><input type="hidden" name="next" value="" data-field="next">
+<div class="q-choices" data-slot="choices"></div>
+<div class="q-reply" data-slot="reply-form"><input class="q-text" name="text" placeholder="Reply..." aria-label="Reply to the question" autocomplete="off" maxlength="32768"><button class="btn text" type="submit">Reply</button></div>
+</form>
+<p class="q-answer" data-slot="answer" role="status"></p>
+</article>
+</template>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+
+</body>
+</html>

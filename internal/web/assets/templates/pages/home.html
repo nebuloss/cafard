@@ -1,15 +1,27 @@
-{{/* Placeholder until track D lands the chat list (CONTRACTS.md 6.1). */}}
-<section class="card outlined empty">
-  <h2>Chats are coming</h2>
-  <p class="muted">Conversations with agents appear here once messaging lands. Meanwhile:</p>
-  <ul class="link-list">
-    <li><a href="/live">Follow the logs live</a></li>
-    <li><a href="/streams">See the sources</a></li>
-    {{if .User.Admin}}<li><a href="/agents">Give an agent a token</a></li>
-    <li><a href="/pair">Pair a phone</a></li>{{end}}
-  </ul>
-  <figure class="snippet">
-    <figcaption class="label">Connect an agent</figcaption>
-    <pre class="mono" data-language="shell"><code>{{.Data.MCP}}</code></pre>
-  </figure>
-</section>
+{{/* Home: the chat list with "Needs you" on top; on wide screens the list
+     and the overview pane (PLAN 9.6.3). Everything is a link or a plain
+     form; HomePage keeps it live. */}}
+<div class="home-layout" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}">
+  <div class="pane-list">
+    {{if .Data.CanSend}}<p class="list-actions only-scripted"><input class="list-search" type="search" placeholder="Filter chats" aria-label="Filter chats" data-slot="search"><button class="icon-btn" type="button" data-action="new-channel" aria-label="New channel" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></button></p>{{end}}
+    {{template "partials/chat_list.html" .Data.List}}
+    {{if .Data.Empty}}<div class="home-empty">{{template "partials/empty_chats.html" .Data}}</div>{{end}}
+  </div>
+  <div class="pane-overview">{{template "partials/overview.html" .Data.Overview}}</div>
+</div>
+{{if .Data.CanSend}}
+<a class="fab extended quick-drop-fab" href="/drop" data-action="quick-drop"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg>Quick drop</a>
+{{template "partials/quick_drop_sheet.html" .Data.Drop}}
+<dialog class="modal new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
+  <form class="panel stack" method="dialog">
+    <h2 id="new-channel-title">New channel</h2>
+    <div class="banner error" data-slot="error" role="alert" hidden></div>
+    <label class="ofield"><span>Name</span><input name="name" required pattern="[a-z0-9\-]{1,40}" placeholder="dut1" autocomplete="off" spellcheck="false"></label>
+    <label class="ofield"><span>Title</span><input name="title" maxlength="200" placeholder="DUT 1 (x86 board)"></label>
+    <label class="ofield"><span>Bound streams (comma separated, globs allowed)</span><input name="patterns" placeholder="serial:dut1, syslog:dut1*" autocomplete="off" spellcheck="false"></label>
+    <div class="dialog-actions"><button class="btn text" type="button" data-action="close">Cancel</button><button class="btn filled" type="button" data-action="create">Create</button></div>
+  </form>
+</dialog>
+{{end}}
+{{template "partials/image_viewer.html"}}
+{{template "partials/shortcuts_dialog.html"}}

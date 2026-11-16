@@ -1,5 +1,10 @@
 import type { HttpClient } from '@/net/HttpClient.ts';
 import {
+  parseAcked,
+  parseChat,
+  parseEntry,
+  parseOverview,
+  parseShare,
   parseEntryPage,
   parseList,
   parseMarkCreated,
@@ -12,6 +17,13 @@ import {
   parseTokenCreated,
 } from '@/model/parse.ts';
 import type {
+  Acked,
+  ChannelCreate,
+  ChannelUpdate,
+  Chat,
+  ChatPrefs,
+  Overview,
+  Share,
   Entry,
   MarkCreated,
   Me,
@@ -39,6 +51,14 @@ export interface EntriesQuery {
   readonly re?: string;
   readonly kinds?: string;
   readonly limit?: number;
+}
+
+/** A page of a chat's timeline (CONTRACTS.md 2.3). */
+export interface TimelineQuery {
+  readonly before_seq?: number;
+  readonly since_seq?: number;
+  readonly limit?: number;
+  readonly f?: string;
 }
 
 /**
@@ -98,5 +118,52 @@ export class CafardApi {
 
   createPairing(request: PairingCreate): Promise<Pairing> {
     return this.http.request('POST', '/api/pairings', { body: request, parse: parsePairing });
+  }
+
+  // Track D: chats. Sending a message goes through the upload queue.
+
+  chats(options: { all?: boolean; archived?: boolean } = {}): Promise<Chat[]> {
+    const query = { all: options.all === true ? 1 : undefined, archived: options.archived === true ? 1 : undefined };
+    return this.http.request('GET', '/api/chats', { query, parse: parseList('chats', parseChat) });
+  }
+
+  overview(): Promise<Overview> {
+    return this.http.request('GET', '/api/overview', { parse: parseOverview });
+  }
+
+  timeline(chat: string, query: TimelineQuery = {}): Promise<Page<Entry>> {
+    return this.http.request('GET', `/api/chats/${encodeURIComponent(chat)}/timeline`, { query: { ...query }, parse: parseEntryPage });
+  }
+
+  setPrefs(chat: string, prefs: ChatPrefs): Promise<Chat> {
+    return this.http.request('PUT', `/api/chats/${encodeURIComponent(chat)}/prefs`, { body: prefs, parse: (raw) => parseChat(raw) });
+  }
+
+  markRead(chat: string, upToSeq: number): Promise<Acked> {
+    return this.http.request('POST', `/api/chats/${encodeURIComponent(chat)}/read`, { body: { up_to_seq: upToSeq }, parse: parseAcked });
+  }
+
+  ack(seqs: readonly number[]): Promise<Acked> {
+    return this.http.request('POST', '/api/acks', { body: { seqs }, parse: parseAcked });
+  }
+
+  message(seq: number): Promise<Entry> {
+    return this.http.request('GET', `/api/messages/${seq}`, { parse: (raw) => parseEntry(raw) });
+  }
+
+  createChannel(request: ChannelCreate): Promise<Chat> {
+    return this.http.request('POST', '/api/channels', { body: request, parse: (raw) => parseChat(raw) });
+  }
+
+  updateChannel(name: string, update: ChannelUpdate): Promise<Chat> {
+    return this.http.request('PATCH', `/api/channels/${encodeURIComponent(name)}`, { body: update, parse: (raw) => parseChat(raw) });
+  }
+
+  deleteChannel(name: string): Promise<void> {
+    return this.http.request('DELETE', `/api/channels/${encodeURIComponent(name)}`, { query: { confirm: name } });
+  }
+
+  share(id: string): Promise<Share> {
+    return this.http.request('GET', `/api/shares/${encodeURIComponent(id)}`, { parse: parseShare });
   }
 }

@@ -1,0 +1,28 @@
+{{/* A conversation: /c/{name} and /dm/{peer} (PLAN 9.6.3). The latest 50
+     messages and event rows, filter chips, an "Older" link, the composer,
+     and the logs of a bound channel; ?view=logs shows the logs instead of
+     the conversation. The panes are laid out by CSS only. */}}
+<div class="chat-layout" data-view="{{.Data.View}}"{{if .Data.Logs}} data-bound{{end}} data-chat="{{.Data.Chat}}" data-surface="{{.Data.Surface}}" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}">
+  <div class="pane-list">{{template "partials/chat_list.html" .Data.List}}</div>
+  <div class="pane-head">
+    {{template "partials/channel_header.html" .Data.Header}}
+    {{with .Data.Banner}}<a class="banner warn q-banner" href="{{.Href}}" data-slot="banner">{{.Text}}</a>{{end}}
+    <nav class="filter-chips" aria-label="Show">{{range .Data.Filters}}<a class="chip filter" href="{{.Href}}" data-filter="{{.Value}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+  </div>
+  <div class="pane-conv">
+    {{if .Data.Older}}<a class="btn text older" href="{{.Data.Older}}" data-slot="older">Older</a>{{end}}
+    <div class="conversation timeline" data-component="ConversationView" role="log" aria-live="polite" aria-label="Messages" data-chat="{{.Data.Chat}}" data-next-seq="{{.Data.NextSeq}}" data-follow="{{if .Data.Follow}}true{{else}}false{{end}}" data-filter="{{.Data.Filter}}"{{if .Data.Older}} data-has-older{{end}}>
+      {{range .Data.Items}}{{if .Message}}{{template "partials/message.html" .Message}}{{else if .Question}}{{template "partials/question.html" .Question}}{{else if .Event}}{{template "partials/event_row.html" .Event}}{{end}}{{end}}
+    </div>
+    {{if .Data.Empty}}<p class="muted conversation-empty" data-slot="empty">{{if .Data.Filter}}Nothing matches this filter.{{else}}No messages yet. Say hello, or wait for an agent.{{end}}</p>{{end}}
+    {{if .Data.Newer}}<a class="btn text newer" href="{{.Data.Newer}}">Newest messages</a>{{end}}
+    <p class="banner notice no-script body-small">New messages appear when you reload; the bundle shows them live.</p>
+    <button class="fab new-messages only-scripted" type="button" data-slot="new" hidden><svg aria-hidden="true"><use href="/static/icons.svg#arrow_downward"></use></svg><span data-slot="new-count">0 new</span></button>
+  </div>
+  {{with .Data.Logs}}{{template "partials/logs_pane.html" .}}{{end}}
+  <div class="pane-composer">{{template "partials/composer.html" .Data.Composer}}</div>
+</div>
+{{with .Data.Dialog}}{{template "partials/channel_dialog.html" .}}{{end}}
+{{template "partials/image_viewer.html"}}
+{{template "partials/shortcuts_dialog.html"}}
+{{if .Data.SeenSrc}}<noscript><img class="seen-beacon" src="{{.Data.SeenSrc}}" alt="" width="1" height="1"></noscript>{{end}}

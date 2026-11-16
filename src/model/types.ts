@@ -215,3 +215,105 @@ export interface PairingCreate {
   readonly new_name?: string;
   readonly scopes?: readonly Scope[];
 }
+
+// Track D: chats (internal/dto/dto.go Chat, Overview, Share; web_d.go).
+export type ChatKind = 'channel' | 'direct';
+export type Surface = 'none' | 'markers' | 'errors';
+
+export interface StreamRef {
+  readonly id: string;
+  readonly status: StreamState;
+}
+
+export interface ChatPreview {
+  readonly seq: number;
+  readonly sender?: string;
+  readonly text: string;
+  readonly event: boolean;
+}
+
+export interface Chat {
+  readonly id: string;
+  readonly kind: ChatKind;
+  readonly name: string;
+  readonly title?: string;
+  readonly topic?: string;
+  readonly peer?: Principal;
+  readonly patterns: readonly string[];
+  readonly streams: readonly StreamRef[];
+  readonly surface: Surface;
+  readonly followed: boolean;
+  readonly pinned: boolean;
+  readonly muted: boolean;
+  readonly archived: boolean;
+  readonly source: 'runtime' | 'config';
+  readonly created_by?: string;
+  readonly can_manage: boolean;
+  readonly unread: number;
+  readonly open_questions: number;
+  readonly last_activity?: string;
+  readonly preview?: ChatPreview;
+}
+
+export interface Overview {
+  readonly questions: readonly Entry[];
+  readonly direct: readonly Chat[];
+  readonly recent: readonly Entry[];
+}
+
+export interface Share {
+  readonly id: string;
+  readonly text?: string;
+  readonly files: readonly ImageAttachment[];
+  readonly expires_at: string;
+}
+
+export interface Seen {
+  readonly seq: number;
+  readonly by: string;
+}
+
+export interface Answered {
+  readonly seq: number;
+  readonly answer: Answer;
+}
+
+export interface Acked {
+  readonly acked: number;
+}
+
+// Request bodies (internal/dto/web_d.go, dto.go).
+export interface ChatPrefs {
+  readonly pinned?: boolean;
+  readonly muted?: boolean;
+  readonly followed?: boolean;
+}
+
+export interface ChannelCreate {
+  readonly name: string;
+  readonly title?: string;
+  readonly topic?: string;
+  readonly patterns?: readonly string[];
+  readonly surface?: Surface;
+}
+
+export interface ChannelUpdate {
+  readonly rename?: string;
+  readonly title?: string;
+  readonly topic?: string;
+  readonly add_patterns?: readonly string[];
+  readonly remove_patterns?: readonly string[];
+  readonly surface?: Surface;
+  readonly archived?: boolean;
+}
+
+/** A log attachment as POST /api/messages takes it (the logs field). */
+export interface LogRequest {
+  readonly stream?: string;
+  readonly channel?: string;
+  readonly from_seq: number;
+  readonly to_seq?: number;
+  readonly grep?: string;
+  readonly min_severity?: number;
+  readonly title?: string;
+}

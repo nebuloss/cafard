@@ -3,6 +3,107 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: track D chat UI
+
+- **No migration.** Pins, mutes, follows and acks already have their
+  tables (track A's 0010); the numbers 0012-0019 of A's range, which D
+  builds on, are left unused.
+- **The chat pages and API need `*messaging.Service`**, not the deps
+  interface: `web.Register` type-asserts `d.Messaging` and only then
+  mounts them (`Site.SetChats`, `API.MountChats`). Messaging gained, in
+  files of D: `Chats`, `Overview`, `QuestionsFor`, `Counts` (`view.Counter`),
+  `Present` (`view.Presenter`), `FilteredTimeline`, `ChatOfStream` and
+  `WatchChats`, an in-process feed of `seen`, `answered` and `chat` events
+  emitted by `Ack`, `SendMessage` (first human reply to a question), channel
+  create, update, delete and auto-archive, `SetFollow` and `SetPrefs` (the
+  last two for that principal only). A slow watcher loses events rather
+  than blocking a send.
+- **SSE:** `seen` goes to the page of that chat; `answered` to the chat
+  and to home; `chat` to home and chat pages (a chat page whose bindings
+  changed reconnects from its cursor). A deleted or renamed-away channel
+  sends no `chat` event: there is no Chat to send. Any of the three marks
+  the badges dirty, so `counts` follows within a second.
+- **Counts:** `open_questions` is the questions of "Needs you" (open,
+  addressed to the viewer by name, or to `@humans` for a human, in a chat
+  the viewer follows and has not muted, or by name whatever the mute);
+  `unread_direct` sums direct chats; a muted channel counts no unread.
+  `chats` lists only the non-zero ones.
+- **The chat list:** default is followed unarchived channels plus every
+  direct conversation; `all=1` adds unfollowed channels, `archived=1`
+  archived ones. Order: pinned channels, channels by last activity (a
+  message, or the newest event row of a bound channel, which also becomes
+  the preview), direct chats by last activity.
+- **`PUT /api/chats/{chat}/prefs` with `followed`** is for channels only
+  (400 for a direct chat). **`DELETE /api/channels/{name}`** needs
+  `?confirm=<name>`. **`f=` filters** read back up to 20 pages of 200 rows
+  to fill one page, so a rare kind still shows; "Older" may then show
+  fewer rows than 50.
+- **`POST /api/messages` takes sessions** (with `RequireSameOrigin`) and
+  two new form fields: `back` (where a failed no-JS post returns, only
+  its `share` parameter kept) and `next` (where a sent one goes; home's
+  question cards return home). A failed form post's banner maps the error
+  code to a sentence on the page; the code comes from the URL, so an
+  unknown one is not echoed.
+- **No-JS read state:** a chat page acks what it renders only when the
+  binary has no bundle. With a bundle it cannot know whether scripts will
+  run, so it carries `<noscript><img src="/seen?seqs=...">`: only a
+  browser without scripts loads it. `/seen` (new route, CONTRACTS 2.1)
+  refuses a `Sec-Fetch-Site` other than same-origin; the Lax session
+  cookie is not sent with a cross-site image anyway.
+- **Channel settings need the bundle** (the dialog uses the JSON API);
+  without it the header's stream chips and the Chat/Logs links still
+  work. Everything else of the chats works without JavaScript.
+- **Message text:** `messaging.Segments` (track A) now drops escape
+  sequences and control characters line by line, so a message cannot
+  retitle a terminal or hide text, in pages and in the JSON alike.
+- **Template contract additions** (CONTRACTS 6.2 updated): `tpl-image`
+  may set `href` on its root (`/blob/` only); `tpl-question` sets `id` and
+  its hidden inputs' values; `tpl-choice` sets `value`;
+  `tpl-needs-you-question` has a `chat` slot with `href`; home lists
+  `tpl-line` (log attachment previews). `partials/choice`,
+  `partials/needs_you_question` and `partials/drop_form` are defined inside
+  `question.html`, `needs_you.html` and `quick_drop_sheet.html`.
+- **The share target:** staged shares live in memory (`view.Shares`, 1 h);
+  their photos are visible to their sharer only, through a new
+  `blob.Store.SetGrant` (no message references them yet); title, text and
+  url are joined into the text. The service worker re-sends the shared
+  form itself (a navigation's own request follows no redirect inside a
+  worker), reads the id from the final URL, and answers 303 to
+  `/?share=<id>`. It caches the shell files only (network first) and
+  never a page or the API. Browsers allow service workers only on HTTPS
+  or localhost.
+- **Uploads:** one job at a time, in order; a network failure or a busy
+  server (429/503, honouring `Retry-After`) holds the queue and retries
+  with backoff (2 s to 60 s); a refusal (400, 403, 413) waits for the
+  person and lets later messages go. Jobs and their photos are kept in
+  IndexedDB until sent; photos are processed once. `ResizeToJpeg` always
+  re-encodes (quality 0.85), which drops EXIF and its GPS position; GIFs
+  and photos that do not decode are sent as they are. Pending uploads
+  show in the composer's upload list, not as a count in the connection
+  badge (PLAN 9.6.2), which is track C's component.
+- **Keys and the service worker** are set up in `mountShell` (track C's
+  file, two additions), so `g c`/`g l`/`g s` work on every page; `?`
+  needs the shortcuts dialog the chat pages carry.
+- **Layout is CSS only.** The one style the bundle sets is the logs
+  pane's width (`--pane-logs` on the chat layout) while dragging its edge;
+  the width is kept in `localStorage`. The textarea grows with
+  `field-sizing: content` where browsers have it.
+- **Shared files touched:** `internal/web/web.go` (chat wiring),
+  `pages/site.go` (one field), `pages/home.go` (replaced), `sse/sse.go`
+  (chat events), `api/messages.go` (session auth, `back`/`next`),
+  `messaging` and `blob` as above, `static/icons.svg` (glyphs appended),
+  `manifest.webmanifest` (share target), `src/App.ts` (three pages and the
+  upload queue), `src/pages/Shell.ts`, `src/net/LiveFeed.ts` (three
+  events), `src/net/CafardApi.ts`, `src/model/*`, `src/render/format.ts`.
+  Tests of other tracks adjusted: the web tests start the real messaging
+  service and their seed has chats (fixture pages regenerated); A's
+  ask_human test follows the 303 to sign-in (chat pages need a session);
+  C's App test registers its own page name instead of `home`, and the
+  LivePage test reads `data-next-seq` from the fixture.
+- **New DTOs** (`internal/dto/web_d.go`, fixtures in
+  `fixtures_d_test.go`): `ChatPrefs`, `ChatRead`, `AckRequest`, `Acked`.
+  No new dependency.
+
 ## 2026-11-16: track E2 serial control
 
 - **`serial_write` and `serial_control` are added in `serial.Register`**

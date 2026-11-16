@@ -176,6 +176,32 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   filter and by `Messaging.Visible` in the handler. Keep both; a test
   runs the hub wide open to pin the second.
 
+- **Track D: the web tests run the real messaging service.** `newEnv`
+  in `internal/web/web_test.go` starts it and mounts `RegisterMessages`;
+  `seed` creates `#dut1`, a photo, a log slice, a question and a DM, and
+  the fixture pages under `testdata/pages` come from that. A test env
+  with a fake `deps.Messaging` gets no chat pages or chat API at all.
+- **Track D: chat pages ack on render only without a bundle.** With
+  `main.js` built they carry a `<noscript>` beacon instead, so tests that
+  count unread branch on `assets.BundleBuilt()`; run `go test ./internal/web`
+  both before and after `npm run build` when touching read state.
+- **Track D: a `<dialog>` must not have the class `dialog`:** track C's
+  `.dialog` is a fixed overlay that shows even when the dialog is closed.
+  Use `modal`, `sheet` or `image-viewer`.
+- **Track D: `.only-scripted` forces `display: inline-flex !important`**
+  once scripts run, so a column menu that carries it needs
+  `flex-direction: column`.
+- **Track D: session posts need `Sec-Fetch-Site: same-origin`** (or no
+  browser header) on `POST /api/messages` now; a Go client following the
+  303 of a bearer post lands on `/signin?next=/c/...`, since chat pages
+  take sessions only.
+- **Track D: new chat mutations must emit.** A messaging change a page
+  should see live calls `emit`/`emitChat` (`internal/messaging/events.go`),
+  or the SSE `chat`/`seen`/`answered` events and the badges miss it.
+- **Track D: `Services.uploads` is required.** A test that builds a
+  `Services` literal needs an `UploadQueue` (`src/testing/services.ts`
+  has `fakeServices`).
+
 ## Rules that are easy to break
 
 - **No `innerHTML` and its relatives in `src/`.** Log lines and messages come

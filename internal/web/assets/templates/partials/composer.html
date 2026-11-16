@@ -1,0 +1,32 @@
+{{/* The composer (Composer), pinned to the bottom. A plain multipart form
+     posting to /api/messages, so text and photos send without the bundle;
+     the bundle adds resizing, the upload queue, paste, drop, replies and
+     log chips. Data: ComposerView. */}}
+{{if .CanSend}}
+<form class="composer" data-component="Composer" method="post" action="/api/messages" enctype="multipart/form-data" data-chat="{{.Chat}}" data-max-files="{{.MaxFiles}}">
+  <input type="hidden" name="chat" value="{{.Chat}}">
+  <input type="hidden" name="reply_to" value="" data-field="reply_to">
+  <input type="hidden" name="logs" value="" data-field="logs">
+  <div class="composer-reply only-scripted" data-slot="reply" hidden><span class="reply-text" data-slot="reply-text"></span><button class="icon-btn small" type="button" data-action="cancel-reply" aria-label="Cancel the reply"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></div>
+  <div class="attachment-tray" data-component="AttachmentTray" data-slot="tray" aria-label="Attachments" aria-live="polite"></div>
+  <div class="upload-list" data-component="UploadStatus" data-slot="uploads" aria-live="polite"></div>
+  <div class="composer-row">
+    <details class="composer-more only-scripted"{{if not .Bound}} hidden{{end}}>
+      <summary class="icon-btn" aria-label="More: attach logs"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></summary>
+      <div class="menu" role="menu">
+        {{range .Streams}}
+        <button class="menu-item" type="button" role="menuitem" data-action="attach-last" data-stream="{{.}}"><svg aria-hidden="true"><use href="/static/icons.svg#description"></use></svg>Last 200 lines of {{.}}</button>
+        <button class="menu-item" type="button" role="menuitem" data-action="attach-from-now" data-stream="{{.}}"><svg aria-hidden="true"><use href="/static/icons.svg#schedule"></use></svg>{{.}} from now on</button>
+        {{end}}
+      </div>
+    </details>
+    <label class="icon-btn file-btn" title="Add photos"><input type="file" name="files[]" accept="image/*" multiple data-field="photos"><svg aria-hidden="true"><use href="/static/icons.svg#image"></use></svg><span class="visually-hidden">Add photos</span></label>
+    <label class="icon-btn file-btn" title="Camera"><input type="file" name="files[]" accept="image/*" capture="environment" data-field="camera"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg><span class="visually-hidden">Take a photo</span></label>
+    <label class="composer-text"><span class="visually-hidden">Message</span><textarea name="text" rows="1" maxlength="32768" placeholder="{{.Placeholder}}" enterkeyhint="send"></textarea></label>
+    <button class="icon-btn filled send" type="submit" aria-label="Send" title="Send (Ctrl+Enter)"><svg aria-hidden="true"><use href="/static/icons.svg#send"></use></svg></button>
+  </div>
+  <label class="keep-original only-scripted"><input type="checkbox" data-field="keep-original"> Keep original photos</label>
+</form>
+{{else}}
+<p class="composer composer-readonly muted">This session can read but not send messages.</p>
+{{end}}
