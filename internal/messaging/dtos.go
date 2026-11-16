@@ -55,22 +55,9 @@ func (s *Service) answer(ctx context.Context, seq int64) (*dto.Answer, error) {
 	return a, nil
 }
 
-// SeenBy lists who acked a message, its sender excluded, in ack order.
-func (s *Service) SeenBy(ctx context.Context, e store.Entry) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT principal FROM acks WHERE seq = ? AND principal != ? ORDER BY at, principal`, e.Seq, e.Sender)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
+// seenBy lists who acked a message, its sender excluded, in ack order.
+func (s *Service) seenBy(ctx context.Context, e store.Entry) ([]string, error) {
+	return store.QueryColumn[string](ctx, s.db, `SELECT principal FROM acks WHERE seq = ? AND principal != ? ORDER BY at, principal`, e.Seq, e.Sender)
 }
 
 // EntryDTO is e as viewer sees it in the API: chat from its side, sender
@@ -89,19 +76,19 @@ func (s *Service) EntryDTO(ctx context.Context, viewer auth.Principal, e store.E
 	out.Recipient = e.Recipient
 	out.ReplyTo = e.ReplyTo
 	out.Segments = Segments(e.Text)
-	for i, a := range e.Attachments {
+	for _, a := range e.Attachments {
 		switch a.Type {
 		case dto.AttachmentImage:
 			out.Attachments = append(out.Attachments, dto.ImageOf(ImageDTO(a)))
 		case dto.AttachmentLog:
-			la, err := s.logDTO(ctx, e, i, a)
+			la, err := s.logDTO(ctx, a)
 			if err != nil {
 				return dto.Entry{}, err
 			}
 			out.Attachments = append(out.Attachments, dto.LogOf(la))
 		}
 	}
-	seen, err := s.SeenBy(ctx, e)
+	seen, err := s.seenBy(ctx, e)
 	if err != nil {
 		return dto.Entry{}, err
 	}

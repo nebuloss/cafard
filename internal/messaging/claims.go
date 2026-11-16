@@ -14,8 +14,8 @@ import (
 
 // Claim durations.
 const (
-	DefaultClaimTTL = 15 * time.Minute
-	MaxClaimTTL     = 24 * time.Hour
+	defaultClaimTTL = 15 * time.Minute
+	maxClaimTTL     = 24 * time.Hour
 	maxClaimNote    = 500
 )
 
@@ -56,9 +56,9 @@ func (s *Service) Claim(ctx context.Context, p auth.Principal, resource string, 
 		return ClaimRow{}, false, dto.Errorf(dto.CodeTooLarge, "A claim note is at most %d bytes.", maxClaimNote)
 	}
 	if ttl <= 0 {
-		ttl = DefaultClaimTTL
+		ttl = defaultClaimTTL
 	}
-	ttl = min(ttl, MaxClaimTTL)
+	ttl = min(ttl, maxClaimTTL)
 	if _, err := s.expire(ctx, resource); err != nil {
 		return ClaimRow{}, false, err
 	}
@@ -197,9 +197,9 @@ func (s *Service) expire(ctx context.Context, resource string) (int, error) {
 // ExpireClaims is the janitor's claim pass.
 func (s *Service) ExpireClaims(ctx context.Context) (int, error) { return s.expire(ctx, "") }
 
-// ListClaims returns the live claims, by resource; patterns (ids or
+// listClaims returns the live claims, by resource; patterns (ids or
 // globs) narrow them, nil keeps all.
-func (s *Service) ListClaims(ctx context.Context, patterns []string) ([]ClaimRow, error) {
+func (s *Service) listClaims(ctx context.Context, patterns []string) ([]ClaimRow, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT resource, principal, coalesce(note, ''), expires_at FROM claims WHERE expires_at > ? ORDER BY resource`,
 		s.clock.Now().UnixNano())
 	if err != nil {
@@ -226,7 +226,7 @@ func (s *Service) ListClaims(ctx context.Context, patterns []string) ([]ClaimRow
 
 // ActiveClaims implements mcpserver.ClaimSource for list_streams.
 func (s *Service) ActiveClaims(ctx context.Context) (map[string]dto.Claim, error) {
-	list, err := s.ListClaims(ctx, nil)
+	list, err := s.listClaims(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

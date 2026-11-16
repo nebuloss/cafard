@@ -3,6 +3,7 @@ package messaging
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,7 +18,6 @@ type InboxQuery struct {
 	Channel      string // only this channel
 	Limit        int
 	IncludeAcked bool
-	SinceSeq     int64
 }
 
 // inboxWhere is the PLAN section 6 inbox rule for principal ?1 (kind
@@ -52,14 +52,11 @@ func (s *Service) Inbox(ctx context.Context, p auth.Principal, q InboxQuery) ([]
 		where += ` AND e.stream = ?3`
 		args = append(args, ch.Stream())
 	}
-	if q.SinceSeq > 0 {
-		where += fmt.Sprintf(` AND e.seq >= %d`, q.SinceSeq)
-	}
 	order := `ASC`
 	if q.IncludeAcked {
 		order = `DESC`
 	}
-	seqs, err := s.seqs(ctx, `SELECT e.seq FROM entries e WHERE `+where+` ORDER BY e.seq `+order+fmt.Sprintf(` LIMIT %d`, limit+1), args...)
+	seqs, err := store.QueryColumn[int64](ctx, s.db, `SELECT e.seq FROM entries e WHERE `+where+` ORDER BY e.seq `+order+fmt.Sprintf(` LIMIT %d`, limit+1), args...)
 	if err != nil {
 		return nil, false, err
 	}
@@ -68,9 +65,7 @@ func (s *Service) Inbox(ctx context.Context, p auth.Principal, q InboxQuery) ([]
 		seqs = seqs[:limit]
 	}
 	if q.IncludeAcked {
-		for i, j := 0, len(seqs)-1; i < j; i, j = i+1, j-1 {
-			seqs[i], seqs[j] = seqs[j], seqs[i]
-		}
+		slices.Reverse(seqs)
 	}
 	out := make([]store.Entry, 0, len(seqs))
 	for _, seq := range seqs {
@@ -83,26 +78,9 @@ func (s *Service) Inbox(ctx context.Context, p auth.Principal, q InboxQuery) ([]
 	return out, more, nil
 }
 
-func (s *Service) seqs(ctx context.Context, query string, args ...any) ([]int64, error) {
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []int64
-	for rows.Next() {
-		var seq int64
-		if err := rows.Scan(&seq); err != nil {
-			return nil, err
-		}
-		out = append(out, seq)
-	}
-	return out, rows.Err()
-}
-
-// InInbox reports whether a committed message is in p's inbox, acks
+// inInbox reports whether a committed message is in p's inbox, acks
 // aside.
-func (s *Service) InInbox(ctx context.Context, p auth.Principal, e store.Entry) (bool, error) {
+func (s *Service) inInbox(ctx context.Context, p auth.Principal, e store.Entry) (bool, error) {
 	if e.Kind != store.KindMessage || !s.Visible(ctx, p, e) {
 		return false, nil
 	}
@@ -128,12 +106,6 @@ func (s *Service) Ack(ctx context.Context, p auth.Principal, seqs []int64) (int,
 		}
 		if k, _ := r.RowsAffected(); k > 0 {
 			n++
-			s.mu.Lock()
-			listeners := s.onAck
-			s.mu.Unlock()
-			for _, f := range listeners {
-				f(seq, p.Name)
-			}
 			s.emit(ChatEvent{Kind: EventSeen, Stream: e.Stream, Seq: seq, By: p.Name})
 		}
 	}
@@ -142,7 +114,7 @@ func (s *Service) Ack(ctx context.Context, p auth.Principal, seqs []int64) (int,
 
 // AckUpTo acks every message of a chat up to seq (the web UI's "read").
 func (s *Service) AckUpTo(ctx context.Context, p auth.Principal, stream string, upTo int64) (int, error) {
-	seqs, err := s.seqs(ctx, `SELECT e.seq FROM entries e WHERE e.stream = ? AND e.kind = 'message' AND e.seq <= ?
+	seqs, err := store.QueryColumn[int64](ctx, s.db, `SELECT e.seq FROM entries e WHERE e.stream = ? AND e.kind = 'message' AND e.seq <= ?
 		AND NOT EXISTS (SELECT 1 FROM acks a WHERE a.principal = ? AND a.seq = e.seq)`, stream, upTo, p.Name)
 	if err != nil {
 		return 0, err
@@ -183,7 +155,7 @@ func (s *Service) waitMatches(ctx context.Context, p auth.Principal, q WaitQuery
 	if q.ReplyTo != 0 {
 		return e.ReplyTo == q.ReplyTo, nil
 	}
-	return s.InInbox(ctx, p, e)
+	return s.inInbox(ctx, p, e)
 }
 
 // Wait returns the first message matching q that p has not acked: one
@@ -278,7 +250,7 @@ func (s *Service) waitStored(ctx context.Context, p auth.Principal, q WaitQuery,
 		where.WriteString(fmt.Sprintf(` AND e.stream = ?%d`, len(args)))
 	}
 	where.WriteString(fmt.Sprintf(` AND e.seq <= %d`, last))
-	seqs, err := s.seqs(ctx, `SELECT e.seq FROM entries e WHERE `+where.String()+` ORDER BY e.seq LIMIT 200`, args...)
+	seqs, err := store.QueryColumn[int64](ctx, s.db, `SELECT e.seq FROM entries e WHERE `+where.String()+` ORDER BY e.seq LIMIT 200`, args...)
 	if err != nil {
 		return store.Entry{}, false, 0, err
 	}

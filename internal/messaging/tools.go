@@ -755,10 +755,7 @@ func (s *Service) toolTimeline(ctx context.Context, c *mcpserver.Call, in timeli
 	if err != nil {
 		return "", entryPage{}, err
 	}
-	entries := make([]store.Entry, len(page.Rows))
-	for i, r := range page.Rows {
-		entries[i] = r.Entry
-	}
+	entries := page.entries()
 	out := entryPage{Entries: dp.Items, Page: mcpserver.Page{NextSeq: page.NextSeq, HasMore: page.HasMore, Shown: len(entries)}}
 	if out.Entries == nil {
 		out.Entries = []dto.Entry{}
@@ -805,7 +802,7 @@ func (s *Service) toolListClaims(ctx context.Context, _ *mcpserver.Call, in list
 			return "", listClaimsOut{}, err
 		}
 	}
-	list, err := s.ListClaims(ctx, patterns)
+	list, err := s.listClaims(ctx, patterns)
 	if err != nil {
 		return "", listClaimsOut{}, err
 	}

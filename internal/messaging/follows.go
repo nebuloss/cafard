@@ -133,16 +133,23 @@ func (s *Service) ChannelChat(ctx context.Context, p auth.Principal, ch Channel)
 	if ch.CreatedBy == systemName {
 		c.CreatedBy = ""
 	}
-	if c.Unread, err = s.unread(ctx, p, ch.Stream()); err != nil {
-		return dto.Chat{}, err
-	}
-	if c.OpenQuestions, err = s.openQuestions(ctx, ch.Stream()); err != nil {
-		return dto.Chat{}, err
-	}
-	if c.Preview, err = s.preview(ctx, ch.Stream()); err != nil {
+	if err := s.fillCounts(ctx, p, ch.Stream(), &c); err != nil {
 		return dto.Chat{}, err
 	}
 	return c, nil
+}
+
+// fillCounts sets a chat's unread count, open questions and preview.
+func (s *Service) fillCounts(ctx context.Context, p auth.Principal, stream string, c *dto.Chat) error {
+	var err error
+	if c.Unread, err = s.unread(ctx, p, stream); err != nil {
+		return err
+	}
+	if c.OpenQuestions, err = s.openQuestions(ctx, stream); err != nil {
+		return err
+	}
+	c.Preview, err = s.preview(ctx, stream)
+	return err
 }
 
 // DirectChat is the Chat DTO of p's conversation with peer.
@@ -160,13 +167,7 @@ func (s *Service) DirectChat(ctx context.Context, p auth.Principal, peer string)
 			c.Peer.LastSeen = dto.TimePtr(*row.LastSeen)
 		}
 	}
-	if c.Unread, err = s.unread(ctx, p, stream); err != nil {
-		return dto.Chat{}, err
-	}
-	if c.OpenQuestions, err = s.openQuestions(ctx, stream); err != nil {
-		return dto.Chat{}, err
-	}
-	if c.Preview, err = s.preview(ctx, stream); err != nil {
+	if err := s.fillCounts(ctx, p, stream, &c); err != nil {
 		return dto.Chat{}, err
 	}
 	if c.Preview != nil {

@@ -46,7 +46,6 @@ type Channel struct {
 	Title, Topic string
 	Surface      dto.Surface
 	CreatedBy    string
-	CreatedAt    time.Time
 	LastActivity time.Time
 	ArchivedAt   *time.Time
 	Source       dto.ChatSource
@@ -103,7 +102,7 @@ func (s *Service) Channels(ctx context.Context, includeArchived bool) ([]Channel
 }
 
 func (s *Service) queryChannels(ctx context.Context, where string, args ...any) ([]Channel, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT name, coalesce(title, ''), coalesce(topic, ''), surface, created_by, created_at,
+	rows, err := s.db.QueryContext(ctx, `SELECT name, coalesce(title, ''), coalesce(topic, ''), surface, created_by,
 		last_activity, archived_at, source FROM channels `+where+` ORDER BY name`, args...)
 	if err != nil {
 		return nil, err
@@ -112,16 +111,16 @@ func (s *Service) queryChannels(ctx context.Context, where string, args ...any) 
 	for rows.Next() {
 		var (
 			c                   Channel
-			created, activity   int64
+			activity            int64
 			archived            sql.NullInt64
 			surface, sourceName string
 		)
-		if err := rows.Scan(&c.Name, &c.Title, &c.Topic, &surface, &c.CreatedBy, &created, &activity, &archived, &sourceName); err != nil {
+		if err := rows.Scan(&c.Name, &c.Title, &c.Topic, &surface, &c.CreatedBy, &activity, &archived, &sourceName); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		c.Surface, c.Source = dto.Surface(surface), dto.ChatSource(sourceName)
-		c.CreatedAt, c.LastActivity = time.Unix(0, created).UTC(), time.Unix(0, activity).UTC()
+		c.LastActivity = time.Unix(0, activity).UTC()
 		if archived.Valid {
 			t := time.Unix(0, archived.Int64).UTC()
 			c.ArchivedAt = &t
@@ -140,21 +139,14 @@ func (s *Service) queryChannels(ctx context.Context, where string, args ...any) 
 	return out, nil
 }
 
+// patterns are a channel's bindings, never nil: an empty list narrows to
+// nothing where nil would mean every stream (list_claims).
 func (s *Service) patterns(ctx context.Context, name string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT pattern FROM channel_streams WHERE channel = ? ORDER BY pattern`, name)
-	if err != nil {
-		return nil, err
+	out, err := store.QueryColumn[string](ctx, s.db, `SELECT pattern FROM channel_streams WHERE channel = ? ORDER BY pattern`, name)
+	if out == nil && err == nil {
+		out = []string{}
 	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
+	return out, err
 }
 
 func (s *Service) unknownChannel(ctx context.Context, name string) *dto.APIError {
@@ -245,23 +237,14 @@ func (s *Service) applyConfigChannels(ctx context.Context) error {
 			}
 		}
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT name FROM channels WHERE source = 'config'`)
+	names, err := store.QueryColumn[string](ctx, tx, `SELECT name FROM channels WHERE source = 'config'`)
 	if err != nil {
 		return err
 	}
-	var stale []string
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			rows.Close()
-			return err
+	for _, n := range names {
+		if listed[n] {
+			continue
 		}
-		if !listed[n] {
-			stale = append(stale, n)
-		}
-	}
-	rows.Close()
-	for _, n := range stale {
 		if _, err := tx.ExecContext(ctx, `UPDATE channels SET source = 'runtime' WHERE name = ?`, n); err != nil {
 			return err
 		}
@@ -501,19 +484,9 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 	return s.Channel(ctx, final)
 }
 
-func (s *Service) needExec() error {
-	if s.exec == nil {
-		return errors.New("messaging: the writer cannot run transactions")
-	}
-	return nil
-}
-
 // rename moves a channel and its messages to a new name, in the writer
 // because entries change stream.
 func (s *Service) rename(ctx context.Context, from, to string) error {
-	if err := s.needExec(); err != nil {
-		return err
-	}
 	return s.exec.Exec(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		stmts := []struct {
 			q    string
@@ -552,9 +525,6 @@ func (s *Service) DeleteChannel(ctx context.Context, p auth.Principal, name stri
 			return dto.Errorf(dto.CodeForbidden, "#%s comes from the configuration; it cannot be deleted.", ch.Name)
 		}
 		return dto.Errorf(dto.CodeForbidden, "Only %s, who created #%s, or an admin may delete it.", ch.CreatedBy, ch.Name)
-	}
-	if err := s.needExec(); err != nil {
-		return err
 	}
 	stream := ch.Stream()
 	defer s.emit(ChatEvent{Kind: EventChat, Stream: stream, Gone: true})

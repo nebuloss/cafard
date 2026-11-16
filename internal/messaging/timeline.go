@@ -1,6 +1,7 @@
 package messaging
 
 import (
+	"cmp"
 	"context"
 	"slices"
 
@@ -86,7 +87,7 @@ func (s *Service) Timeline(ctx context.Context, viewer auth.Principal, stream st
 			rows = append(rows, TimelineRow{Entry: e, Event: i > 0})
 		}
 	}
-	slices.SortFunc(rows, func(a, b TimelineRow) int { return cmpInt(a.Seq, b.Seq) })
+	slices.SortFunc(rows, func(a, b TimelineRow) int { return cmp.Compare(a.Seq, b.Seq) })
 	if len(rows) > limit {
 		more = true
 		if q.BeforeSeq > 0 {
@@ -112,6 +113,15 @@ func cutChan(stream string) (string, bool) {
 		return stream[5:], true
 	}
 	return "", false
+}
+
+// entries are the rows' entries, without the event marks.
+func (p TimelinePage) entries() []store.Entry {
+	out := make([]store.Entry, len(p.Rows))
+	for i, r := range p.Rows {
+		out[i] = r.Entry
+	}
+	return out
 }
 
 // TimelineDTO converts a page for viewer.
