@@ -61,8 +61,8 @@ var commands = map[string]command{
 	"version": cmdVersion,
 	"push":    cmdPush,
 	"token":   cmdToken,
-	"term":    notYet("M6"),
-	"mcp":     notYet("M6"),
+	"term":    cmdTerm,
+	"mcp":     cmdMCP,
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) error {
@@ -93,12 +93,6 @@ func cmdVersion(_ context.Context, e env, args []string) error {
 	}
 	fmt.Fprintln(e.stdout, "cafard "+version)
 	return nil
-}
-
-func notYet(milestone string) command {
-	return func(context.Context, env, []string) error {
-		return fmt.Errorf("not implemented yet (milestone %s)", milestone)
-	}
 }
 
 // parseFlags parses a subcommand's flags. -h prints the flags and is not an

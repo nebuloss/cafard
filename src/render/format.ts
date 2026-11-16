@@ -37,6 +37,12 @@ export function activity(iso: string | undefined, nowMs: number): string {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} ${s.slice(11, 16)}`;
 }
 
+/** A claim chip, like pages.StreamCard: "codex until 10:45" (UTC). */
+export function claimText(c: { readonly principal: string; readonly expires_at: string }): string {
+  const d = new Date(c.expires_at);
+  return Number.isNaN(d.getTime()) ? c.principal : `${c.principal} until ${d.toISOString().slice(11, 16)}`;
+}
+
 /** Lines per minute with one decimal, like strconv.FormatFloat(x, 'f', 1). */
 export function rate(perMin: number): string {
   return perMin.toFixed(1);

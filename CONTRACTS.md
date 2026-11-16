@@ -576,7 +576,7 @@ There is one connection per page. The query picks the scope:
 | home | `?scope=home` | messages visible to the viewer in followed chats (for previews and Overview) |
 | chat | `?chat=chan:dut1` | the chat's messages, and every entry of its bound streams (the client sends lines to the logs pane and event rows to the timeline, per `surface`) |
 | chat (direct) | `?chat=dm:codex-build` | the conversation's messages |
-| live | `?streams=&channel=&kinds=&sev=&re=` | matching non-message entries (`kinds=message` adds messages visible to the viewer) |
+| live | `?streams=&channel=&kinds=&sev=&re=` | matching non-message entries (`kinds=message` adds messages visible to the viewer; with `channel=`, that channel's messages only) |
 | streams | `?scope=status` | none |
 | any | `&since_seq=N` or the `Last-Event-ID` header | replay after N first (at most 5000 entries; beyond that a `reset`) |
 
@@ -589,7 +589,7 @@ Every connection also receives `counts` and `stream_status`.
 | `answered` | - | `{seq, answer: {by, choice?, seq}}` | a question on the page was answered |
 | `chat` | - | `Chat` | a chat's metadata, bindings, prefs or archive state changed. On a chat page whose bindings changed, the client reconnects with its last seq |
 | `counts` | - | `Counts` | on connect, then on change, throttled to 1 per second |
-| `stream_status` | - | `Stream` | a source changed state, throttled to 1 per 2 s per stream |
+| `stream_status` | - | `Stream` | a source changed (state, drops, line state, or a new entry), throttled to 1 per 2 s per stream. It carries `last_line`, `last_seq`, `labels` and `claim` (absent: nobody holds it) |
 | `reset` | - | `{reason}` | the subscriber lagged, or the replay was too long. The client reloads through the JSON API, then reconnects |
 
 - A heartbeat comment `: ping` is sent every 20 s.
@@ -653,7 +653,7 @@ Each partial below is rendered twice:
 | `tpl-question` | `partials/question.html` | `sender`, `time`, `body`, `choices`, `reply-form`, `answer` | `data-seq`, `data-open`, `id` (`m<seq>`); the hidden inputs (`data-field`) get their `value` | chat, home |
 | `tpl-choice` | inside `question.html` (`partials/choice`) | `label` | `data-choice`, `disabled`, `value` (the submit button's choice) | chat, home |
 | `tpl-event-row` | `partials/event_row.html` | `stream`, `time`, `text`, `open` | `data-seq`, `data-severity`, `data-kind`, `href` on `open` | chat, home |
-| `tpl-line` | `partials/line.html` | `time`, `stream`, `sev`, `text` | `data-seq`, `data-sev`, `data-tone` (0-7), `data-selected` | chat, live, home (log attachment previews) |
+| `tpl-line` | `partials/line.html` | `time`, `stream`, `sev`, `text` | `data-seq`, `data-sev`, `data-tone` (0-7), `data-selected`, `data-kind` (`message` for a message row in Live) | chat, live, home (log attachment previews) |
 | `tpl-marker` | `partials/marker.html` | `time`, `text` | `data-seq` | chat, live |
 | `tpl-image` | `partials/image.html` | `img`, `more` | `src` (only `/blob/...`), `alt`, `width`, `height`, `data-sha`, `href` on the root (only `/blob/...`) | chat, home, drop |
 | `tpl-log-attachment` | `partials/log_attachment.html` | `streams`, `title`, `lines`, `span`, `preview`, `open`, `state` | `href` on `open` (only `/live?...` or `#`), `data-snapshot`, `data-expired`, `data-open-ended` | chat, home |
@@ -669,7 +669,7 @@ These are on the page from the start, and the bundle only attaches
 behaviour to them:
 
 - `nav`, `channel_header`, `channel_dialog`, `composer`, `quick_drop_sheet`
-- `image_viewer`, `range_bar`, `filter_bar`, `logs_pane`, `overview`
+- `image_viewer`, `range_bar`, `filter_bar`, `logs_pane`, `line_menu`, `overview`
 - `token_dialog`, `pair_panel`, `shortcuts_dialog`, `empty_*`
 
 Their mount points are `data-component="<ComponentName>"`.

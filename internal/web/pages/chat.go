@@ -487,8 +487,8 @@ func (s *Site) share(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		return
 	}
 	var (
-		texts []string
-		blobs []dto.Blob
+		fields = map[string]string{} // title, text, url, joined in that order whatever the form's
+		blobs  []dto.Blob
 	)
 	for {
 		part, err := mr.NextPart()
@@ -524,9 +524,7 @@ func (s *Site) share(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		if v := strings.TrimSpace(string(data)); v != "" {
 			switch part.FormName() {
 			case "title", "text", "url":
-				if !slices.Contains(texts, v) {
-					texts = append(texts, v)
-				}
+				fields[part.FormName()] = v
 			}
 		}
 	}
@@ -534,6 +532,12 @@ func (s *Site) share(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		if !strings.HasPrefix(b.Mime, "image/") {
 			s.Fail(w, r, &p, http.StatusBadRequest, "That file cannot be shared", "Only photos can be shared to cafard.")
 			return
+		}
+	}
+	var texts []string
+	for _, k := range []string{"title", "text", "url"} {
+		if v := fields[k]; v != "" && !slices.Contains(texts, v) {
+			texts = append(texts, v)
 		}
 	}
 	sh := s.chats.shares.Put(p.Name, strings.Join(texts, "\n"), blobs)

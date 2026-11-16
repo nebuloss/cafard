@@ -842,7 +842,7 @@ Agents pay for every token, so:
 | `read` | `channel?` (its bound streams), `streams?` (default all log streams), `since_seq?` (default: last 100 lines), `until_seq?`, `limit?`, `min_severity?`, `grep?` (RE2) | lines, `next_seq`, `has_more` |
 | `tail` | `channel?` (its bound streams), `streams?`, `lines?` (50) | the last N lines and `next_seq` |
 | `wait_for` | `pattern` (RE2), `channel?` (its bound streams), `streams?`, `since_seq?` (default: now), `timeout_s?` (60, max 600), `context_lines?` (20) | on a match: the matching line, the lines before it, `match_seq`. On timeout: `timed_out`, the lines seen (capped), `next_seq` |
-| `search` | `query` (FTS5), `channel?` (its messages and bound streams), `streams?`, `from?`, `to?` (RFC 3339 or relative like `-2h`), `limit?` | matching lines in seq order |
+| `search` | `query` (FTS5), `channel?` (its messages and bound streams), `streams?`, `from?`, `to?` (RFC 3339 or relative like `-2h`), `since_seq?` (continue), `limit?` | matching lines in seq order, `next_seq`, `has_more` |
 | `context` | `seq`, `before?` (20), `after?` (20) | lines around one entry, in its stream; on a message seq, message visibility applies |
 | `mark` | `stream`, `label` | creates a marker and returns its `seq`, a cursor for "everything since I started test X" |
 | `serial_write` | `stream`, `data`, `newline?` (`\r`) | bytes written. Refused unless all three hold: the stream is `writable` in the config, the token has the `serial_write` scope, and the caller holds the claim. Every write is recorded as a marker `<principal>> data`. |

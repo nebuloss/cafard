@@ -1,7 +1,7 @@
 import { DisposableBag, type Disposable } from '@/core/Disposable.ts';
-import { Dom } from '@/core/Dom.ts';
+import { Dom, h } from '@/core/Dom.ts';
 import type { Stream } from '@/model/types.ts';
-import { activity, rate } from '@/render/format.ts';
+import { activity, claimText, rate } from '@/render/format.ts';
 import { SlotTemplate } from '@/render/SlotTemplate.ts';
 import type { Services } from '@/App.ts';
 import type { Page } from '@/pages/Page.ts';
@@ -48,8 +48,9 @@ export class StreamCards {
   ) {}
 
   /**
-   * Applies a status change. The event carries what status knows (state,
-   * rate, drops, line state); the last line stays as rendered.
+   * Applies a status change. The event carries the state, rate, drops and
+   * line state, and (since track G) the last line and the claim holder: no
+   * claim in an event means nobody holds the stream.
    */
   update(s: Stream): HTMLElement {
     let card = Dom.findAll('[data-stream]', this.rows).find((el) => el.dataset['stream'] === s.id) ?? null;
@@ -68,6 +69,9 @@ export class StreamCards {
     set('rate', rate(s.rate_per_min));
     set('last', activity(s.last_activity, this.now()));
     set('dropped', String(s.dropped));
+    if (s.last_line !== undefined) set('preview', s.last_line);
+    const claim = Dom.find('[data-slot="claim"]', card);
+    if (claim !== null) claim.replaceChildren(...(s.claim === undefined ? [] : [h('span', { class: 'chip' }, claimText(s.claim))]));
     if (s.line_state !== undefined) {
       const ls = s.line_state;
       const parts: string[] = [];

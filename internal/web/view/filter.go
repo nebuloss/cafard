@@ -204,3 +204,13 @@ func (f LogFilter) URL() string {
 	}
 	return v.Encode()
 }
+
+// MessagePatterns are the message streams of kinds=message: the channel's
+// with channel=, else every chat's. Callers still check visibility.
+func MessagePatterns(f LogFilter) []string {
+	if f.Channel != "" {
+		name := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(f.Channel), "#"), "chan:")
+		return []string{"chan:" + name}
+	}
+	return []string{"chan:*", "dm:*"}
+}
