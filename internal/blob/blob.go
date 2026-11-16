@@ -224,7 +224,7 @@ func (b *Store) insert(ctx context.Context, row dto.Blob) error {
 	_, err := b.db.ExecContext(ctx, `INSERT INTO blobs(sha256, mime, size, width, height, created_at, agent_sha256, thumb_sha256)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(sha256) DO UPDATE SET created_at = excluded.created_at`,
 		row.SHA256, row.Mime, row.Size, nullInt(row.Width), nullInt(row.Height), row.CreatedAt.UnixNano(),
-		nullStr(row.AgentSHA256), nullStr(row.ThumbSHA256))
+		store.NullString(row.AgentSHA256), store.NullString(row.ThumbSHA256))
 	return err
 }
 
@@ -233,13 +233,6 @@ func nullInt(n int) any {
 		return nil
 	}
 	return n
-}
-
-func nullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }
 
 // Stat returns a blob's row.

@@ -52,7 +52,8 @@ func scanEntry(row scanner) (Entry, error) {
 	return e, nil
 }
 
-func nullString(s string) any {
+// NullString is s for a nullable TEXT column: NULL when empty.
+func NullString(s string) any {
 	if s == "" {
 		return nil
 	}
@@ -124,8 +125,8 @@ func insertEntries(ctx context.Context, tx *sql.Tx, entries []Entry) ([]Entry, e
 			meta = string(e.Meta)
 		}
 		if err := insert.QueryRowContext(ctx, nanos(e.TS), srcTS, e.Stream, string(e.Kind), e.Severity,
-			nullString(e.Host), nullString(e.App), e.Text, atts,
-			nullString(e.Sender), nullString(e.Recipient), nullInt(e.ReplyTo), meta).Scan(&e.Seq); err != nil {
+			NullString(e.Host), NullString(e.App), e.Text, atts,
+			NullString(e.Sender), NullString(e.Recipient), nullInt(e.ReplyTo), meta).Scan(&e.Seq); err != nil {
 			return nil, err
 		}
 		out[i] = e
