@@ -339,4 +339,7 @@ func TestSegments(t *testing.T) {
 	if got := Segments("a `b"); !slices.Equal(got, []dto.Segment{{T: dto.SegText, V: "a `b"}}) {
 		t.Errorf("unclosed = %+v", got)
 	}
+	if got := Segments("a\x1b]0;owned\x07b\nc\x1b[31md"); len(got) != 1 || got[0].V != "ab\ncd" {
+		t.Errorf("escapes = %+v", got)
+	}
 }
