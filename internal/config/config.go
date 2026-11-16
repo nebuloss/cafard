@@ -14,7 +14,9 @@ package config
 import (
 	"fmt"
 
+	"github.com/nebuloss/cafard/internal/blob"
 	"github.com/nebuloss/cafard/internal/mcpserver"
+	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/store"
 	"net"
 	"net/url"
@@ -37,8 +39,11 @@ type Config struct {
 	TLSKey    string `yaml:"tls_key"`
 	LogLevel  string `yaml:"log_level"`
 
-	Retention store.Retention  `yaml:"retention"`
-	MCP       mcpserver.Config `yaml:"mcp"`
+	Retention store.Retention    `yaml:"retention"`
+	MCP       mcpserver.Config   `yaml:"mcp"`
+	Messaging messaging.Config   `yaml:"messaging"`
+	Images    blob.Config        `yaml:"images"`
+	Channels  messaging.Channels `yaml:"channels"`
 }
 
 // Validator is implemented by feature sub-structs that check themselves.
