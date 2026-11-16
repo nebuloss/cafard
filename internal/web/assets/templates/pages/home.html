@@ -1,0 +1,15 @@
+{{/* Placeholder until track D lands the chat list (CONTRACTS.md 6.1). */}}
+<section class="card outlined empty">
+  <h2>Chats are coming</h2>
+  <p class="muted">Conversations with agents appear here once messaging lands. Meanwhile:</p>
+  <ul class="link-list">
+    <li><a href="/live">Follow the logs live</a></li>
+    <li><a href="/streams">See the sources</a></li>
+    {{if .User.Admin}}<li><a href="/agents">Give an agent a token</a></li>
+    <li><a href="/pair">Pair a phone</a></li>{{end}}
+  </ul>
+  <figure class="snippet">
+    <figcaption class="label">Connect an agent</figcaption>
+    <pre class="mono" data-language="shell"><code>{{.Data.MCP}}</code></pre>
+  </figure>
+</section>

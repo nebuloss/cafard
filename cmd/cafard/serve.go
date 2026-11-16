@@ -23,6 +23,7 @@ import (
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
+	"github.com/nebuloss/cafard/internal/web"
 	"github.com/nebuloss/cafard/internal/web/assets"
 	"github.com/nebuloss/cafard/internal/writer"
 )
@@ -88,7 +89,7 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 		Writer:  w,
 		Hub:     h,
 		Status:  stat,
-		Auth:    &auth.TokenAuthenticator{Tokens: tokens},
+		Auth:    &auth.TokenAuthenticator{Tokens: tokens, Sessions: auth.NewSessions(st.DB(), clk).Lookup},
 		Tokens:  tokens,
 		Janitor: jan,
 		Clock:   clk,
@@ -112,6 +113,7 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 	// One line per feature: Register(mux, mcp, deps[, its config section]).
 	for _, register := range []func() (func(context.Context) error, error){
 		func() (func(context.Context) error, error) { return httpapi.Register(mux, mcp, d) },
+		func() (func(context.Context) error, error) { return web.Register(mux, mcp, d) },
 	} {
 		start, err := register()
 		if err != nil {
@@ -153,7 +155,8 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, stdout io.
 		fmt.Fprintf(stdout, "Sign in with it at %s/signin, or give agents their own tokens:\n", a.deps.Server.BaseURL())
 		fmt.Fprintf(stdout, "  cafard token create --name claude-laptop --kind agent --scopes read,message\n\n")
 	}
-	if err := auth.ExposureGuard(ctx, cfg.HTTPListen, a.deps.Tokens.CountAdminTokens); err != nil {
+	if err := auth.ExposureGuard(ctx, cfg.HTTPListen, a.deps.Tokens.CountAdminTokens,
+		auth.NewSessions(a.deps.Store.DB(), a.deps.Clock).CountAdmin); err != nil {
 		return err
 	}
 

@@ -1,0 +1,32 @@
+{{/* The logs filters (server-only, FilterBar attaches to it). A GET form,
+     so filters live in the URL and work without the bundle. On compact
+     screens it folds into a sheet behind one button. Data: liveFilter. */}}
+<details class="filter-sheet" data-component="FilterBar"{{if .Open}} open{{end}}>
+  <summary class="btn tonal filter-toggle"><svg aria-hidden="true"><use href="/static/icons.svg#filter_list"></use></svg>Filters{{if .Active}} ({{.Active}}){{end}}</summary>
+  <form class="filter-bar" method="get" action="/live" role="search">
+    <label class="ofield">
+      <span>Streams</span>
+      <input name="streams" value="{{.Streams}}" placeholder="serial:dut1, syslog:*" list="known-streams" autocomplete="off" spellcheck="false">
+    </label>
+    <datalist id="known-streams">{{range .Known}}<option value="{{.}}"></option>{{end}}</datalist>
+    <label class="ofield">
+      <span>Severity</span>
+      <select name="sev">
+        {{range .Severities}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <label class="ofield grow">
+      <span>Regexp</span>
+      <input name="re" value="{{.Re}}" placeholder="usb|dwc3" autocomplete="off" spellcheck="false">
+    </label>
+    <fieldset class="chips">
+      <legend class="visually-hidden">Kinds</legend>
+      <label class="chip filter"><input type="checkbox" name="kinds" value="line"{{if .Lines}} checked{{end}}>Lines</label>
+      <label class="chip filter"><input type="checkbox" name="kinds" value="marker"{{if .Markers}} checked{{end}}>Markers</label>
+    </fieldset>
+    {{if .FromSeq}}<input type="hidden" name="from_seq" value="{{.FromSeq}}">{{end}}
+    {{if .ToSeq}}<input type="hidden" name="to_seq" value="{{.ToSeq}}">{{end}}
+    <button class="btn filled" type="submit">Apply</button>
+    <a class="btn text" href="/live">Reset</a>
+  </form>
+</details>

@@ -1,0 +1,14 @@
+{{/* One source (tpl-stream-card): a card below 600 px, a table row above.
+     The dot takes its colour from the card's data-status. */}}
+<div class="stream-card" role="row" data-stream="{{.ID}}" data-status="{{.Status}}">
+  <span class="sc-name" role="cell"><span class="stream-dot" aria-hidden="true"></span><span class="mono" data-slot="name">{{.ID}}</span></span>
+  <span class="sc-status" role="cell" data-slot="status">{{.Status}}</span>
+  <span class="sc-transport" role="cell" data-slot="transport">{{.Transport}}</span>
+  <span class="sc-rate" role="cell" data-slot="rate">{{.Rate}}</span>
+  <span class="sc-last" role="cell" data-slot="last">{{.Last}}</span>
+  <span class="sc-preview mono" role="cell" data-slot="preview">{{.Preview}}</span>
+  <span class="sc-dropped" role="cell" data-slot="dropped">{{.Dropped}}</span>
+  <span class="sc-claim" role="cell" data-slot="claim">{{if .Claim}}<span class="chip">{{.Claim}}</span>{{end}}</span>
+  <span class="sc-lines" role="cell" data-slot="line-state">{{.LineState}}</span>
+  <a class="sc-open btn text" role="cell" data-slot="open" href="{{.Open}}">Open in Live</a>
+</div>

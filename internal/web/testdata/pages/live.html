@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>Live - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="live" class="shell">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="bar">
+    
+    <svg class="mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
+    
+    <h1>Live</h1>
+    <span class="spacer"></span>
+    
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    <span class="avatar" title="admin (human)">A</span>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Main">
+  <a class="nav-item" href="/">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats" hidden>0</span></span>
+    <span class="nav-label">Chats</span>
+  </a>
+  <a class="nav-item" href="/live" aria-current="page">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
+    <span class="nav-label">Live</span>
+  </a>
+  <a class="nav-item" href="/streams">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Sources</span>
+  </a>
+  
+  <a class="nav-item rail-only" href="/agents">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
+    <span class="nav-label">Agents</span>
+  </a>
+  <a class="nav-item rail-only" href="/pair">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
+    <span class="nav-label">Pair</span>
+  </a>
+  
+  <details class="nav-more">
+    <summary class="nav-item">
+      <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></span>
+      <span class="nav-label">More</span>
+    </summary>
+    <div class="menu" role="menu">
+      
+      <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
+      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
+      
+      <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+        <input type="hidden" name="next" value="/live">
+        <span class="menu-caption">Theme</span>
+        <span class="segmented">
+          <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
+          <button type="submit" name="theme" value="light" aria-pressed="false">Light</button>
+          <button type="submit" name="theme" value="dark" aria-pressed="false">Dark</button>
+        </span>
+      </form>
+      <form method="post" action="/signout">
+        <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out admin</button>
+      </form>
+    </div>
+  </details>
+</nav>
+
+
+<main id="main">
+
+
+<section class="live">
+  
+<details class="filter-sheet" data-component="FilterBar">
+  <summary class="btn tonal filter-toggle"><svg aria-hidden="true"><use href="/static/icons.svg#filter_list"></use></svg>Filters</summary>
+  <form class="filter-bar" method="get" action="/live" role="search">
+    <label class="ofield">
+      <span>Streams</span>
+      <input name="streams" value="" placeholder="serial:dut1, syslog:*" list="known-streams" autocomplete="off" spellcheck="false">
+    </label>
+    <datalist id="known-streams"><option value="serial:dut1"></option><option value="syslog:bench-pi"></option></datalist>
+    <label class="ofield">
+      <span>Severity</span>
+      <select name="sev">
+        <option value="7" selected>All</option><option value="6">Info and worse</option><option value="5">Notice and worse</option><option value="4">Warning and worse</option><option value="3">Error and worse</option><option value="2">Critical and worse</option><option value="1">Alert and worse</option><option value="0">Emergency</option>
+      </select>
+    </label>
+    <label class="ofield grow">
+      <span>Regexp</span>
+      <input name="re" value="" placeholder="usb|dwc3" autocomplete="off" spellcheck="false">
+    </label>
+    <fieldset class="chips">
+      <legend class="visually-hidden">Kinds</legend>
+      <label class="chip filter"><input type="checkbox" name="kinds" value="line" checked>Lines</label>
+      <label class="chip filter"><input type="checkbox" name="kinds" value="marker" checked>Markers</label>
+    </fieldset>
+    
+    
+    <button class="btn filled" type="submit">Apply</button>
+    <a class="btn text" href="/live">Reset</a>
+  </form>
+</details>
+
+  
+  <p class="banner notice no-script">Live updates need JavaScript; this is the last 500 lines. Reload to see newer lines.</p>
+  <div class="logview dense" data-component="LogView" data-next-seq="5" data-follow="true" data-query="">
+    <div class="log-list mono" role="list" aria-label="Log lines" data-slot="list">
+    
+<div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
+
+<div class="line" role="listitem" data-seq="2" data-sev="3" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="ERR">E</abbr><span class="line-text" data-slot="text"><span class="ansi-fg-1">dwc3 fe800000.usb: failed to initialize core: -110</span></span></div>
+
+<div class="marker" role="listitem" data-seq="3"><time class="marker-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="marker-text" data-slot="text">serial:dut1: codex-build: flashed linux-6.18-rc3</span></div>
+
+<div class="line" role="listitem" data-seq="4" data-sev="6" data-tone="4"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">syslog:bench-pi</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">systemd[1]: Started cafard push.</span></div>
+
+    </div>
+    <button class="fab new-lines only-scripted" type="button" data-slot="new" hidden><svg aria-hidden="true"><use href="/static/icons.svg#arrow_downward"></use></svg><span data-slot="new-count">0 new</span></button>
+    <button class="icon-btn follow-toggle only-scripted" type="button" data-slot="follow" aria-pressed="true" aria-label="Pause following"><svg aria-hidden="true"><use href="/static/icons.svg#pause"></use></svg></button>
+  </div>
+  
+</section>
+
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-line">
+<div class="line" role="listitem" data-seq="0" data-sev="0" data-tone="0"><time class="line-time" data-slot="time" datetime=""></time><span class="line-stream" data-slot="stream"></span><abbr class="line-sev" data-slot="sev" title=""></abbr><span class="line-text" data-slot="text"></span></div>
+</template>
+<template id="tpl-marker">
+<div class="marker" role="listitem" data-seq="0"><time class="marker-time" data-slot="time" datetime=""></time><span class="marker-text" data-slot="text"></span></div>
+</template>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+
+</body>
+</html>

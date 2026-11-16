@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>Sign in - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="signin" class="bare">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<main id="main">
+
+<section class="signin">
+  <div class="signin-brand">
+    <svg class="signin-mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
+    <p class="wordmark">cafard</p>
+    <p class="muted">Logs, photos and messages for agents and the people they work with.</p>
+  </div>
+  <h1>Sign in</h1>
+  
+  <form method="post" action="/signin" class="stack">
+    
+    <label class="ofield">
+      <span>Token</span>
+      <input type="password" name="token" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="cfd_..." aria-describedby="token-help">
+    </label>
+    <p class="help" id="token-help">Paste the admin token printed on first start, or a token of a person. It opens a session in this browser; the token itself is not kept here.</p>
+    <button class="btn filled block" type="submit">Sign in</button>
+  </form>
+  <p class="muted body-small">On a phone, scan the code an admin shows on the Pair page instead.</p>
+</section>
+
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+
+</body>
+</html>

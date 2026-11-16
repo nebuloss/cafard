@@ -1,15 +1,58 @@
 {{define "layout"}}<!DOCTYPE html>
-<html lang="en">
+{{/* The theme is set by the server from a cookie, so the first paint is
+     already right; deciding it in the browser flashes the wrong palette. */}}
+<html lang="en"{{if eq .Theme "light"}} data-theme="light"{{else if eq .Theme "dark"}} data-theme="dark"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{{if eq .Theme "light"}}
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#faebe0">
+{{else if eq .Theme "dark"}}
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#261e18">
+{{else}}
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+{{end}}
 <title>{{.Title}} - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/static/app.css">
 {{if .Scripted}}<script type="module" src="/app/main.js"></script>{{end}}
 </head>
-<body data-page="{{.Page}}">
-<main>{{block "content" .}}{{end}}</main>
+<body data-page="{{.Page}}" class="{{if .User}}shell{{else}}bare{{end}}">
+<a class="skip-link" href="#main">Skip to content</a>
+{{if .User}}
+<header class="topbar">
+  <div class="bar">
+    {{if .Back}}
+    <a class="icon-btn" href="{{.Back}}" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
+    {{else}}
+    <svg class="mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
+    {{end}}
+    <h1>{{.Title}}</h1>
+    <span class="spacer"></span>
+    {{/* Driven by LiveFeed; hidden without the bundle, which has no live feed. */}}
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    <span class="avatar" title="{{.User.Name}} ({{.User.Kind}})">{{.User.Initial}}</span>
+  </div>
+</header>
+{{template "partials/nav.html" .}}
+{{end}}
+<main id="main">
+{{if .Error}}<div class="banner error" role="alert">{{.Error}}</div>{{end}}
+{{block "content" .}}{{end}}
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+{{if .Notice}}{{template "partials/toast.html" .NoticeToast}}{{end}}
+</div>
+<div class="dialog-root" data-dialog-root></div>
+{{.Twins}}
 </body>
 </html>
 {{end}}

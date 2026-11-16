@@ -1,0 +1,12 @@
+{{/* One pending pairing (server-only). Data: pendingView. The QR is a plain
+     image, so it shows without the bundle; PairPage runs the countdown. */}}
+<article class="card pair-panel" data-component="PairPanel" data-pairing="{{.ID}}" data-expires="{{.ExpiresISO}}">
+  <h3>Sign in as <span class="mono">{{.Name}}</span></h3>
+  {{if .URL}}
+  <div class="qr-surface"><img src="{{.QR}}" alt="QR code that signs a phone in as {{.Name}}" width="256" height="256"></div>
+  <p class="mono pair-url">{{.URL}}</p>
+  {{else}}
+  <p class="muted">The server restarted since this code was made, so it can no longer show it. Make a new one.</p>
+  {{end}}
+  <p class="muted">Valid for 5 minutes, once. <span class="countdown" data-slot="countdown">Expires at {{.ExpiresText}} UTC.</span></p>
+</article>
