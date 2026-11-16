@@ -295,6 +295,52 @@ lines are dropped beyond that, and a line in the stream says how many),
 and is deleted once delivered. `--spool PATH` puts it elsewhere; `--spool
 off` keeps lines in memory only.
 
+### Driving a board (track E2)
+
+An agent can type into a console and drive its DTR and RTS lines (to
+reset a board, or hold it in its boot loader) with `serial_write` and
+`serial_control`. Three gates guard both tools:
+
+1. the port has `writable: true` in `cafard.yaml` (ports are read-only
+   by default);
+2. the agent's token has the `serial_write` scope; tokens without it are
+   not even offered the tools. Claiming needs `message` too:
+   `cafard token create --name bench-agent --kind agent --scopes read,message,serial_write`;
+3. the agent holds the claim on the port's stream, so two agents never
+   drive the same board at once.
+
+```yaml
+serial:
+  - name: dut1
+    device: /dev/serial/by-id/usb-FTDI_FT232R_A1B2C3-if00-port0
+    writable: true
+```
+
+A typical session, as MCP calls:
+
+```text
+claim          {resource: "serial:dut1", ttl_s: 600, note: "flashing"}
+serial_control {stream: "serial:dut1", pulse: {line: "dtr", ms: 100}}   # reset
+wait_for       {pattern: "U-Boot", streams: ["serial:dut1"]}
+serial_write   {stream: "serial:dut1", data: "printenv"}               # sends printenv\r
+release        {resource: "serial:dut1"}
+```
+
+`serial_write` appends `newline` (default `\r`, what Enter sends; `""` for
+none) and returns the bytes written and the seq of its marker: pass
+`since_seq` = that seq + 1 to read the answer. `serial_control` takes
+`dtr`, `rts`, `break_ms`, `pulse` and `baud` (run in that order) and
+returns the resulting line state. It works on local and `rfc2217` ports;
+raw `tcp` and plain Telnet ports refuse it and say why. A port that is
+down answers `busy` with a retry delay. Whether DTR or RTS reaches reset
+or boot depends on the board's wiring (an ESP32 dev board wires both).
+
+Every write is recorded in the stream as a marker `agent-a> printenv\r`
+(control characters escaped, long data cut), every control action as
+`serial: agent-a pulsed DTR for 100 ms`, beside the claim and release
+markers, so the stream and any channel bound to it show who drove the
+board when.
+
 ## Agents (MCP)
 
 cafard serves MCP over streamable HTTP at `/mcp`, with a bearer token:

@@ -38,16 +38,19 @@ type Manager struct {
 	byStream map[string]*Handle
 }
 
-// Register declares the configured ports; start reads them until the
-// context ends. There are no routes or tools here: serial_write and
-// serial_control use Manager.Lookup.
-func Register(_ *http.ServeMux, _ *mcpserver.Server, d deps.Deps, cfg *Config) (func(context.Context) error, error) {
+// Register declares the configured ports and adds the serial_write and
+// serial_control tools; start reads the ports until the context ends.
+// Without ports there are no tools: they could only fail.
+func Register(_ *http.ServeMux, s *mcpserver.Server, d deps.Deps, cfg *Config) (func(context.Context) error, error) {
 	if cfg == nil || len(cfg.Ports) == 0 {
 		return nil, nil
 	}
 	m, err := New(d, cfg, Options{})
 	if err != nil {
 		return nil, err
+	}
+	if s != nil {
+		registerTools(s, m)
 	}
 	return m.Run, nil
 }

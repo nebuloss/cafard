@@ -148,6 +148,14 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   a resource notification such as "your inbox changed" reaches only that
   principal's sessions.
 
+- **Track E2: a tool hidden by scope is a protocol error, not a tool
+  error.** Calling `serial_write` with a token that lacks the scope makes
+  `CallTool` return an error (unknown tool), so `callFails` cannot test
+  it; check `ListTools` instead.
+- **Track E2: write markers go through `Writer.Commit` before the
+  bytes,** so the port's echo is ordered after them. Gates run before the
+  marker; keep it that way or a refused call leaves a false trace.
+
 - **Templates cannot use functions.** `assets_test` parses every
   template with an empty FuncMap, so a `{{myFunc}}` anywhere breaks it.
   Build strings in Go (`internal/web/pages/views.go`) and pass fields or

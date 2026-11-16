@@ -123,4 +123,4 @@ images:
 #     data_bits: 8
 #     parity: none                  # none | even | odd | mark | space
 #     stop_bits: 1
-#     writable: false
+#     writable: false               # true: agents with serial_write and the claim may drive it
