@@ -1,7 +1,6 @@
-// Package api is the JSON API under /api/ (except /api/log and
-// /api/events). This file and blob.go are track A's: messages, their
-// attachments and blobs.
 package api
+
+// Messages, their attachments and blobs.
 
 import (
 	"context"
@@ -21,6 +20,7 @@ import (
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/textclean"
+	"github.com/nebuloss/cafard/internal/web/view"
 )
 
 const (
@@ -56,17 +56,6 @@ type messagesAPI struct {
 // a 303 (CONTRACTS section 3.4).
 func WantsJSON(r *http.Request) bool {
 	return r.Header.Get("X-Cafard") == "1" || strings.Contains(r.Header.Get("Accept"), "application/json")
-}
-
-// ChatPath is the page of a chat id ("chan:x" or "dm:peer").
-func ChatPath(chat string) string {
-	if name, ok := strings.CutPrefix(chat, "chan:"); ok {
-		return "/c/" + url.PathEscape(name)
-	}
-	if peer, ok := strings.CutPrefix(chat, "dm:"); ok {
-		return "/dm/" + url.PathEscape(peer)
-	}
-	return "/"
 }
 
 func asAPIError(err error) *dto.APIError {
@@ -157,13 +146,13 @@ func (h *messagesAPI) post(w http.ResponseWriter, r *http.Request) {
 		if f.back != "" {
 			back = f.back
 		} else if f.chat != "" {
-			back = ChatPath(f.chat)
+			back = view.ChatHref(f.chat)
 		}
 		h.fail(w, r, err, back)
 		return
 	}
 	if f.chat != "" {
-		back = ChatPath(f.chat)
+		back = view.ChatHref(f.chat)
 		if f.back != "" {
 			back = f.back
 		}
@@ -192,7 +181,7 @@ func (h *messagesAPI) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !WantsJSON(r) {
-		target := ChatPath(out.Chat)
+		target := view.ChatHref(out.Chat)
 		if f.next != "" {
 			target = f.next
 		}

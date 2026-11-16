@@ -1,7 +1,7 @@
-// Package api is the JSON API under /api/ (CONTRACTS.md 2.3 and 3). Every
-// route takes a bearer token or a session; writes with a session must be
-// same-origin. Track C's routes are in the c_*.go files; track A adds the
-// message routes in files of its own and one line in Mount.
+// Package api is the JSON API under /api/ (CONTRACTS.md 2.3 and 3) but
+// /api/log and /api/events, and /blob/. Every route takes a bearer token
+// or a session; writes with a session must be same-origin. Messages and
+// blobs register through RegisterMessages, the chats through MountChats.
 package api
 
 import (
@@ -33,11 +33,6 @@ func New(d deps.Deps, sessions *auth.Sessions, pairings *auth.Pairings, kinds *v
 		log = slog.Default()
 	}
 	return &API{d: d, sessions: sessions, pairings: pairings, kinds: kinds, log: log}
-}
-
-// Mount registers the routes.
-func (a *API) Mount(mux *http.ServeMux) {
-	a.mountC(mux)
 }
 
 // Handler is an API handler with the caller's principal.

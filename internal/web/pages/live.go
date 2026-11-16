@@ -158,17 +158,8 @@ func showing(f view.LogFilter, n int) string {
 func filterView(r *http.Request, f view.LogFilter) liveFilter {
 	q := r.URL.Query()
 	v := liveFilter{Streams: strings.Join(q["streams"], ","), Re: q.Get("re")}
-	sev := q.Get("sev")
-	if f.MinSev != nil {
-		sev = strconv.Itoa(*f.MinSev)
-	}
-	if sev == "" {
-		sev = "7"
-	}
-	for _, o := range sevLabels {
-		o.Selected = o.Value == sev
-		v.Severities = append(v.Severities, o)
-	}
+	var sev string
+	v.Severities, sev = sevOptions(q.Get("sev"), f)
 	v.Lines, v.Markers = true, true
 	if kinds := q["kinds"]; len(kinds) > 0 {
 		joined := "," + strings.Join(kinds, ",") + ","
@@ -189,6 +180,23 @@ func filterView(r *http.Request, f view.LogFilter) liveFilter {
 		}
 	}
 	return v
+}
+
+// sevOptions are the severity choices with the filter's one selected, or
+// the raw value when the filter rejected it; sev is the selected value.
+func sevOptions(raw string, f view.LogFilter) (opts []sevOption, sev string) {
+	sev = raw
+	if f.MinSev != nil {
+		sev = strconv.Itoa(*f.MinSev)
+	}
+	if sev == "" {
+		sev = "7"
+	}
+	for _, o := range sevLabels {
+		o.Selected = o.Value == sev
+		opts = append(opts, o)
+	}
+	return opts, sev
 }
 
 // followFrom is where a view with no log kinds (kinds=message only)

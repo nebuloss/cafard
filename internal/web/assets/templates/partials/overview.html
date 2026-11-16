@@ -5,7 +5,7 @@
   <h2 id="overview-title" class="visually-hidden">Overview</h2>
   {{if .NeedsYou.Questions}}
   <h3>Needs you</h3>
-  <div class="overview-questions" data-slot="questions">{{range .NeedsYou.Questions}}{{template "partials/needs_you_question" .}}{{end}}</div>
+  <div class="overview-questions" data-slot="questions">{{range .NeedsYou.Questions}}{{template "partials/question.html" .}}{{end}}</div>
   {{end}}
   <h3>Recent activity</h3>
   <div class="overview-recent timeline" data-slot="recent" aria-live="polite">

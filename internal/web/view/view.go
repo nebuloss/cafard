@@ -51,7 +51,7 @@ func (k *Kinds) Of(ctx context.Context, name string) dto.PrincipalKind {
 }
 
 // Entry is the DTO of a line or marker. Messages get their text as one
-// text segment here; messaging fills in the rest when it lands.
+// text segment here; Present uses messaging's presenter when there is one.
 func Entry(ctx context.Context, e store.Entry, kinds *Kinds) dto.Entry {
 	out := dto.Entry{
 		Seq:      e.Seq,

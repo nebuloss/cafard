@@ -12,8 +12,8 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// Track D: home, the chat list with "Needs you" on top and, on wide
-// screens, the overview pane (PLAN 9.6.3).
+// Home: the chat list with "Needs you" on top and, on wide screens, the
+// overview pane (PLAN 9.6.3).
 
 // chatSite is what the chat pages need beyond the Site.
 type chatSite struct {
@@ -27,7 +27,7 @@ func (s *Site) SetChats(svc *messaging.Service, shares *view.Shares) {
 	s.chats = &chatSite{svc: svc, shares: shares}
 }
 
-// The twins of track D (CONTRACTS.md 6.2).
+// The twins of the chat pages (CONTRACTS.md 6.2).
 func (s *Site) addChatTwins() {
 	s.AddTwin("tpl-chat-row", "partials/chat_row.html", ChatRowView{})
 	s.AddTwin("tpl-message", "partials/message.html", MessageView{})
@@ -38,7 +38,7 @@ func (s *Site) addChatTwins() {
 	s.AddTwin("tpl-log-attachment", "partials/log_attachment.html", LogAttachmentView{})
 	s.AddTwin("tpl-attachment-chip", "partials/attachment_chip.html", AttachmentChipView{})
 	s.AddTwin("tpl-upload-status", "partials/upload_status.html", UploadStatusView{})
-	s.AddTwin("tpl-needs-you-question", "partials/needs_you_question", QuestionView{InList: true})
+	s.AddTwin("tpl-needs-you-question", "partials/question.html", QuestionView{InList: true})
 }
 
 // Twins of each chat page.

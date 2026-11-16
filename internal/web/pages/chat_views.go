@@ -12,10 +12,10 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// Track D: the data of the chat partials (CONTRACTS.md 6.2) and the
-// builders that turn the API's DTOs into them, so a server-rendered row
-// and one the bundle builds from the same DTO read alike. Zero values
-// render the twins.
+// The data of the chat partials (CONTRACTS.md 6.2) and the builders that
+// turn the API's DTOs into them, so a server-rendered row and one the
+// bundle builds from the same DTO read alike. Zero values render the
+// twins.
 
 // ChatRowView is partials/chat_row.html (tpl-chat-row).
 type ChatRowView struct {
@@ -116,15 +116,7 @@ type TimelineItem struct {
 
 // MessageTime is the time of a message: hours and minutes today (UTC),
 // the date otherwise. src/render/format.ts messageTime matches it.
-func MessageTime(t time.Time, now time.Time) string {
-	u := t.UTC()
-	if u.Format("2006-01-02") == now.UTC().Format("2006-01-02") {
-		return u.Format("15:04")
-	}
-	return u.Format("Jan 2 15:04")
-}
-
-func iso(t dto.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+func MessageTime(t time.Time, now time.Time) string { return dayOrTime(t, now, "15:04") }
 
 // ChatName is how a chat is named in lists and titles: "#dut1", "@codex".
 func ChatName(c dto.Chat) string {
@@ -132,28 +124,6 @@ func ChatName(c dto.Chat) string {
 		return "@" + c.Name
 	}
 	return "#" + c.Name
-}
-
-// ChatLabel names a chat id ("chan:dut1" -> "#dut1").
-func ChatLabel(id string) string {
-	if name, ok := strings.CutPrefix(id, "chan:"); ok {
-		return "#" + name
-	}
-	if peer, ok := strings.CutPrefix(id, "dm:"); ok {
-		return "@" + peer
-	}
-	return id
-}
-
-// ChatHref is the page of a chat id.
-func ChatHref(id string) string {
-	if name, ok := strings.CutPrefix(id, "chan:"); ok {
-		return "/c/" + url.PathEscape(name)
-	}
-	if peer, ok := strings.CutPrefix(id, "dm:"); ok {
-		return "/dm/" + url.PathEscape(peer)
-	}
-	return "/"
 }
 
 func count(n int) string {
@@ -168,14 +138,14 @@ func count(n int) string {
 
 // ChatRow is the list row of a chat.
 func ChatRow(c dto.Chat, now time.Time, active string) ChatRowView {
-	v := ChatRowView{ID: c.ID, Href: ChatHref(c.ID), Name: ChatName(c), Title: c.Title,
+	v := ChatRowView{ID: c.ID, Href: view.ChatHref(c.ID), Name: ChatName(c), Title: c.Title,
 		Unread: count(c.Unread), Questions: count(c.OpenQuestions),
 		Pinned: c.Pinned, Muted: c.Muted, Archived: c.Archived, Active: c.ID == active, Unfollowed: !c.Followed}
 	if c.Muted {
 		v.Unread = ""
 	}
 	if c.LastActivity != nil {
-		v.Time, v.ISO = MessageTime(c.LastActivity.Time, now), iso(*c.LastActivity)
+		v.Time, v.ISO = MessageTime(c.LastActivity.Time, now), iso(c.LastActivity.Time)
 	}
 	if c.Preview != nil {
 		v.Preview = PreviewText(*c.Preview)
@@ -351,7 +321,7 @@ func Items(es []dto.Entry, o ItemsOptions) []TimelineItem {
 	for _, e := range es {
 		switch {
 		case e.Event || e.Kind != dto.EntryMessage:
-			ev := EventRow(e, o.Now)
+			ev := EventRow(e)
 			out = append(out, TimelineItem{Event: &ev})
 		case e.Question != nil:
 			q := Question(e, o)
@@ -375,7 +345,7 @@ func senderOf(e dto.Entry) (name, kind string) {
 func Message(e dto.Entry, o ItemsOptions, byseq map[int64]dto.Entry) MessageView {
 	name, kind := senderOf(e)
 	v := MessageView{Seq: e.Seq, ID: "m" + strconv.FormatInt(e.Seq, 10), Mine: name == o.Viewer && name != "",
-		Sender: name, SenderKind: kind, Time: MessageTime(e.TS.Time, o.Now), ISO: iso(e.TS),
+		Sender: name, SenderKind: kind, Time: MessageTime(e.TS.Time, o.Now), ISO: iso(e.TS.Time),
 		Segments: e.Segments, ReplyQuote: replyQuote(e, byseq), SeenBy: SeenText(e.SeenBy), ReplyTo: e.ReplyTo, Text: e.Text}
 	if len(v.Segments) == 0 && e.Text != "" {
 		v.Segments = []dto.Segment{{T: dto.SegText, V: e.Text}}
@@ -388,7 +358,7 @@ func Message(e dto.Entry, o ItemsOptions, byseq map[int64]dto.Entry) MessageView
 		}
 	}
 	if o.InList && e.Chat != "" {
-		v.ChatHref, v.ChatLabel = ChatHref(e.Chat)+"#"+v.ID, ChatLabel(e.Chat)
+		v.ChatHref, v.ChatLabel = view.ChatHref(e.Chat)+"#"+v.ID, view.ChatLabel(e.Chat)
 	}
 	return v
 }
@@ -397,7 +367,7 @@ func Message(e dto.Entry, o ItemsOptions, byseq map[int64]dto.Entry) MessageView
 func Question(e dto.Entry, o ItemsOptions) QuestionView {
 	name, kind := senderOf(e)
 	v := QuestionView{Seq: e.Seq, ID: "m" + strconv.FormatInt(e.Seq, 10), Open: e.Question.Open,
-		Sender: name, SenderKind: kind, Time: MessageTime(e.TS.Time, o.Now), ISO: iso(e.TS), Segments: e.Segments,
+		Sender: name, SenderKind: kind, Time: MessageTime(e.TS.Time, o.Now), ISO: iso(e.TS.Time), Segments: e.Segments,
 		Answer: AnswerText(e.Question.Answer), Chat: e.Chat, ReplyTo: strconv.FormatInt(e.Seq, 10),
 		Back: o.Back, Next: o.Next, InList: o.InList}
 	if len(v.Segments) == 0 && e.Text != "" {
@@ -407,15 +377,15 @@ func Question(e dto.Entry, o ItemsOptions) QuestionView {
 		v.Choices = append(v.Choices, ChoiceView{Label: c, Disabled: !e.Question.Open})
 	}
 	if o.InList {
-		v.ChatHref, v.ChatLabel = ChatHref(e.Chat)+"#"+v.ID, "in "+ChatLabel(e.Chat)
+		v.ChatHref, v.ChatLabel = view.ChatHref(e.Chat)+"#"+v.ID, "in "+view.ChatLabel(e.Chat)
 	}
 	return v
 }
 
 // EventRow is the view of a line or marker shown between messages.
-func EventRow(e dto.Entry, now time.Time) EventRowView {
+func EventRow(e dto.Entry) EventRowView {
 	return EventRowView{Seq: e.Seq, Severity: e.Severity, Kind: string(e.Kind), Stream: e.Stream,
-		Text: view.StripText(e.Text), Time: LogTime(e.TS.Time), ISO: iso(e.TS), Open: EventLink(e.Stream, e.Seq)}
+		Text: view.StripText(e.Text), Time: LogTime(e.TS.Time), ISO: iso(e.TS.Time), Open: EventLink(e.Stream, e.Seq)}
 }
 
 // EventLink is where an event row leads without the bundle: its stream
