@@ -4,12 +4,9 @@ package webtest
 
 import (
 	"context"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +18,7 @@ import (
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
+	"github.com/nebuloss/cafard/internal/writer/writertest"
 )
 
 // Now is the fake clock's start.
@@ -50,19 +48,9 @@ type Options struct {
 // New starts the stack; it stops at the end of the test.
 func New(t testing.TB, o Options) *Env {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	st, err := store.Open(ctx, filepath.Join(t.TempDir(), store.FileName))
-	if err != nil {
-		t.Fatal(err)
-	}
 	clk := clock.NewFake(Now)
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := hub.New(o.Visible)
-	stat := status.New(clk)
-	w := writer.New(st, h, stat, clk, log, writer.Options{BatchEvery: time.Millisecond})
-	done := make(chan struct{})
-	go func() { _ = w.Run(ctx); close(done) }()
-	t.Cleanup(func() { cancel(); <-done; st.Close() })
+	s := writertest.New(t, writertest.Options{Clock: clk, Visible: o.Visible, Writer: writer.Options{BatchEvery: time.Millisecond}})
+	st, h, stat, w, log := s.Store, s.Hub, s.Status, s.Writer, s.Log
 	tokens := auth.NewTokens(st.DB(), clk)
 	sessions := auth.NewSessions(st.DB(), clk)
 	e := &Env{T: t, Store: st, Tokens: tokens, Sessions: sessions, Hub: h, Status: stat, Writer: w, Clock: clk, Mux: http.NewServeMux()}

@@ -15,6 +15,7 @@ import (
 	"github.com/nebuloss/cafard/internal/hub"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
+	"github.com/nebuloss/cafard/internal/writer/writertest"
 )
 
 type seen struct {
@@ -29,33 +30,18 @@ func (s *seen) Seen(stream string, _ time.Time) {
 }
 
 type fixture struct {
+	*writertest.Stack
 	st   *store.Store
 	hub  *hub.Memory
 	w    *writer.W
 	seen *seen
-	stop func()
-	done chan error
 }
 
 func start(t *testing.T, opts writer.Options) *fixture {
 	t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), store.FileName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := hub.New(nil)
 	sn := &seen{n: map[string]int{}}
-	w := writer.New(st, h, sn, clock.System{}, slog.New(slog.NewTextHandler(io.Discard, nil)), opts)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- w.Run(ctx) }()
-	f := &fixture{st: st, hub: h, w: w, seen: sn, stop: cancel, done: done}
-	t.Cleanup(func() {
-		cancel()
-		<-done
-		st.Close()
-	})
-	return f
+	s := writertest.New(t, writertest.Options{Seer: sn, Writer: opts})
+	return &fixture{Stack: s, st: s.Store, hub: s.Hub, w: s.Writer, seen: sn}
 }
 
 func TestCommitReturnsIncreasingSeqs(t *testing.T) {
@@ -170,11 +156,9 @@ func TestShutdownCommitsWhatIsQueued(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	f.stop()
-	if err := <-f.done; err != nil {
+	if err := f.Stop(); err != nil {
 		t.Fatal(err)
 	}
-	f.done <- nil // for the cleanup
 	last, _ := f.st.LastSeq(ctx)
 	if last != 10 {
 		t.Errorf("committed %d entries before stopping, want 10", last)

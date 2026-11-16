@@ -2,10 +2,7 @@ package mcpserver
 
 import (
 	"context"
-	"io"
-	"log/slog"
 	"math/rand/v2"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -15,9 +12,9 @@ import (
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/hub"
-	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
+	"github.com/nebuloss/cafard/internal/writer/writertest"
 )
 
 // hookHub runs onSubscribe right after a subscription exists, which is the
@@ -37,22 +34,9 @@ func (h *hookHub) Subscribe(f hub.Filter, buffer int) hub.Subscription {
 
 func newTestServer(t *testing.T) (*Server, *writer.W, *hookHub) {
 	t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), store.FileName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	mem := hub.New(nil)
-	hh := &hookHub{inner: mem}
-	w := writer.New(st, mem, status.New(clock.System{}), clock.System{}, log, writer.Options{BatchEvery: time.Millisecond})
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- w.Run(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-		st.Close()
-	})
+	s := writertest.New(t, writertest.Options{Writer: writer.Options{BatchEvery: time.Millisecond}})
+	st, w, log := s.Store, s.Writer, s.Log
+	hh := &hookHub{inner: s.Hub}
 	d := deps.Deps{Store: st, Writer: w, Hub: hh, Clock: clock.System{}, Log: log}
 	return New(d, Config{}), w, hh
 }
