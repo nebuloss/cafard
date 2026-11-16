@@ -23,9 +23,7 @@ type Options struct {
 	Server  string // base URL of the remote cafard, e.g. http://10.0.50.2:8790
 	Token   string
 	Version string
-	// HTTPClient carries the requests; default http.DefaultTransport.
-	HTTPClient *http.Client
-	Log        *slog.Logger
+	Log     *slog.Logger
 }
 
 // endpoint is the remote /mcp address, checked.
@@ -87,12 +85,8 @@ func New(ctx context.Context, opts Options) (*Proxy, error) {
 	if opts.Log == nil {
 		opts.Log = slog.New(slog.DiscardHandler)
 	}
-	base := http.DefaultTransport
-	if opts.HTTPClient != nil && opts.HTTPClient.Transport != nil {
-		base = opts.HTTPClient.Transport
-	}
 	p := &Proxy{opts: opts, endpoint: endpoint, log: opts.Log,
-		http: &http.Client{Transport: bearer{token: opts.Token, next: base}},
+		http: &http.Client{Transport: bearer{token: opts.Token, next: http.DefaultTransport}},
 		subs: map[string]bool{}, progress: map[string]progressFor{}}
 	remote, err := p.connect(ctx)
 	if err != nil {

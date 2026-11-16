@@ -25,13 +25,7 @@ type SerialOptions struct {
 // to 30 s.
 func SerialReader(ctx context.Context, opts SerialOptions) (io.ReadCloser, error) {
 	if opts.Open == nil {
-		opts.Open = func(p serial.Port) (io.ReadCloser, error) {
-			l, err := serial.OpenLocal(p)
-			if err != nil {
-				return nil, err
-			}
-			return l, nil
-		}
+		opts.Open = func(p serial.Port) (io.ReadCloser, error) { return serial.OpenLocalRW(p) }
 	}
 	if opts.Log == nil {
 		opts.Log = slog.New(slog.DiscardHandler)

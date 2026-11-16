@@ -1,10 +1,7 @@
 package push
 
 import (
-	"bufio"
-	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,72 +16,8 @@ import (
 	"time"
 
 	"github.com/nebuloss/cafard/internal/ingest/serial"
+	"github.com/nebuloss/cafard/internal/testutil"
 )
-
-// flaky answers 503 while down, and records what it accepts.
-type flaky struct {
-	mu     sync.Mutex
-	down   bool
-	status int // when set, answer this instead
-	lines  []wireLine
-	got    []time.Time // when each line arrived
-}
-
-func (f *flaky) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.status != 0 {
-		http.Error(w, `{"error":{"code":"unauthorized","message":"The token is revoked."}}`, f.status)
-		return
-	}
-	if f.down {
-		http.Error(w, "down", http.StatusServiceUnavailable)
-		return
-	}
-	zr, err := gzip.NewReader(r.Body)
-	if err != nil {
-		http.Error(w, "not gzip", http.StatusBadRequest)
-		return
-	}
-	sc := bufio.NewScanner(zr)
-	for sc.Scan() {
-		var l wireLine
-		if err := json.Unmarshal(sc.Bytes(), &l); err != nil {
-			http.Error(w, "bad line", http.StatusBadRequest)
-			return
-		}
-		f.lines = append(f.lines, l)
-		f.got = append(f.got, time.Now())
-	}
-	w.Write([]byte(`{"accepted":1,"last_seq":1}`))
-}
-
-func (f *flaky) set(down bool) {
-	f.mu.Lock()
-	f.down = down
-	f.mu.Unlock()
-}
-
-func (f *flaky) texts() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var out []string
-	for _, l := range f.lines {
-		out = append(out, l.Text)
-	}
-	return out
-}
-
-func waitFor(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
 
 func spoolOpts(t *testing.T, url, path string) Options {
 	sp, err := OpenSpool(path, 0)
@@ -97,7 +30,7 @@ func spoolOpts(t *testing.T, url, path string) Options {
 }
 
 func TestSpoolHoldsLinesWhileTheServerIsDown(t *testing.T) {
-	f := &flaky{down: true}
+	f := &fakeServer{down: true}
 	srv := httptest.NewServer(f)
 	defer srv.Close()
 	path := filepath.Join(t.TempDir(), "spool", "laptop.ndjson")
@@ -112,7 +45,7 @@ func TestSpoolHoldsLinesWhileTheServerIsDown(t *testing.T) {
 	for i := range 30 {
 		fmt.Fprintf(w, "line %d\n", i)
 	}
-	waitFor(t, "the spool file", func() bool { fi, err := os.Stat(path); return err == nil && fi.Size() > 0 })
+	testutil.Eventually(t, "the spool file", 5*time.Second, func() bool { fi, err := os.Stat(path); return err == nil && fi.Size() > 0 })
 	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
 		t.Errorf("spool mode %v", fi.Mode().Perm())
 	}
@@ -164,7 +97,7 @@ func TestLeftoversFromAnEarlierRunGoFirst(t *testing.T) {
 	}
 	sp.Close()
 
-	f := &flaky{}
+	f := &fakeServer{}
 	srv := httptest.NewServer(f)
 	defer srv.Close()
 	p, _ := New(spoolOpts(t, srv.URL, path))
@@ -180,7 +113,7 @@ func TestLeftoversFromAnEarlierRunGoFirst(t *testing.T) {
 }
 
 func TestRefusalKeepsTheLinesSpooled(t *testing.T) {
-	f := &flaky{status: http.StatusUnauthorized}
+	f := &fakeServer{status: http.StatusUnauthorized}
 	srv := httptest.NewServer(f)
 	defer srv.Close()
 	path := filepath.Join(t.TempDir(), "laptop.ndjson")
@@ -322,7 +255,7 @@ func TestFollowSurvivesTruncationAndRotation(t *testing.T) {
 
 	time.Sleep(30 * time.Millisecond) // let it open and seek to the end
 	appendFile(t, path, "one\n")
-	waitFor(t, "one", func() bool { return c.String() == "one\n" })
+	testutil.Eventually(t, "one", 5*time.Second, func() bool { return c.String() == "one\n" })
 
 	// Truncated, as PuTTY does when it overwrites the log.
 	if err := os.Truncate(path, 0); err != nil {
@@ -330,7 +263,7 @@ func TestFollowSurvivesTruncationAndRotation(t *testing.T) {
 	}
 	time.Sleep(30 * time.Millisecond)
 	appendFile(t, path, "two\n")
-	waitFor(t, "two", func() bool { return c.String() == "one\ntwo\n" })
+	testutil.Eventually(t, "two", 5*time.Second, func() bool { return c.String() == "one\ntwo\n" })
 
 	// Rotated: the old file gets a last line, then a new file takes its name.
 	appendFile(t, path, "last of old\n")
@@ -338,10 +271,10 @@ func TestFollowSurvivesTruncationAndRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	appendFile(t, path, "first of new\n")
-	waitFor(t, "rotation", func() bool { return c.String() == "one\ntwo\nlast of old\nfirst of new\n" })
+	testutil.Eventually(t, "rotation", 5*time.Second, func() bool { return c.String() == "one\ntwo\nlast of old\nfirst of new\n" })
 
 	cancel()
-	waitFor(t, "stop", func() bool { _, err := r.Read(make([]byte, 1)); return errors.Is(err, context.Canceled) })
+	testutil.Eventually(t, "stop", 5*time.Second, func() bool { _, err := r.Read(make([]byte, 1)); return errors.Is(err, context.Canceled) })
 }
 
 func TestFollowWaitsForTheFileAndReadsItAll(t *testing.T) {
@@ -353,7 +286,7 @@ func TestFollowWaitsForTheFileAndReadsItAll(t *testing.T) {
 	go c.run(r)
 	time.Sleep(20 * time.Millisecond)
 	appendFile(t, path, "hello\n")
-	waitFor(t, "hello", func() bool { return c.String() == "hello\n" })
+	testutil.Eventually(t, "hello", 5*time.Second, func() bool { return c.String() == "hello\n" })
 }
 
 func TestFollowFromStart(t *testing.T) {
@@ -363,7 +296,7 @@ func TestFollowFromStart(t *testing.T) {
 	defer cancel()
 	c := &collect{}
 	go c.run(Follow(ctx, path, FollowOptions{FromStart: true, Poll: 5 * time.Millisecond}))
-	waitFor(t, "kept", func() bool { return c.String() == "kept\n" })
+	testutil.Eventually(t, "kept", 5*time.Second, func() bool { return c.String() == "kept\n" })
 }
 
 func TestSerialReaderReopensALostPort(t *testing.T) {
@@ -402,18 +335,18 @@ func TestSerialReaderReopensALostPort(t *testing.T) {
 	go c.run(r)
 	b := <-ends
 	b.Write([]byte("boot\n"))
-	waitFor(t, "boot", func() bool { return c.String() == "boot\n" })
+	testutil.Eventually(t, "boot", 5*time.Second, func() bool { return c.String() == "boot\n" })
 
 	// Unplugged: the next opens fail for a while, then it is back.
 	mu.Lock()
 	fail = true
 	mu.Unlock()
 	b.Close()
-	waitFor(t, "retries", func() bool { mu.Lock(); defer mu.Unlock(); return opens >= 5 })
+	testutil.Eventually(t, "retries", 5*time.Second, func() bool { mu.Lock(); defer mu.Unlock(); return opens >= 5 })
 	mu.Lock()
 	fail = false
 	mu.Unlock()
 	b = <-ends
 	b.Write([]byte("again\n"))
-	waitFor(t, "again", func() bool { return c.String() == "boot\nagain\n" })
+	testutil.Eventually(t, "again", 5*time.Second, func() bool { return c.String() == "boot\nagain\n" })
 }

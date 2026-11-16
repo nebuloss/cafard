@@ -15,6 +15,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/config"
 	"github.com/nebuloss/cafard/internal/store"
+	"github.com/nebuloss/cafard/internal/testutil"
 )
 
 // testConfig is the default configuration without the syslog and
@@ -75,8 +76,8 @@ func waitBound(t *testing.T, network, addr string) {
 // waitEntries polls the store until stream has at least n entries.
 func (s *server) waitEntries(stream string, n int) []store.Entry {
 	s.t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
+	var entries []store.Entry
+	testutil.Eventually(s.t, fmt.Sprintf("%d entries in %s", n, stream), 10*time.Second, func() bool {
 		st, err := store.Open(context.Background(), filepath.Join(s.dir, store.FileName))
 		if err != nil {
 			s.t.Fatal(err)
@@ -86,14 +87,10 @@ func (s *server) waitEntries(stream string, n int) []store.Entry {
 		if err != nil {
 			s.t.Fatal(err)
 		}
-		if len(res.Entries) >= n {
-			return res.Entries
-		}
-		if time.Now().After(deadline) {
-			s.t.Fatalf("stream %s has %d entries, want %d", stream, len(res.Entries), n)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+		entries = res.Entries
+		return len(entries) >= n
+	})
+	return entries
 }
 
 func checkEntry(t *testing.T, e store.Entry, text string, sev int, src time.Time) {

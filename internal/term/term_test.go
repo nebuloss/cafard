@@ -17,6 +17,7 @@ import (
 
 	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/push"
+	"github.com/nebuloss/cafard/internal/testutil"
 )
 
 // fakePort is a board on a serial line: the test feeds what it prints
@@ -133,17 +134,6 @@ func (s *logServer) got() []string {
 	return append([]string(nil), s.lines...)
 }
 
-func eventually(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
 func TestTermRelaysBothWaysPushesAndQuitsOnCtrlBracket(t *testing.T) {
 	logs := &logServer{}
 	srv := httptest.NewServer(logs)
@@ -163,11 +153,11 @@ func TestTermRelaysBothWaysPushesAndQuitsOnCtrlBracket(t *testing.T) {
 		})
 	}()
 	port.out <- []byte("U-Boot 2024.04\r\nlogin: ")
-	eventually(t, "the board's output on the console", func() bool { return strings.Contains(console.output(), "login: ") })
+	testutil.Eventually(t, "the board's output on the console", 5*time.Second, func() bool { return strings.Contains(console.output(), "login: ") })
 	console.press("root\r")
-	eventually(t, "the keys on the port", func() bool { return port.received() == "root\r" })
+	testutil.Eventually(t, "the keys on the port", 5*time.Second, func() bool { return port.received() == "root\r" })
 	port.out <- []byte("\r\nPassword: ")
-	eventually(t, "the second prompt", func() bool { return strings.Contains(console.output(), "Password: ") })
+	testutil.Eventually(t, "the second prompt", 5*time.Second, func() bool { return strings.Contains(console.output(), "Password: ") })
 	console.press("se\x03cret\x1dnot sent")
 	select {
 	case err := <-done:
@@ -215,15 +205,15 @@ func TestTermReopensAPortThatGoesAway(t *testing.T) {
 		})
 	}()
 	first.out <- []byte("before\r\n")
-	eventually(t, "output before the unplug", func() bool { return strings.Contains(console.output(), "before") })
+	testutil.Eventually(t, "output before the unplug", 5*time.Second, func() bool { return strings.Contains(console.output(), "before") })
 	first.Close()
-	eventually(t, "the lost-port note", func() bool { return strings.Contains(console.output(), "went away") })
+	testutil.Eventually(t, "the lost-port note", 5*time.Second, func() bool { return strings.Contains(console.output(), "went away") })
 	console.press("x")
-	eventually(t, "the reopen", func() bool { return strings.Contains(console.output(), "is back") })
+	testutil.Eventually(t, "the reopen", 5*time.Second, func() bool { return strings.Contains(console.output(), "is back") })
 	second.out <- []byte("after\r\n")
-	eventually(t, "output after the replug", func() bool { return strings.Contains(console.output(), "after") })
+	testutil.Eventually(t, "output after the replug", 5*time.Second, func() bool { return strings.Contains(console.output(), "after") })
 	console.press("y")
-	eventually(t, "keys on the new port", func() bool { return second.received() == "y" })
+	testutil.Eventually(t, "keys on the new port", 5*time.Second, func() bool { return second.received() == "y" })
 	cancel()
 	select {
 	case err := <-done:

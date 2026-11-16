@@ -41,37 +41,27 @@ type Options struct {
 	// Push, when set, receives everything read from the port, as
 	// push.Pusher.Reader does: it reads until EOF, then delivers what is
 	// left and returns.
-	Push func(ctx context.Context, r io.Reader) error
-	// PushGrace is how long the pusher may take to deliver after the
-	// session ends; default 5 s. Lines it has not sent by then stay in its
-	// spool when it has one.
-	PushGrace  time.Duration
+	Push       func(ctx context.Context, r io.Reader) error
 	Log        *slog.Logger
 	MinBackoff time.Duration // reopening a lost port; default 1 s
-	MaxBackoff time.Duration // default 30 s
 }
+
+// pushGrace is how long the pusher may take to deliver after the session
+// ends. Lines it has not sent by then stay in its spool when it has one.
+const pushGrace = 5 * time.Second
+
+// maxBackoff caps the wait between reopens of a lost port.
+func (o *Options) maxBackoff() time.Duration { return max(30*time.Second, o.MinBackoff) }
 
 func (o *Options) defaults() {
 	if o.Open == nil {
-		o.Open = func(p serial.Port) (Port, error) {
-			l, err := serial.OpenLocal(p)
-			if err != nil {
-				return nil, err
-			}
-			return l, nil
-		}
+		o.Open = serial.OpenLocalRW
 	}
 	if o.Log == nil {
 		o.Log = slog.New(slog.DiscardHandler)
 	}
-	if o.PushGrace <= 0 {
-		o.PushGrace = 5 * time.Second
-	}
 	if o.MinBackoff <= 0 {
 		o.MinBackoff = time.Second
-	}
-	if o.MaxBackoff < o.MinBackoff {
-		o.MaxBackoff = max(30*time.Second, o.MinBackoff)
 	}
 }
 
@@ -129,18 +119,16 @@ func Run(ctx context.Context, opts Options) error {
 
 	// What the port says goes to the console and, through a pipe, to the
 	// pusher.
-	var (
-		pushIn    *io.PipeWriter
-		pushDone  = make(chan error, 1)
-		pushCtx   context.Context
-		stopPush  context.CancelFunc
-		readerEnd = make(chan struct{})
-	)
-	pushCtx, stopPush = context.WithCancel(context.WithoutCancel(ctx))
+	pushCtx, stopPush := context.WithCancel(context.WithoutCancel(ctx))
 	defer stopPush()
+	pushDone := make(chan error, 1)
+	var (
+		pushIn *io.PipeWriter
+		toPush io.Writer // stays a nil interface without a pusher
+	)
 	if opts.Push != nil {
 		pr, pw := io.Pipe()
-		pushIn = pw
+		pushIn, toPush = pw, pw
 		go func() {
 			err := opts.Push(pushCtx, pr)
 			// A pusher that gave up must not block the reader.
@@ -153,10 +141,7 @@ func Run(ctx context.Context, opts Options) error {
 	} else {
 		pushDone <- nil
 	}
-	var toPush io.Writer // a nil *PipeWriter in an interface is not nil
-	if pushIn != nil {
-		toPush = pushIn
-	}
+	readerEnd := make(chan struct{})
 	go func() {
 		defer close(readerEnd)
 		s.readPort(ctx, toPush)
@@ -180,7 +165,7 @@ func Run(ctx context.Context, opts Options) error {
 	var pushErr error
 	select {
 	case pushErr = <-pushDone:
-	case <-time.After(opts.PushGrace):
+	case <-time.After(pushGrace):
 		stopPush()
 		pushErr = <-pushDone
 	}
@@ -230,7 +215,7 @@ func (s *session) readPort(ctx context.Context, push io.Writer) {
 			}
 			p, err := s.opts.Open(s.opts.Port)
 			if err != nil {
-				backoff = min(2*backoff, s.opts.MaxBackoff)
+				backoff = min(2*backoff, s.opts.maxBackoff())
 				continue
 			}
 			s.mu.Lock()

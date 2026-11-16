@@ -38,17 +38,13 @@ never opens a database; stdout carries the protocol, logs go to stderr.
 
 func cmdMCP(ctx context.Context, e env, args []string) error {
 	set := flag.NewFlagSet("cafard mcp", flag.ContinueOnError)
-	server := set.String("server", e.getenv("CAFARD_SERVER"), "server URL")
-	token := set.String("token", "", "bearer token (default $CAFARD_TOKEN)")
+	rf := addRemoteFlags(set, e, "server URL")
 	logLevel := set.String("log-level", "warn", "stderr log level: debug, info, warn, error")
 	set.Usage = func() { fmt.Fprint(e.stderr, mcpUsage) }
 	if help, err := parseFlags(set, e, args); help || err != nil {
 		return err
 	}
-	if *token == "" {
-		*token = e.getenv("CAFARD_TOKEN")
-	}
-	p, err := mcpproxy.New(ctx, mcpproxy.Options{Server: *server, Token: *token, Version: version, Log: newLogger(e, *logLevel)})
+	p, err := mcpproxy.New(ctx, mcpproxy.Options{Server: rf.server, Token: rf.bearer(), Version: version, Log: newLogger(e, *logLevel)})
 	if err != nil {
 		return err
 	}
@@ -80,8 +76,7 @@ cannot take yet wait in a spool, as with cafard push.
 
 func cmdTerm(ctx context.Context, e env, args []string) error {
 	set := flag.NewFlagSet("cafard term", flag.ContinueOnError)
-	server := set.String("server", e.getenv("CAFARD_SERVER"), "server URL; without one nothing is pushed")
-	token := set.String("token", "", "bearer token (default $CAFARD_TOKEN)")
+	rf := addRemoteFlags(set, e, "server URL; without one nothing is pushed")
 	stream := set.String("stream", "", "stream name (default the port's name)")
 	baud := set.Int("baud", serial.DefaultBaud, "baud rate (8N1)")
 	spoolPath := set.String("spool", "", `spool file for lines the server cannot take yet, or "off"`)
@@ -98,9 +93,6 @@ func cmdTerm(ctx context.Context, e env, args []string) error {
 		fmt.Fprint(e.stderr, termUsage)
 		return errors.New("term needs a serial port, e.g. COM5 or /dev/ttyUSB0")
 	}
-	if *token == "" {
-		*token = e.getenv("CAFARD_TOKEN")
-	}
 	if *stream == "" {
 		*stream = portStream(device)
 	}
@@ -113,23 +105,12 @@ func cmdTerm(ctx context.Context, e env, args []string) error {
 	} else {
 		opts.Console = plainConsole{e.stdin, e.stdout}
 	}
-	if *server != "" {
-		popts := push.Options{Server: *server, Token: *token, Stream: *stream, Log: log, Version: version}
-		if _, err := push.New(popts); err != nil {
-			return err
-		}
-		sp, err := openSpool(e, log, *spoolPath, *server, *stream)
+	if rf.server != "" {
+		p, closeSpool, err := newPusher(e, push.Options{Server: rf.server, Token: rf.bearer(), Stream: *stream, Log: log, Version: version}, *spoolPath)
 		if err != nil {
 			return err
 		}
-		if sp != nil {
-			defer sp.Close()
-			popts.Spool = sp
-		}
-		p, err := push.New(popts)
-		if err != nil {
-			return err
-		}
+		defer closeSpool()
 		opts.Push = p.Reader
 	}
 	if err := term.Run(ctx, opts); err != nil {
