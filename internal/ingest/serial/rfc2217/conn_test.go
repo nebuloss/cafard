@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/nebuloss/cafard/internal/testutil"
 )
 
 // peer is an in-process Telnet server on the far end of a net.Pipe.
@@ -88,17 +90,6 @@ func (p *peer) snapshot() (raw, data []byte, verbs [][2]byte, subs [][]byte) {
 	return slices.Clone(p.raw), slices.Clone(p.data), slices.Clone(p.verbs), slices.Clone(p.subs)
 }
 
-func eventually(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(2 * time.Millisecond)
-	}
-}
-
 // ser2net answers our offers in kind and echoes COM-PORT-OPTION commands.
 func ser2netLike(p *peer) {
 	p.onVerb = func(p *peer, verb, opt byte) {
@@ -132,7 +123,7 @@ func TestNegotiationSendsTheLineSettings(t *testing.T) {
 		{OptComPort, CmdSetParity, ParityNone},
 		{OptComPort, CmdSetStopSize, StopOne},
 	}
-	eventually(t, "the four settings", func() bool { _, _, _, s := p.snapshot(); return len(s) >= 4 })
+	testutil.Eventually(t, "the four settings", 2*time.Second, func() bool { _, _, _, s := p.snapshot(); return len(s) >= 4 })
 	raw, _, verbs, subs := p.snapshot()
 	for i, w := range want {
 		if !bytes.Equal(subs[i], w) {
@@ -178,7 +169,7 @@ func TestDataIsEscapedBothWays(t *testing.T) {
 	if _, err := c.Write([]byte{'a', 0xFF, 'b'}); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "data at the peer", func() bool { _, d, _, _ := p.snapshot(); return len(d) >= 3 })
+	testutil.Eventually(t, "data at the peer", 2*time.Second, func() bool { _, d, _, _ := p.snapshot(); return len(d) >= 3 })
 	raw, data, _, _ := p.snapshot()
 	if !bytes.Equal(data, []byte{'a', 0xFF, 'b'}) || !bytes.Contains(raw, []byte{'a', IAC, IAC, 'b'}) {
 		t.Errorf("peer got data % x, raw % x", data, raw)
@@ -270,7 +261,7 @@ func TestRefusingPeerIsPlainTelnet(t *testing.T) {
 	if _, err := c.Write([]byte("hi")); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "data", func() bool { _, d, _, _ := p.snapshot(); return string(d) == "hi" })
+	testutil.Eventually(t, "data", 2*time.Second, func() bool { _, d, _, _ := p.snapshot(); return string(d) == "hi" })
 	_, _, _, subs := p.snapshot()
 	if len(subs) != 0 {
 		t.Errorf("settings sent to a peer that refused: % x", subs)
@@ -293,13 +284,13 @@ func TestUnsupportedOptionsAreRefusedOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.send(IAC, WILL, 1, IAC, DO, 24)
-	eventually(t, "refusals", func() bool {
+	testutil.Eventually(t, "refusals", 2*time.Second, func() bool {
 		_, _, v, _ := p.snapshot()
 		return slices.Contains(v, [2]byte{DONT, 1}) && slices.Contains(v, [2]byte{WONT, 24})
 	})
 	// The peer turning BINARY off is acknowledged once.
 	p.send(IAC, DONT, OptBinary, IAC, DONT, OptBinary)
-	eventually(t, "WONT BINARY", func() bool { _, _, v, _ := p.snapshot(); return slices.Contains(v, [2]byte{WONT, OptBinary}) })
+	testutil.Eventually(t, "WONT BINARY", 2*time.Second, func() bool { _, _, v, _ := p.snapshot(); return slices.Contains(v, [2]byte{WONT, OptBinary}) })
 	time.Sleep(20 * time.Millisecond)
 	_, _, verbs, _ := p.snapshot()
 	n := 0
@@ -315,7 +306,7 @@ func TestUnsupportedOptionsAreRefusedOnce(t *testing.T) {
 	if _, err := c.Write([]byte("a\rb\r\n")); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "CR NUL", func() bool { r, _, _, _ := p.snapshot(); return bytes.HasSuffix(r, []byte("a\r\x00b\r\n")) })
+	testutil.Eventually(t, "CR NUL", 2*time.Second, func() bool { r, _, _, _ := p.snapshot(); return bytes.HasSuffix(r, []byte("a\r\x00b\r\n")) })
 }
 
 func TestReadEndsWhenTheConnectionCloses(t *testing.T) {

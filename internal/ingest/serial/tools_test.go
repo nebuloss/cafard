@@ -13,8 +13,10 @@ import (
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/ingest/ingestutil/ingesttest"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/store"
+	"github.com/nebuloss/cafard/internal/testutil"
 )
 
 // fakeClaims is the claim side of messaging: resource -> holder.
@@ -71,9 +73,9 @@ func wantCode(t *testing.T, what string, err error, code string, contains ...str
 	}
 }
 
-func markers(w *fakeWriter) []string {
+func markers(w *ingesttest.Writer) []string {
 	var out []string
-	for _, e := range w.all() {
+	for _, e := range w.Entries() {
 		if e.Kind == store.KindMarker && !strings.HasPrefix(e.Text, "serial: connected") && !strings.HasPrefix(e.Text, "serial: cannot open") {
 			out = append(out, e.Text)
 		}
@@ -117,10 +119,10 @@ func TestToolsGateWriteAndControl(t *testing.T) {
 	<-tcpFar
 	for _, s := range []string{"serial:dut1", "serial:dut3", "serial:ro"} {
 		h, _ := m.Lookup(s)
-		eventually(t, s+" connected", func() bool { ok, _ := h.Connected(); return ok })
+		testutil.Eventually(t, s+" connected", 3*time.Second, func() bool { ok, _ := h.Connected(); return ok })
 	}
 	gone, _ := m.Lookup("serial:gone")
-	eventually(t, "gone tried", func() bool { _, why := gone.Connected(); return why != "" })
+	testutil.Eventually(t, "gone tried", 3*time.Second, func() bool { _, why := gone.Connected(); return why != "" })
 
 	ctx := context.Background()
 	a := &mcpserver.Call{Principal: auth.Principal{Name: "agent-a", Scopes: auth.NewScopeSet(auth.ScopeSerialWrite)}}
@@ -201,7 +203,7 @@ func TestToolsGateWriteAndControl(t *testing.T) {
 	if got := markers(e.w); !slices.Equal(got, want) {
 		t.Errorf("markers:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	for _, en := range e.w.all() {
+	for _, en := range e.w.Entries() {
 		if en.Kind == store.KindMarker && strings.HasPrefix(en.Text, "agent-a") && (en.Sender != "agent-a" || en.Stream != "serial:dut1" || en.Severity != store.DefaultSeverity) {
 			t.Errorf("marker %+v", en)
 		}

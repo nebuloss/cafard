@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/nebuloss/cafard/internal/status"
@@ -107,7 +108,7 @@ func (h *Handle) Write(ctx context.Context, p []byte) (int, error) {
 	}
 }
 
-func (h *Handle) connected() (interface{ Write([]byte) (int, error) }, error) {
+func (h *Handle) connected() (io.ReadWriteCloser, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.link == nil {
@@ -121,16 +122,11 @@ func (h *Handle) connected() (interface{ Write([]byte) (int, error) }, error) {
 }
 
 func (h *Handle) controller() (Controller, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.link == nil {
-		reason := h.down
-		if reason == "" {
-			reason = "not opened yet"
-		}
-		return nil, fmt.Errorf("%s: %w (%s)", h.Stream(), ErrDisconnected, reason)
+	link, err := h.connected()
+	if err != nil {
+		return nil, err
 	}
-	c, ok := h.link.(Controller)
+	c, ok := link.(Controller)
 	if !ok {
 		reason := "this transport carries data only"
 		if h.transport == TransportTCP {
@@ -138,7 +134,7 @@ func (h *Handle) controller() (Controller, error) {
 		}
 		return nil, &UnsupportedError{Stream: h.Stream(), Transport: h.transport, Reason: reason}
 	}
-	if r, ok := h.link.(controlRefuser); ok {
+	if r, ok := link.(controlRefuser); ok {
 		if reason := r.ControlUnavailable(); reason != "" {
 			return nil, &UnsupportedError{Stream: h.Stream(), Transport: h.transport, Reason: reason}
 		}

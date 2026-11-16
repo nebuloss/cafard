@@ -58,8 +58,6 @@ const (
 // Modem state bits of NOTIFY-MODEMSTATE.
 const (
 	ModemDCD      = 0x80
-	ModemRI       = 0x40
-	ModemDSR      = 0x20
 	ModemCTS      = 0x10
 	ModemDeltaDCD = 0x08
 )

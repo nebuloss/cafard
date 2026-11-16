@@ -18,68 +18,31 @@ import (
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/ingest/ingestutil/ingesttest"
 	"github.com/nebuloss/cafard/internal/ingest/serial/rfc2217"
+	"github.com/nebuloss/cafard/internal/ingest/serial/rfc2217/rfc2217test"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
+	"github.com/nebuloss/cafard/internal/testutil"
 )
 
-type fakeWriter struct {
-	mu      sync.Mutex
-	entries []store.Entry
-}
-
-func (w *fakeWriter) Submit(_ context.Context, e store.Entry, _ bool) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.entries = append(w.entries, e)
-	return nil
-}
-
-func (w *fakeWriter) Commit(ctx context.Context, e store.Entry) (int64, error) {
-	return 0, w.Submit(ctx, e, false)
-}
-
-func (w *fakeWriter) CommitBatch(ctx context.Context, es []store.Entry) (int64, error) {
-	for _, e := range es {
-		_ = w.Submit(ctx, e, false)
-	}
-	return 0, nil
-}
-
-func (w *fakeWriter) all() []store.Entry {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return slices.Clone(w.entries)
-}
-
 // texts lists "kind:text" for every entry.
-func (w *fakeWriter) texts() []string {
+func texts(w *ingesttest.Writer) []string {
 	var out []string
-	for _, e := range w.all() {
+	for _, e := range w.Entries() {
 		out = append(out, string(e.Kind)+":"+e.Text)
 	}
 	return out
 }
 
-func eventually(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(2 * time.Millisecond)
-	}
-}
-
 type env struct {
-	w    *fakeWriter
+	w    *ingesttest.Writer
 	st   *status.Memory
 	deps deps.Deps
 }
 
 func newEnv() *env {
-	e := &env{w: &fakeWriter{}, st: status.New(clock.System{})}
+	e := &env{w: ingesttest.NewWriter(), st: status.New(clock.System{})}
 	e.deps = deps.Deps{Writer: e.w, Status: e.st, Clock: clock.System{}}
 	return e
 }
@@ -138,8 +101,8 @@ func startManager(t *testing.T, e *env, ports []Port, f Factory) *Manager {
 	return m
 }
 
-func hasEntry(w *fakeWriter, want string) bool {
-	return slices.ContainsFunc(w.texts(), func(s string) bool { return strings.Contains(s, want) })
+func hasEntry(w *ingesttest.Writer, want string) bool {
+	return slices.ContainsFunc(texts(w), func(s string) bool { return strings.Contains(s, want) })
 }
 
 func TestReconnectWritesMarkersAndStatus(t *testing.T) {
@@ -151,7 +114,7 @@ func TestReconnectWritesMarkersAndStatus(t *testing.T) {
 
 	b := <-far
 	go b.Write([]byte("hello\r\nboot\rlogin: "))
-	eventually(t, "lines", func() bool { return hasEntry(e.w, "line:login: ") })
+	testutil.Eventually(t, "lines", 3*time.Second, func() bool { return hasEntry(e.w, "line:login: ") })
 	got, _ := e.st.Get("serial:dut1")
 	if got.Status != dto.StreamConnected && got.Status != dto.StreamIdle {
 		t.Errorf("status while up = %s", got.Status)
@@ -162,11 +125,11 @@ func TestReconnectWritesMarkersAndStatus(t *testing.T) {
 
 	far2 := o.pipe(nil)
 	b.Close()
-	eventually(t, "disconnect marker", func() bool { return hasEntry(e.w, "marker:serial: disconnected from 10.0.50.30:7002") })
+	testutil.Eventually(t, "disconnect marker", 3*time.Second, func() bool { return hasEntry(e.w, "marker:serial: disconnected from 10.0.50.30:7002") })
 	b2 := <-far2
-	eventually(t, "reconnect marker", func() bool { return hasEntry(e.w, "marker:serial: reconnected after") })
+	testutil.Eventually(t, "reconnect marker", 3*time.Second, func() bool { return hasEntry(e.w, "marker:serial: reconnected after") })
 	go b2.Write([]byte("again\n"))
-	eventually(t, "line after reconnect", func() bool { return hasEntry(e.w, "line:again") })
+	testutil.Eventually(t, "line after reconnect", 3*time.Second, func() bool { return hasEntry(e.w, "line:again") })
 
 	want := []string{
 		"marker:serial: cannot open 10.0.50.30:7002: no such file or directory; retrying",
@@ -178,7 +141,7 @@ func TestReconnectWritesMarkersAndStatus(t *testing.T) {
 		"marker:serial: reconnected",
 		"line:again",
 	}
-	texts := e.w.texts()
+	texts := texts(e.w)
 	if len(texts) != len(want) {
 		t.Fatalf("entries:\n%s", strings.Join(texts, "\n"))
 	}
@@ -187,7 +150,7 @@ func TestReconnectWritesMarkersAndStatus(t *testing.T) {
 			t.Errorf("entry %d = %q, want %q...", i, texts[i], w)
 		}
 	}
-	for _, en := range e.w.all() {
+	for _, en := range e.w.Entries() {
 		if en.Stream != "serial:dut1" {
 			t.Errorf("stream %q", en.Stream)
 		}
@@ -210,20 +173,20 @@ func TestDownStatusCarriesTheReason(t *testing.T) {
 		o.fail(errors.New("permission denied"))
 	}
 	startManager(t, e, []Port{{Name: "dut1", Device: "/dev/ttyUSB0"}}, o.factory)
-	eventually(t, "three attempts", func() bool { o.mu.Lock(); defer o.mu.Unlock(); return len(o.calls) >= 3 })
+	testutil.Eventually(t, "three attempts", 3*time.Second, func() bool { o.mu.Lock(); defer o.mu.Unlock(); return len(o.calls) >= 3 })
 	got, _ := e.st.Get("serial:dut1")
 	if got.Status != dto.StreamDown {
 		t.Errorf("status = %s", got.Status)
 	}
 	// One marker for the whole streak of failures.
 	n := 0
-	for _, s := range e.w.texts() {
+	for _, s := range texts(e.w) {
 		if strings.Contains(s, "cannot open") {
 			n++
 		}
 	}
 	if n != 1 {
-		t.Errorf("%d open_failed markers: %q", n, e.w.texts())
+		t.Errorf("%d open_failed markers: %q", n, texts(e.w))
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -273,7 +236,7 @@ func TestControlDrivesTheLinesInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "connected", func() bool { ok, _ := h.Connected(); return ok })
+	testutil.Eventually(t, "connected", 3*time.Second, func() bool { ok, _ := h.Connected(); return ok })
 
 	yes, no := true, false
 	ls, err := h.Control(context.Background(), ControlRequest{Baud: 9600, DTR: &yes, RTS: &no, BreakMS: 5, Pulse: &Pulse{Line: "dtr", MS: 5}})
@@ -318,7 +281,7 @@ func TestControlDrivesTheLinesInOrder(t *testing.T) {
 	far2 := o.pipe(nil)
 	b.Close()
 	<-far2
-	eventually(t, "reopen", func() bool { o.mu.Lock(); defer o.mu.Unlock(); return len(o.calls) == 2 })
+	testutil.Eventually(t, "reopen", 3*time.Second, func() bool { o.mu.Lock(); defer o.mu.Unlock(); return len(o.calls) == 2 })
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.calls[1].Baud != 9600 {
@@ -341,7 +304,7 @@ func TestRawTCPRefusesControl(t *testing.T) {
 	m := startManager(t, e, []Port{{Name: "dut3", TCP: "10.0.50.30:7002", Writable: true}, {Name: "ro", TCP: "10.0.50.30:7003"}}, f)
 	<-far
 	h, _ := m.Lookup("serial:dut3")
-	eventually(t, "connected", func() bool { ok, _ := h.Connected(); return ok })
+	testutil.Eventually(t, "connected", 3*time.Second, func() bool { ok, _ := h.Connected(); return ok })
 	yes := true
 	_, err := h.Control(context.Background(), ControlRequest{DTR: &yes})
 	var ue *UnsupportedError
@@ -371,118 +334,46 @@ func TestWriteToADisconnectedPort(t *testing.T) {
 	o.fail(errors.New("unplugged"))
 	m := startManager(t, e, []Port{{Name: "dut1", Device: "/dev/ttyUSB0", Writable: true}}, o.factory)
 	h, _ := m.Lookup("serial:dut1")
-	eventually(t, "attempt", func() bool { _, why := h.Connected(); return why == "unplugged" })
+	testutil.Eventually(t, "attempt", 3*time.Second, func() bool { _, why := h.Connected(); return why == "unplugged" })
 	if _, err := h.Write(context.Background(), []byte("x")); !errors.Is(err, ErrDisconnected) || !strings.Contains(err.Error(), "unplugged") {
 		t.Errorf("write: %v", err)
 	}
 }
 
-// ser2net is a fake RFC 2217 server on a pipe. It accepts or refuses
-// COM-PORT-OPTION, answers commands and records the SET-CONTROL values.
-type ser2net struct {
-	conn    net.Conn
-	refuse  bool
-	mu      sync.Mutex
-	control []byte
-	baud    []byte
+// rfcPeer is an RFC 2217 peer on the far end of a pipe.
+type rfcPeer struct {
+	*rfc2217test.Peer
+	conn net.Conn
 }
 
-func (s *ser2net) run() {
-	var sub []byte
-	state := 0 // 0 data, 1 IAC, 2 verb, 3 SB, 4 SB IAC
-	var verb byte
-	buf := make([]byte, 256)
-	reply := func(b ...byte) { go s.conn.Write(b) }
-	for {
-		n, err := s.conn.Read(buf)
-		for _, c := range buf[:n] {
-			switch state {
-			case 0:
-				if c == rfc2217.IAC {
-					state = 1
-				}
-			case 1:
-				switch c {
-				case rfc2217.WILL, rfc2217.DO, rfc2217.WONT, rfc2217.DONT:
-					verb, state = c, 2
-				case rfc2217.SB:
-					sub, state = nil, 3
-				default:
-					state = 0
-				}
-			case 2:
-				state = 0
-				switch {
-				case verb == rfc2217.WILL && c == rfc2217.OptComPort && s.refuse:
-					reply(rfc2217.IAC, rfc2217.DONT, c)
-				case verb == rfc2217.WILL:
-					reply(rfc2217.IAC, rfc2217.DO, c)
-				case verb == rfc2217.DO:
-					reply(rfc2217.IAC, rfc2217.WILL, c)
-				}
-			case 3:
-				if c == rfc2217.IAC {
-					state = 4
-				} else {
-					sub = append(sub, c)
-				}
-			case 4:
-				if c == rfc2217.SE {
-					state = 0
-					s.mu.Lock()
-					switch sub[1] {
-					case rfc2217.CmdSetControl:
-						s.control = append(s.control, sub[2])
-					case rfc2217.CmdSetBaudRate:
-						s.baud = slices.Clone(sub[2:])
-					}
-					s.mu.Unlock()
-					out := []byte{rfc2217.IAC, rfc2217.SB, sub[0], sub[1] + rfc2217.ServerOffset}
-					out = append(out, sub[2:]...)
-					reply(append(out, rfc2217.IAC, rfc2217.SE)...)
-				} else {
-					sub, state = append(sub, c), 3
-				}
-			}
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
-func rfcFactory(servers chan *ser2net, refuse bool) Factory {
+func rfcFactory(peers chan rfcPeer, refuse bool) Factory {
 	return func(ctx context.Context, p Port, ev Events) (io.ReadWriteCloser, error) {
 		a, b := net.Pipe()
-		s := &ser2net{conn: b, refuse: refuse}
-		go s.run()
-		servers <- s
-		return NewRFC2217(ctx, a, p, ev)
+		s := rfcPeer{&rfc2217test.Peer{Refuse: refuse}, b}
+		go s.Serve(b)
+		peers <- s
+		return newRFC2217(ctx, a, p, ev)
 	}
 }
 
 func TestRFC2217PortSetsBaudAndPulsesDTR(t *testing.T) {
 	e := newEnv()
-	servers := make(chan *ser2net, 4)
+	servers := make(chan rfcPeer, 4)
 	m := startManager(t, e, []Port{{Name: "dut2", RFC2217: "10.0.50.30:7001", Baud: 57600, Writable: true}}, rfcFactory(servers, false))
 	s := <-servers
 	h, _ := m.Lookup("serial:dut2")
-	eventually(t, "connected", func() bool { ok, _ := h.Connected(); return ok })
-	eventually(t, "baud", func() bool { s.mu.Lock(); defer s.mu.Unlock(); return s.baud != nil })
-	s.mu.Lock()
-	if !bytes.Equal(s.baud, []byte{0, 0, 0xE1, 0}) {
-		t.Errorf("SET-BAUDRATE % x, want 57600", s.baud)
+	testutil.Eventually(t, "connected", 3*time.Second, func() bool { ok, _ := h.Connected(); return ok })
+	testutil.Eventually(t, "baud", 3*time.Second, func() bool { return s.Baud() != nil })
+	if b := s.Baud(); !bytes.Equal(b, []byte{0, 0, 0xE1, 0}) {
+		t.Errorf("SET-BAUDRATE % x, want 57600", b)
 	}
-	s.mu.Unlock()
-	eventually(t, "connect marker", func() bool { return hasEntry(e.w, "marker:serial: connected: RFC 2217 10.0.50.30:7001 at 57600 8N1") })
+	testutil.Eventually(t, "connect marker", 3*time.Second, func() bool { return hasEntry(e.w, "marker:serial: connected: RFC 2217 10.0.50.30:7001 at 57600 8N1") })
 
 	ls, err := h.Control(context.Background(), ControlRequest{Pulse: &Pulse{Line: "dtr", MS: 5}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.mu.Lock()
-	ctl := slices.Clone(s.control)
-	s.mu.Unlock()
+	ctl := s.Control()
 	if !bytes.Equal(ctl, []byte{rfc2217.ControlDTROff, rfc2217.ControlDTROn}) {
 		t.Errorf("SET-CONTROL values %v", ctl)
 	}
@@ -493,7 +384,7 @@ func TestRFC2217PortSetsBaudAndPulsesDTR(t *testing.T) {
 	// Carrier changes become markers.
 	go s.conn.Write([]byte{rfc2217.IAC, rfc2217.SB, rfc2217.OptComPort, 107, 0x80, rfc2217.IAC, rfc2217.SE,
 		rfc2217.IAC, rfc2217.SB, rfc2217.OptComPort, 107, 0x08, rfc2217.IAC, rfc2217.SE})
-	eventually(t, "carrier marker", func() bool { return hasEntry(e.w, "marker:serial: carrier detect (DCD) dropped") })
+	testutil.Eventually(t, "carrier marker", 3*time.Second, func() bool { return hasEntry(e.w, "marker:serial: carrier detect (DCD) dropped") })
 	if got := h.LineState(); got.DCD == nil || *got.DCD {
 		t.Errorf("DCD = %v", got.DCD)
 	}
@@ -501,12 +392,12 @@ func TestRFC2217PortSetsBaudAndPulsesDTR(t *testing.T) {
 
 func TestRFC2217RefusalIsExplained(t *testing.T) {
 	e := newEnv()
-	servers := make(chan *ser2net, 4)
+	servers := make(chan rfcPeer, 4)
 	m := startManager(t, e, []Port{{Name: "dut2", RFC2217: "10.0.50.30:7001", Writable: true}}, rfcFactory(servers, true))
 	s := <-servers
 	h, _ := m.Lookup("serial:dut2")
-	eventually(t, "connected", func() bool { ok, _ := h.Connected(); return ok })
-	eventually(t, "plain Telnet marker", func() bool {
+	testutil.Eventually(t, "connected", 3*time.Second, func() bool { ok, _ := h.Connected(); return ok })
+	testutil.Eventually(t, "plain Telnet marker", 3*time.Second, func() bool {
 		return hasEntry(e.w, "marker:serial: connected: plain Telnet 10.0.50.30:7001: the peer answered DONT COM-PORT-OPTION")
 	})
 	yes := true
@@ -515,7 +406,7 @@ func TestRFC2217RefusalIsExplained(t *testing.T) {
 	}
 	// Data still flows.
 	go s.conn.Write([]byte("still here\n"))
-	eventually(t, "data", func() bool { return hasEntry(e.w, "line:still here") })
+	testutil.Eventually(t, "data", 3*time.Second, func() bool { return hasEntry(e.w, "line:still here") })
 }
 
 func TestConfigYAML(t *testing.T) {
