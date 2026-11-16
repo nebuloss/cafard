@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -12,6 +15,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/config"
+	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/push"
 )
 
@@ -114,12 +118,23 @@ func cmdToken(ctx context.Context, e env, args []string) error {
 }
 
 const pushUsage = `Usage:
-  cafard push --server URL --token T --stream NAME [--echo]   reads stdin
+  cafard push --server URL --token T --stream NAME [source] [--echo] [--spool PATH|off]
 
-  journalctl -f | cafard push --server http://10.0.50.2:8790 --token cfd_... --stream laptop
+Sources (one at most):
+  (none)                          read stdin      journalctl -f | cafard push ...
+  --serial COM5 [--baud 115200]   read a serial port; reopened if it goes away
+  --file PATH [--follow]          read a file; --follow keeps reading as it
+                                  grows (a PuTTY session log), through
+                                  truncation and rotation. --from-start also
+                                  sends what the file holds already.
+
+  cafard.exe push --server http://10.0.50.2:8790 --stream bench --serial COM5 --baud 115200
 
 --server and --token may come from CAFARD_SERVER and CAFARD_TOKEN. The
-stream is push:NAME unless NAME already has a kind prefix.
+stream is push:NAME unless NAME already has a kind prefix. While the server
+is unreachable, lines wait in a spool file (100 MiB at most, in the user
+cache directory by default) and are sent in order when it is back, or by
+the next push to the same server and stream.
 `
 
 func cmdPush(ctx context.Context, e env, args []string) error {
@@ -128,6 +143,12 @@ func cmdPush(ctx context.Context, e env, args []string) error {
 	token := set.String("token", "", "bearer token (default $CAFARD_TOKEN)")
 	stream := set.String("stream", "", "stream name")
 	echo := set.Bool("echo", false, "also print what is read")
+	device := set.String("serial", "", "serial port to read (COM5, /dev/ttyUSB0)")
+	baud := set.Int("baud", serial.DefaultBaud, "baud rate for --serial (8N1)")
+	file := set.String("file", "", "file to read")
+	follow := set.Bool("follow", false, "with --file: keep reading as the file grows")
+	fromStart := set.Bool("from-start", false, "with --follow: also send what the file already holds")
+	spoolPath := set.String("spool", "", `spool file for lines the server cannot take yet, or "off" (default in the user cache directory)`)
 	set.Usage = func() { fmt.Fprint(e.stderr, pushUsage) }
 	if help, err := parseFlags(set, e, args); help || err != nil {
 		return err
@@ -135,13 +156,74 @@ func cmdPush(ctx context.Context, e env, args []string) error {
 	if *token == "" {
 		*token = e.getenv("CAFARD_TOKEN")
 	}
-	opts := push.Options{Server: *server, Token: *token, Stream: *stream, Log: newLogger(e, "info"), Version: version}
+	given := map[string]bool{}
+	set.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	switch {
+	case *device != "" && *file != "":
+		return fmt.Errorf("push reads one source: --serial or --file, not both")
+	case given["baud"] && *device == "":
+		return fmt.Errorf("--baud goes with --serial")
+	case *follow && *file == "":
+		return fmt.Errorf("--follow goes with --file")
+	case *fromStart && !*follow:
+		return fmt.Errorf("--from-start goes with --follow")
+	}
+	log := newLogger(e, "info")
+	opts := push.Options{Server: *server, Token: *token, Stream: *stream, Log: log, Version: version}
 	if *echo {
 		opts.Echo = e.stdout
+	}
+	if _, err := push.New(opts); err != nil {
+		return err // the flags are wrong: say so before touching the spool
+	}
+	if *spoolPath != "off" {
+		path := *spoolPath
+		if path == "" {
+			p, err := push.DefaultSpoolPath(e.getenv, *server, *stream)
+			if err != nil {
+				log.Warn("running without a spool: lines wait in memory while the server is unreachable", "err", err)
+			}
+			path = p
+		}
+		if path != "" {
+			sp, err := push.OpenSpool(path, push.DefaultSpoolMax)
+			if err != nil {
+				return fmt.Errorf("spool: %w (pass --spool PATH or --spool off)", err)
+			}
+			defer sp.Close()
+			opts.Spool = sp
+		}
 	}
 	p, err := push.New(opts)
 	if err != nil {
 		return err
 	}
-	return p.Reader(ctx, e.stdin)
+
+	var src io.Reader = e.stdin
+	switch {
+	case *device != "":
+		r, err := push.SerialReader(ctx, push.SerialOptions{Port: serial.Port{Device: *device, Baud: *baud}, Log: log})
+		if err != nil {
+			return fmt.Errorf("--serial %s: %w", *device, err)
+		}
+		defer r.Close()
+		src = r
+	case *file != "" && *follow:
+		r := push.Follow(ctx, *file, push.FollowOptions{FromStart: *fromStart, Log: log})
+		defer r.Close()
+		src = r
+	case *file != "":
+		f, err := os.Open(*file)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		src = f
+	}
+	err = p.Reader(ctx, src)
+	if errors.Is(err, context.Canceled) && ctx.Err() != nil && (*device != "" || *follow) {
+		// Ctrl-C is how a serial or follow push ends.
+		return nil
+	}
+	return err
 }

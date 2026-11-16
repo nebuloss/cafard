@@ -14,6 +14,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/store"
 	"net"
@@ -39,6 +40,7 @@ type Config struct {
 
 	Retention store.Retention  `yaml:"retention"`
 	MCP       mcpserver.Config `yaml:"mcp"`
+	Serial    serial.Config    `yaml:"serial"`
 }
 
 // Validator is implemented by feature sub-structs that check themselves.

@@ -20,6 +20,7 @@ import (
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/hub"
 	"github.com/nebuloss/cafard/internal/ingest/httpapi"
+	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
@@ -112,6 +113,7 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 	// One line per feature: Register(mux, mcp, deps[, its config section]).
 	for _, register := range []func() (func(context.Context) error, error){
 		func() (func(context.Context) error, error) { return httpapi.Register(mux, mcp, d) },
+		func() (func(context.Context) error, error) { return serial.Register(mux, mcp, d, &cfg.Serial) },
 	} {
 		start, err := register()
 		if err != nil {
