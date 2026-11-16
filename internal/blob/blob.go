@@ -90,8 +90,8 @@ func (b *Store) Config() Config { return b.cfg }
 
 var shaRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-// ValidSHA reports whether s looks like a blob id.
-func ValidSHA(s string) bool { return shaRE.MatchString(s) }
+// validSHA reports whether s looks like a blob id.
+func validSHA(s string) bool { return shaRE.MatchString(s) }
 
 func (b *Store) path(sha string) string {
 	return filepath.Join(b.dir, sha[:2], sha)
@@ -137,7 +137,7 @@ func (b *Store) Put(ctx context.Context, r io.Reader, mime string) (dto.Blob, er
 		return dto.Blob{}, dto.Errorf(dto.CodeBadRequest, "A file is empty.")
 	}
 	if mime == "" || strings.HasPrefix(mime, "image/") {
-		mime = Sniff(head)
+		mime = sniff(head)
 		if !IsImage(mime) {
 			return dto.Blob{}, dto.Errorf(dto.CodeBadRequest, "A file is not a png, jpeg, webp, gif or heic image.")
 		}
@@ -266,7 +266,7 @@ func (b *Store) Stat(ctx context.Context, sha string) (dto.Blob, error) {
 
 // Open returns the original ("") or a variant ("agent", "thumb") of sha.
 func (b *Store) Open(ctx context.Context, sha string, variant string) (io.ReadSeekCloser, dto.Blob, error) {
-	if !ValidSHA(sha) {
+	if !validSHA(sha) {
 		return nil, dto.Blob{}, ErrNotFound
 	}
 	row, err := b.Stat(ctx, sha)
@@ -312,26 +312,13 @@ func (b *Store) ReadAll(ctx context.Context, sha, variant string) ([]byte, dto.B
 
 // originals are the blobs sha is, or is a variant of.
 func (b *Store) originals(ctx context.Context, sha string) ([]string, error) {
-	rows, err := b.db.QueryContext(ctx, `SELECT sha256 FROM blobs WHERE sha256 = ? OR agent_sha256 = ? OR thumb_sha256 = ?`, sha, sha, sha)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var s string
-		if err := rows.Scan(&s); err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
+	return store.QueryColumn[string](ctx, b.db, `SELECT sha256 FROM blobs WHERE sha256 = ? OR agent_sha256 = ? OR thumb_sha256 = ?`, sha, sha, sha)
 }
 
 // VisibleTo reports whether p can see at least one message referencing
 // sha (as an image, the variant of one, or a log snapshot).
 func (b *Store) VisibleTo(ctx context.Context, sha string, p auth.Principal) (bool, error) {
-	if !ValidSHA(sha) || b.visible == nil {
+	if !validSHA(sha) || b.visible == nil {
 		return false, nil
 	}
 	if b.grant != nil && b.grant(ctx, sha, p) {
@@ -363,21 +350,8 @@ func (b *Store) VisibleTo(ctx context.Context, sha string, p auth.Principal) (bo
 }
 
 func (b *Store) referencing(ctx context.Context, sha string) ([]int64, error) {
-	rows, err := b.db.QueryContext(ctx, `SELECT seq FROM entries WHERE kind = 'message' AND attachments IS NOT NULL
+	return store.QueryColumn[int64](ctx, b.db, `SELECT seq FROM entries WHERE kind = 'message' AND attachments IS NOT NULL
 		AND instr(attachments, ?) > 0 ORDER BY seq DESC LIMIT 200`, sha)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []int64
-	for rows.Next() {
-		var s int64
-		if err := rows.Scan(&s); err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
 }
 
 func references(e store.Entry, sha string) bool {
@@ -389,8 +363,8 @@ func references(e store.Entry, sha string) bool {
 	return false
 }
 
-// Sniff guesses an image type from the first bytes.
-func Sniff(head []byte) string {
+// sniff guesses an image type from the first bytes.
+func sniff(head []byte) string {
 	if len(head) >= 12 && string(head[4:8]) == "ftyp" {
 		switch string(head[8:12]) {
 		case "heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1":

@@ -21,8 +21,8 @@ import (
 const (
 	MaxTextBytes    = 32 << 10
 	MaxAgentImages  = 6
-	MaxAgentImageMB = 10
-	MaxChoices      = 10
+	maxAgentImageMB = 10
+	maxChoices      = 10
 	maxChoiceLen    = 200
 )
 
@@ -101,8 +101,8 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 	if len(m.Logs) > MaxLogAttachments {
 		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "A message carries at most %d log attachments.", MaxLogAttachments)
 	}
-	if len(in.Choices) > MaxChoices {
-		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "A question has at most %d choices.", MaxChoices)
+	if len(in.Choices) > maxChoices {
+		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "A question has at most %d choices.", maxChoices)
 	}
 	for _, c := range in.Choices {
 		if strings.TrimSpace(c) == "" || len(c) > maxChoiceLen {
@@ -230,9 +230,9 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 }
 
 func (s *Service) putInline(ctx context.Context, i int, img dto.ImageUpload) (dto.Blob, error) {
-	limit := MaxAgentImageMB << 20
+	limit := maxAgentImageMB << 20
 	if base64.StdEncoding.DecodedLen(len(img.Data)) > limit+3 {
-		return dto.Blob{}, dto.Errorf(dto.CodeTooLarge, "Image %d is larger than %d MiB, the limit for inline images.", i+1, MaxAgentImageMB)
+		return dto.Blob{}, dto.Errorf(dto.CodeTooLarge, "Image %d is larger than %d MiB, the limit for inline images.", i+1, maxAgentImageMB)
 	}
 	data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(img.Data))
 	if err != nil {
@@ -241,7 +241,7 @@ func (s *Service) putInline(ctx context.Context, i int, img dto.ImageUpload) (dt
 		}
 	}
 	if len(data) > limit {
-		return dto.Blob{}, dto.Errorf(dto.CodeTooLarge, "Image %d is larger than %d MiB, the limit for inline images.", i+1, MaxAgentImageMB)
+		return dto.Blob{}, dto.Errorf(dto.CodeTooLarge, "Image %d is larger than %d MiB, the limit for inline images.", i+1, maxAgentImageMB)
 	}
 	b, err := s.blobs.Put(ctx, bytes.NewReader(data), img.Mime)
 	var apiErr *dto.APIError

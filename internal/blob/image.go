@@ -42,22 +42,8 @@ func (b *Store) derive(ctx context.Context, path string) (variants, error) {
 	case <-ctx.Done():
 		return variants{}, ctx.Err()
 	}
-	type result struct {
-		v   variants
-		err error
-	}
-	done := make(chan result, 1)
-	go func() {
-		defer func() { <-b.pool }()
-		v, err := deriveFile(path, b.cfg.MaxMegapixels)
-		done <- result{v, err}
-	}()
-	select {
-	case r := <-done:
-		return r.v, r.err
-	case <-ctx.Done():
-		return variants{}, ctx.Err()
-	}
+	defer func() { <-b.pool }()
+	return deriveFile(path, b.cfg.MaxMegapixels)
 }
 
 func deriveFile(path string, maxMP int) (variants, error) {

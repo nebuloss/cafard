@@ -150,10 +150,7 @@ func (s *Service) resChannel(ctx context.Context, p auth.Principal, uri string) 
 	if err != nil {
 		return nil, err
 	}
-	entries := make([]store.Entry, len(page.Rows))
-	for i, r := range page.Rows {
-		entries[i] = r.Entry
-	}
+	entries := page.entries()
 	text := channelLine(chat) + "\n"
 	if len(entries) > 0 {
 		text += textclean.Format(entries, textclean.AgentDefaults, time.UTC).Text
@@ -281,7 +278,7 @@ func (s *Service) notifyEntry(ctx context.Context, th *throttle, e store.Entry) 
 	}
 	s.subsMu.Unlock()
 	for _, p := range who {
-		if ok, err := s.InInbox(ctx, p, e); err != nil || !ok {
+		if ok, err := s.inInbox(ctx, p, e); err != nil || !ok {
 			continue
 		}
 		name := p.Name

@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -22,7 +23,7 @@ import (
 const (
 	MaxLogAttachments = 5
 	SnapshotMaxLines  = 2000
-	SnapshotMaxBytes  = 256 << 10
+	snapshotMaxBytes  = 256 << 10
 	previewLines      = 5
 	maxLogTitle       = 200
 	attachReadChunk   = 5000
@@ -126,7 +127,7 @@ func (s *Service) buildLogAttachment(ctx context.Context, i int, r dto.LogReques
 	}
 	if r.ToSeq != nil && a.Lines > 0 && a.Lines <= SnapshotMaxLines {
 		f := textclean.Format(kept, snapshotLimits, time.UTC)
-		if len(f.Text) <= SnapshotMaxBytes {
+		if len(f.Text) <= snapshotMaxBytes {
 			sha, err := s.blobs.PutText(ctx, f.Text)
 			if err != nil {
 				return store.Attachment{}, err
@@ -159,7 +160,7 @@ func (s *Service) expired(ctx context.Context, a store.Attachment) (bool, error)
 	return n == 0, err
 }
 
-func (s *Service) logDTO(ctx context.Context, e store.Entry, index int, a store.Attachment) (dto.LogAttachment, error) {
+func (s *Service) logDTO(ctx context.Context, a store.Attachment) (dto.LogAttachment, error) {
 	la := dto.LogAttachment{Stream: a.Stream, Channel: a.Channel, Streams: a.Streams, FromSeq: a.FromSeq, ToSeq: a.ToSeq,
 		Grep: a.Grep, MinSeverity: a.MinSeverity, Title: a.Title, Lines: a.Lines, Snapshot: a.SnapshotSHA256 != ""}
 	if a.FirstTS != 0 {
@@ -192,27 +193,19 @@ type AttachmentPage struct {
 	Expired  bool
 }
 
-// LogAttachment returns attachment index of message seq, checking that
-// viewer can see the message.
-func (s *Service) LogAttachment(ctx context.Context, viewer auth.Principal, seq int64, index int) (store.Entry, store.Attachment, error) {
+// AttachmentLines pages through a log attachment from sinceSeq (0 means
+// its start), checking that viewer can see the message. A snapshot is
+// read when there is one; an open-ended attachment keeps returning new
+// lines of its streams.
+func (s *Service) AttachmentLines(ctx context.Context, viewer auth.Principal, seq int64, index int, sinceSeq int64, limit int) (AttachmentPage, store.Attachment, error) {
 	e, err := s.Message(ctx, viewer, seq)
 	if err != nil {
-		return store.Entry{}, store.Attachment{}, err
+		return AttachmentPage{}, store.Attachment{}, err
 	}
 	if index < 0 || index >= len(e.Attachments) || e.Attachments[index].Type != dto.AttachmentLog {
-		return store.Entry{}, store.Attachment{}, dto.Errorf(dto.CodeNotFound, "Message %d has no log attachment %d.", seq, index)
+		return AttachmentPage{}, store.Attachment{}, dto.Errorf(dto.CodeNotFound, "Message %d has no log attachment %d.", seq, index)
 	}
-	return e, e.Attachments[index], nil
-}
-
-// AttachmentLines pages through a log attachment from sinceSeq (0 means
-// its start). A snapshot is read when there is one; an open-ended
-// attachment keeps returning new lines of its streams.
-func (s *Service) AttachmentLines(ctx context.Context, viewer auth.Principal, seq int64, index int, sinceSeq int64, limit int) (AttachmentPage, store.Attachment, error) {
-	_, a, err := s.LogAttachment(ctx, viewer, seq, index)
-	if err != nil {
-		return AttachmentPage{}, a, err
-	}
+	a := e.Attachments[index]
 	since := max(sinceSeq, a.FromSeq)
 	page, err := s.attachmentPage(ctx, a, since, limit)
 	if err != nil {
@@ -233,9 +226,9 @@ func (s *Service) attachmentPage(ctx context.Context, a store.Attachment, since 
 	if a.SnapshotSHA256 != "" {
 		data, _, err := s.blobs.ReadAll(ctx, a.SnapshotSHA256, blob.VariantOriginal)
 		if err == nil {
-			all := ParseFormatted(string(data))
+			all := parseFormatted(string(data))
 			start, _ := slices.BinarySearchFunc(all, since, func(e store.Entry, seq int64) int {
-				return cmpInt(e.Seq, seq)
+				return cmp.Compare(e.Seq, seq)
 			})
 			rest := all[start:]
 			page := AttachmentPage{Snapshot: true}
@@ -275,20 +268,10 @@ func (s *Service) attachmentPage(ctx context.Context, a store.Attachment, since 
 	return page, nil
 }
 
-func cmpInt(a, b int64) int {
-	switch {
-	case a < b:
-		return -1
-	case a > b:
-		return 1
-	}
-	return 0
-}
-
-// ParseFormatted reads back text written by textclean.Format into
+// parseFormatted reads back text written by textclean.Format into
 // entries: seq, time, stream, severity and text. Collapsed repeats come
 // back as their first line only.
-func ParseFormatted(text string) []store.Entry {
+func parseFormatted(text string) []store.Entry {
 	var (
 		out []store.Entry
 		day time.Time
@@ -330,12 +313,7 @@ func ParseFormatted(text string) []store.Entry {
 }
 
 func severityOf(name string) int {
-	for i := range 8 {
-		if textclean.SeverityName(i) == name {
-			return i
-		}
-	}
-	if n, err := strconv.Atoi(name); err == nil {
+	if n, err := store.ParseSeverity(name); err == nil {
 		return n
 	}
 	return store.DefaultSeverity

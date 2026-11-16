@@ -1,6 +1,7 @@
 package messaging
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"strings"
@@ -143,7 +144,7 @@ func (s *Service) eventPreview(ctx context.Context, p auth.Principal, c *dto.Cha
 // or unfollowed chat drops its @humans questions, never the ones that
 // name p.
 func (s *Service) questionsFor(ctx context.Context, p auth.Principal, limit int) ([]store.Entry, error) {
-	seqs, err := s.seqs(ctx, `SELECT q.seq FROM entries q WHERE q.kind = 'message'
+	seqs, err := store.QueryColumn[int64](ctx, s.db, `SELECT q.seq FROM entries q WHERE q.kind = 'message'
 		AND q.meta IS NOT NULL AND json_type(q.meta, '$.choices') IS NOT NULL
 		AND coalesce(q.sender, '') != ?1
 		AND (q.recipient = ?1 OR (q.recipient = '@humans' AND ?2 = 1))
@@ -228,7 +229,7 @@ func (s *Service) Overview(ctx context.Context, p auth.Principal) (dto.Overview,
 		}
 		rows = append(rows, page.Rows...)
 	}
-	slices.SortFunc(rows, func(a, b TimelineRow) int { return cmpInt(b.Seq, a.Seq) })
+	slices.SortFunc(rows, func(a, b TimelineRow) int { return cmp.Compare(b.Seq, a.Seq) })
 	rows = slices.CompactFunc(rows, func(a, b TimelineRow) bool { return a.Seq == b.Seq })
 	if len(rows) > recentLimit {
 		rows = rows[:recentLimit]
@@ -240,7 +241,7 @@ func (s *Service) Overview(ctx context.Context, p auth.Principal) (dto.Overview,
 		}
 		d.Event = r.Event
 		if r.Event {
-			d.Chat = s.chatOfEvent(ctx, p, chats, r.Entry)
+			d.Chat = chatOfEvent(chats, r.Entry)
 		}
 		o.Recent = append(o.Recent, d)
 	}
@@ -248,7 +249,7 @@ func (s *Service) Overview(ctx context.Context, p auth.Principal) (dto.Overview,
 }
 
 // chatOfEvent is the first chat in the list whose bindings show e.
-func (s *Service) chatOfEvent(_ context.Context, _ auth.Principal, chats []dto.Chat, e store.Entry) string {
+func chatOfEvent(chats []dto.Chat, e store.Entry) string {
 	for _, c := range chats {
 		for _, st := range c.Streams {
 			if st.ID == e.Stream {

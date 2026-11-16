@@ -184,7 +184,7 @@ func (b *Store) remove(ctx context.Context, sha string) error {
 	if _, err := b.db.ExecContext(ctx, `DELETE FROM blobs WHERE sha256 = ?`, sha); err != nil {
 		return err
 	}
-	if !ValidSHA(sha) {
+	if !validSHA(sha) {
 		return nil
 	}
 	if err := os.Remove(b.path(sha)); err != nil && !errors.Is(err, os.ErrNotExist) {

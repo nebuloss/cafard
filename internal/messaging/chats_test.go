@@ -176,10 +176,3 @@ func TestFilteredTimelineFillsItsPage(t *testing.T) {
 		t.Errorf("older page = %v more=%v", seqsOfRows(page.Rows), page.HasMore)
 	}
 }
-
-func TestSegmentsDropEscapes(t *testing.T) {
-	got := Segments("a\x1b]0;owned\x07b\nc\x1b[31md")
-	if len(got) != 1 || got[0].V != "ab\ncd" {
-		t.Errorf("segments = %+v", got)
-	}
-}

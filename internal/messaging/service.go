@@ -64,7 +64,6 @@ type Service struct {
 
 	mu     sync.Mutex
 	staged StagedLookup
-	onAck  []func(seq int64, by string)
 	mcp    *mcpserver.Server
 	subsMu sync.Mutex
 	events chatEvents
@@ -81,19 +80,20 @@ var _ deps.Messaging = (*Service)(nil)
 // and reapplies the config channels. It writes no entries: the writer is
 // not running yet when New is called.
 func New(ctx context.Context, d deps.Deps, o Options) (*Service, error) {
+	exec, ok := d.Writer.(Execer)
+	if !ok {
+		return nil, errors.New("messaging: the writer cannot run transactions")
+	}
 	blobs, err := blob.New(d.Store, d.Server.DataDir, o.Images, d.Clock, d.Log.With("component", "blobs"))
 	if err != nil {
 		return nil, err
 	}
 	s := &Service{
-		st: d.Store, db: d.Store.DB(), w: d.Writer, hub: d.Hub, tokens: d.Tokens, blobs: blobs,
+		st: d.Store, db: d.Store.DB(), w: d.Writer, exec: exec, hub: d.Hub, tokens: d.Tokens, blobs: blobs,
 		clock: d.Clock, log: d.Log.With("component", "messaging"), opts: o,
 		sendLimit:   newLimiter(d.Clock, float64(o.Config.RatePerMinute)/60, float64(o.Config.Burst)),
 		createLimit: newLimiter(d.Clock, float64(o.Config.ChannelCreatePerHour)/3600, float64(o.Config.ChannelCreatePerHour)),
 		subs:        map[string]map[string]*subscription{},
-	}
-	if e, ok := d.Writer.(Execer); ok {
-		s.exec = e
 	}
 	if d.Status != nil {
 		s.status = d.Status
@@ -115,13 +115,6 @@ func (s *Service) Blobs() *blob.Store { return s.blobs }
 func (s *Service) SetStagedLookup(f StagedLookup) {
 	s.mu.Lock()
 	s.staged = f
-	s.mu.Unlock()
-}
-
-// OnAck registers a function told about every new ack (SSE "seen").
-func (s *Service) OnAck(f func(seq int64, by string)) {
-	s.mu.Lock()
-	s.onAck = append(s.onAck, f)
 	s.mu.Unlock()
 }
 
@@ -162,27 +155,15 @@ func (s *Service) deleteOrphanFollows(ctx context.Context) error {
 		AND NOT EXISTS (SELECT 1 FROM channels c WHERE 'chan:' || c.name = follows.chat)`); err != nil {
 		return err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT chat FROM follows WHERE chat LIKE 'dm:%'`)
+	chats, err := store.QueryColumn[string](ctx, s.db, `SELECT DISTINCT chat FROM follows WHERE chat LIKE 'dm:%'`)
 	if err != nil {
 		return err
 	}
-	var gone []string
-	for rows.Next() {
-		var chat string
-		if err := rows.Scan(&chat); err != nil {
-			rows.Close()
-			return err
-		}
+	for _, chat := range chats {
 		a, b, ok := DMParties(chat)
-		if !ok || !s.principalExists(ctx, a) || !s.principalExists(ctx, b) {
-			gone = append(gone, chat)
+		if ok && s.principalExists(ctx, a) && s.principalExists(ctx, b) {
+			continue
 		}
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, chat := range gone {
 		if _, err := s.db.ExecContext(ctx, `DELETE FROM follows WHERE chat = ?`, chat); err != nil {
 			return err
 		}
@@ -191,9 +172,8 @@ func (s *Service) deleteOrphanFollows(ctx context.Context) error {
 }
 
 func (s *Service) principalExists(ctx context.Context, name string) bool {
-	var n int
-	_ = s.db.QueryRowContext(ctx, `SELECT count(*) FROM principals WHERE name = ?`, name).Scan(&n)
-	return n > 0
+	_, err := s.tokens.Principal(ctx, name)
+	return err == nil
 }
 
 // kindOf is a principal's kind, "" when unknown.
@@ -204,12 +184,12 @@ func (s *Service) kindOf(ctx context.Context, name string) string {
 	if k, ok := s.kinds.Load(name); ok {
 		return k.(string)
 	}
-	var kind string
-	if err := s.db.QueryRowContext(ctx, `SELECT kind FROM principals WHERE name = ?`, name).Scan(&kind); err != nil {
+	row, err := s.tokens.Principal(ctx, name)
+	if err != nil {
 		return ""
 	}
-	s.kinds.Store(name, kind)
-	return kind
+	s.kinds.Store(name, row.Kind)
+	return row.Kind
 }
 
 // DMStream is the stream of the direct conversation between a and b.
