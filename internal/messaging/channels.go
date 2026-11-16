@@ -252,12 +252,8 @@ func (s *Service) applyConfigChannels(ctx context.Context) error {
 	return tx.Commit()
 }
 
-func nullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
+// nullStr is NULL for an empty text column.
+var nullStr = store.NullString
 
 func checkTexts(title, topic *string) error {
 	if title != nil && len(*title) > maxTitle {

@@ -5,8 +5,6 @@ package view
 import (
 	"context"
 	"hash/fnv"
-	"slices"
-	"strings"
 	"sync"
 
 	"github.com/nebuloss/cafard/internal/auth"
@@ -114,44 +112,7 @@ func Tone(stream string) int {
 	return int(h.Sum32() % 8)
 }
 
-// Streams merges the store's streams with the live status, message
-// streams left out, sorted by id.
+// Streams is status.Streams, for the pages and the API.
 func Streams(ctx context.Context, st *store.Store, reg status.Registry) ([]dto.Stream, error) {
-	rows, err := st.Streams(ctx)
-	if err != nil {
-		return nil, err
-	}
-	live := map[string]dto.Stream{}
-	if reg != nil {
-		for _, s := range reg.Snapshot() {
-			live[s.ID] = s
-		}
-	}
-	out := make([]dto.Stream, 0, len(rows)+len(live))
-	seen := map[string]bool{}
-	for _, r := range rows {
-		if store.IsMessageStream(r.ID) {
-			continue
-		}
-		seen[r.ID] = true
-		s, ok := live[r.ID]
-		if !ok {
-			s = dto.Stream{ID: r.ID, Transport: "internal", Status: dto.StreamIdle}
-			if r.LastTS != nil {
-				s.LastActivity = dto.TimePtr(*r.LastTS)
-			}
-		}
-		s.Kind, s.LastSeq, s.Labels, s.LastLine = r.Kind, r.LastSeq, r.Labels, textclean.StripANSI(r.LastLine)
-		out = append(out, s)
-	}
-	for id, s := range live {
-		if !seen[id] && !store.IsMessageStream(id) {
-			if s.Kind == "" {
-				s.Kind = store.StreamKind(id)
-			}
-			out = append(out, s)
-		}
-	}
-	slices.SortFunc(out, func(a, b dto.Stream) int { return strings.Compare(a.ID, b.ID) })
-	return out, nil
+	return status.Streams(ctx, st, reg)
 }

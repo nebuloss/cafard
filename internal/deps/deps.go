@@ -29,8 +29,8 @@ type Deps struct {
 	Auth      auth.Authenticator
 	Tokens    *auth.Tokens
 	Janitor   *store.Janitor
-	Blobs     BlobStore // nil until track A
-	Messaging Messaging // nil until track A
+	Blobs     BlobStore // nil in tests without messaging
+	Messaging Messaging // nil in tests without messaging
 	Clock     clock.Clock
 	Log       *slog.Logger
 	Version   string

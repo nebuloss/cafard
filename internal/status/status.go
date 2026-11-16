@@ -4,13 +4,16 @@ package status
 
 import (
 	"context"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/store"
+	"github.com/nebuloss/cafard/internal/textclean"
 )
 
 // State is a source's state.
@@ -111,7 +114,7 @@ func (m *Memory) Declare(src Source) {
 	if src.Transport != "" {
 		s.src.Transport = src.Transport
 	}
-	m.changed(s, true)
+	m.changed(s)
 }
 
 // Seen counts one entry. The writer calls it for every committed entry.
@@ -133,7 +136,7 @@ func (m *Memory) Seen(stream string, _ time.Time) {
 	// Every entry is a change (rate, last activity, last line), so watchers
 	// hear about an active source at the throttle's pace, not only when
 	// its state flips: the Sources page stays live (track G).
-	m.changed(s, true)
+	m.changed(s)
 }
 
 // SetConnected records a serial port or TCP peer coming up or going down.
@@ -142,7 +145,7 @@ func (m *Memory) SetConnected(stream string, up bool, reason string) {
 	defer m.mu.Unlock()
 	s := m.get(stream)
 	s.connectable, s.up, s.reason = true, up, reason
-	m.changed(s, true)
+	m.changed(s)
 }
 
 // Dropped counts entries lost to back-pressure.
@@ -151,7 +154,7 @@ func (m *Memory) Dropped(stream string, n int) {
 	defer m.mu.Unlock()
 	s := m.get(stream)
 	s.dropped += int64(n)
-	m.changed(s, true)
+	m.changed(s)
 }
 
 // SetLineState records the modem lines of a serial port.
@@ -160,7 +163,7 @@ func (m *Memory) SetLineState(stream string, ls LineState) {
 	defer m.mu.Unlock()
 	s := m.get(stream)
 	s.lineState = &ls
-	m.changed(s, true)
+	m.changed(s)
 }
 
 func (m *Memory) state(s *source, now time.Time) State {
@@ -201,15 +204,10 @@ func (m *Memory) view(s *source, now time.Time) dto.Stream {
 	return v
 }
 
-// changed notifies watchers, throttled per stream. always=false only
-// notifies on a change of state.
-func (m *Memory) changed(s *source, always bool) {
+// changed notifies watchers, throttled per stream.
+func (m *Memory) changed(s *source) {
 	now := m.clock.Now()
-	st := m.state(s, now)
-	if !always && st == s.lastState {
-		return
-	}
-	s.lastState = st
+	s.lastState = m.state(s, now)
 	if now.Sub(s.lastNotified) < notifyEvery {
 		s.pending = true
 		return
@@ -299,4 +297,46 @@ func (m *Memory) Run(ctx context.Context) error {
 			m.Tick()
 		}
 	}
+}
+
+// Streams merges the store's streams with the live status, message
+// streams left out, sorted by id. Claims are the caller's.
+func Streams(ctx context.Context, st *store.Store, reg Registry) ([]dto.Stream, error) {
+	rows, err := st.Streams(ctx)
+	if err != nil {
+		return nil, err
+	}
+	live := map[string]dto.Stream{}
+	if reg != nil {
+		for _, s := range reg.Snapshot() {
+			live[s.ID] = s
+		}
+	}
+	out := make([]dto.Stream, 0, len(rows)+len(live))
+	seen := map[string]bool{}
+	for _, r := range rows {
+		if store.IsMessageStream(r.ID) {
+			continue
+		}
+		seen[r.ID] = true
+		s, ok := live[r.ID]
+		if !ok {
+			s = dto.Stream{ID: r.ID, Transport: "internal", Status: dto.StreamIdle}
+			if r.LastTS != nil {
+				s.LastActivity = dto.TimePtr(*r.LastTS)
+			}
+		}
+		s.Kind, s.LastSeq, s.Labels, s.LastLine = r.Kind, r.LastSeq, r.Labels, textclean.StripANSI(r.LastLine)
+		out = append(out, s)
+	}
+	for id, s := range live {
+		if !seen[id] && !store.IsMessageStream(id) {
+			if s.Kind == "" {
+				s.Kind = store.StreamKind(id)
+			}
+			out = append(out, s)
+		}
+	}
+	slices.SortFunc(out, func(a, b dto.Stream) int { return strings.Compare(a.ID, b.ID) })
+	return out, nil
 }

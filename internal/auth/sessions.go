@@ -2,9 +2,7 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -55,28 +53,20 @@ func NewSessions(db *sql.DB, c clock.Clock) *Sessions {
 	return &Sessions{db: db, clock: c, touched: map[int64]time.Time{}}
 }
 
-func newSessionSecret() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return SessionPrefix + base64.RawURLEncoding.EncodeToString(b), nil
-}
-
 // Create opens a session for an existing principal and returns its secret
 // in clear, once, for the cookie.
 func (s *Sessions) Create(ctx context.Context, principal string, scopes ScopeSet, label, userAgent string) (SessionRow, string, error) {
 	if len(scopes) == 0 {
 		return SessionRow{}, "", errors.New("a session needs at least one scope")
 	}
-	var kind string
-	if err := s.db.QueryRowContext(ctx, `SELECT kind FROM principals WHERE name = ?`, principal).Scan(&kind); err != nil {
+	kind, err := principalKind(ctx, s.db, principal)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SessionRow{}, "", fmt.Errorf("%w: principal %s", ErrNotFound, principal)
 		}
 		return SessionRow{}, "", err
 	}
-	secret, err := newSessionSecret()
+	secret, err := newSecret(SessionPrefix)
 	if err != nil {
 		return SessionRow{}, "", err
 	}
@@ -212,22 +202,7 @@ func (s *Sessions) Revoke(ctx context.Context, id int64) error {
 // CountAdmin is how many live sessions carry the admin scope, for the
 // exposure guard.
 func (s *Sessions) CountAdmin(ctx context.Context) (int, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT scopes FROM sessions WHERE expires_at > ?`, s.clock.Now().UTC().UnixNano())
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-	n := 0
-	for rows.Next() {
-		var sc string
-		if err := rows.Scan(&sc); err != nil {
-			return 0, err
-		}
-		if set, _ := ParseScopes(sc); set.Has(ScopeAdmin) {
-			n++
-		}
-	}
-	return n, rows.Err()
+	return countAdmin(ctx, s.db, `SELECT scopes FROM sessions WHERE expires_at > ?`, s.clock.Now().UTC().UnixNano())
 }
 
 // Expire deletes expired sessions and pairings that are used or expired.

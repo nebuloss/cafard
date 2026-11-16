@@ -205,7 +205,7 @@ func TestSetStringParsesDurations(t *testing.T) {
 
 func TestFeatureValidatorIsCalledWithItsKey(t *testing.T) {
 	r := root{OTLP: feature{MaxBodyMiB: -1}}
-	err := validateIn(reflect.ValueOf(&r).Elem(), "")
+	err := validateStructs(reflect.ValueOf(&r).Elem())
 	if err == nil || !strings.HasPrefix(err.Error(), "otlp: ") {
 		t.Fatalf("err = %v", err)
 	}

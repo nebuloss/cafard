@@ -14,6 +14,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/hub"
+	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/textclean"
 )
@@ -92,6 +93,9 @@ type markOut struct {
 
 const maxLabel = 1000
 
+// logKinds are what the log tools return: never messages.
+var logKinds = []store.Kind{store.KindLine, store.KindMarker}
+
 func registerLogTools(s *Server) {
 	AddTool(s, auth.ScopeRead, mcp.Tool{Name: "whoami", Description: "Who you are to cafard: principal name, kind and scopes."}, s.whoami)
 	AddTool(s, auth.ScopeRead, mcp.Tool{Name: "list_streams", Description: "The log sources: id, status (connected, idle, down), rate, last activity, drops."}, s.listStreams)
@@ -159,6 +163,16 @@ func (s *Server) streamIDs(ctx context.Context, patterns []string) ([]string, er
 	return ids, nil
 }
 
+// selectIDs resolves channel= and streams= to existing log stream ids;
+// nil means all.
+func (s *Server) selectIDs(ctx context.Context, in selectIn) ([]string, error) {
+	patterns, err := s.resolve(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return s.streamIDs(ctx, patterns)
+}
+
 func compile(pattern, what string) (*regexp.Regexp, error) {
 	if pattern == "" {
 		return nil, nil
@@ -173,11 +187,7 @@ func compile(pattern, what string) (*regexp.Regexp, error) {
 func (s *Server) listStreams(ctx context.Context, _ *Call, in listStreamsIn) (string, listStreamsOut, error) {
 	var keep map[string]bool
 	if in.Channel != "" {
-		patterns, err := s.resolve(ctx, selectIn{Channel: in.Channel})
-		if err != nil {
-			return "", listStreamsOut{}, err
-		}
-		ids, err := s.streamIDs(ctx, patterns)
+		ids, err := s.selectIDs(ctx, selectIn{Channel: in.Channel})
 		if err != nil {
 			return "", listStreamsOut{}, err
 		}
@@ -219,39 +229,10 @@ func (s *Server) listStreams(ctx context.Context, _ *Call, in listStreamsIn) (st
 // streams merges the store's streams with the live status. Message
 // streams are left out.
 func (s *Server) streams(ctx context.Context) ([]dto.Stream, error) {
-	rows, err := s.deps.Store.Streams(ctx)
+	out, err := status.Streams(ctx, s.deps.Store, s.deps.Status)
 	if err != nil {
 		return nil, err
 	}
-	live := map[string]dto.Stream{}
-	if s.deps.Status != nil {
-		for _, st := range s.deps.Status.Snapshot() {
-			live[st.ID] = st
-		}
-	}
-	out := make([]dto.Stream, 0, len(rows)+len(live))
-	seen := map[string]bool{}
-	for _, r := range rows {
-		if store.IsMessageStream(r.ID) {
-			continue
-		}
-		seen[r.ID] = true
-		st, ok := live[r.ID]
-		if !ok {
-			st = dto.Stream{ID: r.ID, Kind: r.Kind, Transport: "internal", Status: dto.StreamIdle}
-			if r.LastTS != nil {
-				st.LastActivity = dto.TimePtr(*r.LastTS)
-			}
-		}
-		st.Kind, st.LastSeq, st.Labels, st.LastLine = r.Kind, r.LastSeq, r.Labels, textclean.StripANSI(r.LastLine)
-		out = append(out, st)
-	}
-	for id, st := range live {
-		if !seen[id] && !store.IsMessageStream(id) {
-			out = append(out, st)
-		}
-	}
-	slices.SortFunc(out, func(a, b dto.Stream) int { return strings.Compare(a.ID, b.ID) })
 	if cs, ok := s.deps.Messaging.(ClaimSource); ok {
 		claims, err := cs.ActiveClaims(ctx)
 		if err != nil {
@@ -295,11 +276,7 @@ func formatPage(entries []store.Entry, more bool, next int64) (string, Page) {
 }
 
 func (s *Server) read(ctx context.Context, _ *Call, in readIn) (string, Page, error) {
-	patterns, err := s.resolve(ctx, in.selectIn)
-	if err != nil {
-		return "", Page{}, err
-	}
-	ids, err := s.streamIDs(ctx, patterns)
+	ids, err := s.selectIDs(ctx, in.selectIn)
 	if err != nil {
 		return "", Page{}, err
 	}
@@ -307,7 +284,7 @@ func (s *Server) read(ctx context.Context, _ *Call, in readIn) (string, Page, er
 	if err != nil {
 		return "", Page{}, err
 	}
-	q := store.Query{Streams: ids, MinSeverity: in.MinSeverity, Pattern: re, Kinds: []store.Kind{store.KindLine, store.KindMarker}}
+	q := store.Query{Streams: ids, MinSeverity: in.MinSeverity, Pattern: re, Kinds: logKinds}
 	if in.UntilSeq != nil {
 		q.UntilSeq = *in.UntilSeq
 	}
@@ -337,11 +314,7 @@ func (s *Server) read(ctx context.Context, _ *Call, in readIn) (string, Page, er
 }
 
 func (s *Server) tail(ctx context.Context, _ *Call, in tailIn) (string, Page, error) {
-	patterns, err := s.resolve(ctx, in.selectIn)
-	if err != nil {
-		return "", Page{}, err
-	}
-	ids, err := s.streamIDs(ctx, patterns)
+	ids, err := s.selectIDs(ctx, in.selectIn)
 	if err != nil {
 		return "", Page{}, err
 	}
@@ -352,7 +325,7 @@ func (s *Server) tail(ctx context.Context, _ *Call, in tailIn) (string, Page, er
 		return "", Page{}, err
 	}
 	res, err := s.deps.Store.Read(ctx, store.Query{Streams: ids, Desc: true, Limit: clampLimit(in.Lines, 50, textclean.AgentDefaults.MaxLines),
-		Kinds: []store.Kind{store.KindLine, store.KindMarker}})
+		Kinds: logKinds})
 	if err != nil {
 		return "", Page{}, err
 	}
@@ -393,7 +366,7 @@ func (s *Server) waitFor(ctx context.Context, c *Call, in waitIn) (string, waitO
 		contextN = max(0, min(*in.ContextLines, 200))
 	}
 
-	w := &waiter{s: s, re: re, patterns: patterns, kinds: []store.Kind{store.KindLine, store.KindMarker}}
+	w := &waiter{s: s, re: re, patterns: patterns, kinds: logKinds}
 	if patterns != nil && len(patterns) == 0 {
 		return "No stream matches, so nothing can arrive.", waitOut{TimedOut: true}, nil
 	}

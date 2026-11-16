@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -103,9 +102,6 @@ func New(d deps.Deps, cfg Config) *Server {
 	return s
 }
 
-// Deps is what the server was built with, for tools added by other packages.
-func (s *Server) Deps() deps.Deps { return s.deps }
-
 // AddTool registers a tool that needs scope. Call it before serving.
 func AddTool[In, Out any](s *Server, scope auth.Scope, t mcp.Tool, h Handler[In, Out]) {
 	inSchema, err := jsonschema.For[In](schemaOptions)
@@ -118,7 +114,7 @@ func AddTool[In, Out any](s *Server, scope auth.Scope, t mcp.Tool, h Handler[In,
 	}
 	t.InputSchema, t.OutputSchema = inSchema, outSchema
 	raw := func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		p, ok := principalOf(req)
+		p, ok := principalOf(req.Extra)
 		if !ok {
 			return toolError(dto.Errorf(dto.CodeUnauthenticated, "This call carried no valid token.")), nil
 		}
@@ -180,26 +176,13 @@ func toolError(e *dto.APIError) *mcp.CallToolResult {
 
 const principalKey = "principal"
 
-func principalOf(req *mcp.CallToolRequest) (auth.Principal, bool) {
-	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
+// principalOf is the principal verify put in a request's token info.
+func principalOf(extra *mcp.RequestExtra) (auth.Principal, bool) {
+	if extra == nil || extra.TokenInfo == nil {
 		return auth.Principal{}, false
 	}
-	p, ok := req.Extra.TokenInfo.Extra[principalKey].(auth.Principal)
+	p, ok := extra.TokenInfo.Extra[principalKey].(auth.Principal)
 	return p, ok
-}
-
-// ToolNames lists the tools a scope set gets, for tests and docs.
-func (s *Server) ToolNames(scopes auth.ScopeSet) []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var names []string
-	for _, t := range s.tools {
-		if scopes.Has(t.scope) {
-			names = append(names, t.tool.Name)
-		}
-	}
-	slices.Sort(names)
-	return names
 }
 
 // serverFor is the SDK server of one principal with its scopes. Servers
@@ -245,11 +228,7 @@ func (s *Server) serverFor(p auth.Principal) *mcp.Server {
 // checked, one session per client.
 func (s *Server) Handler() http.Handler {
 	streamable := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		info := sdkauth.TokenInfoFromContext(r.Context())
-		if info == nil {
-			return nil
-		}
-		p, ok := info.Extra[principalKey].(auth.Principal)
+		p, ok := principalOf(&mcp.RequestExtra{TokenInfo: sdkauth.TokenInfoFromContext(r.Context())})
 		if !ok {
 			return nil
 		}

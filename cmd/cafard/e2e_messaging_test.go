@@ -12,7 +12,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -21,7 +20,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/nebuloss/cafard/internal/auth"
-	"github.com/nebuloss/cafard/internal/store"
 )
 
 func callResult(t *testing.T, cs *mcp.ClientSession, name string, args map[string]any) (*mcp.CallToolResult, string, map[string]any) {
@@ -416,14 +414,9 @@ func TestLogAttachmentOf73LinesSurvivesRetention(t *testing.T) {
 	}
 
 	// Retention deletes the stream's lines.
-	st, err := store.Open(context.Background(), filepath.Join(s.dir, store.FileName))
-	if err != nil {
+	if _, err := s.db().DB().Exec(`DELETE FROM entries WHERE stream = 'serial:dut1'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.DB().Exec(`DELETE FROM entries WHERE stream = 'serial:dut1'`); err != nil {
-		t.Fatal(err)
-	}
-	st.Close()
 	if text, _ := call(t, b, "read", map[string]any{"streams": []string{"serial:dut1"}, "since_seq": 0}); !strings.Contains(text, "No entries") {
 		t.Fatalf("lines still there: %q", text)
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/nebuloss/cafard/internal/store"
 	"net"
 	"net/url"
+	"reflect"
 	"strconv"
 )
 
@@ -97,7 +98,7 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("log_level: %q is not one of debug, info, warn, error", c.LogLevel)
 	}
-	return validateFeatures(c)
+	return validateStructs(reflect.ValueOf(c).Elem())
 }
 
 // TLS reports whether cafard terminates TLS itself.

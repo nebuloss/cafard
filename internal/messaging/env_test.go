@@ -2,9 +2,6 @@ package messaging
 
 import (
 	"context"
-	"io"
-	"log/slog"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,9 +10,9 @@ import (
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/hub"
 	"github.com/nebuloss/cafard/internal/mcpserver"
-	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
+	"github.com/nebuloss/cafard/internal/writer/writertest"
 )
 
 var t0 = time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
@@ -43,24 +40,9 @@ func defaultOptions() Options {
 
 func newEnv(t *testing.T, tweak ...func(*Options)) *env {
 	t.Helper()
-	dir := t.TempDir()
-	st, err := store.Open(context.Background(), filepath.Join(dir, store.FileName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	clk := clock.NewFake(t0)
-	h := hub.New(nil)
-	stat := status.New(clk)
-	w := writer.New(st, h, stat, clk, log, writer.Options{BatchEvery: time.Millisecond})
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- w.Run(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-		st.Close()
-	})
+	s := writertest.New(t, writertest.Options{Clock: clk, Writer: writer.Options{BatchEvery: time.Millisecond}})
+	dir, st, h, stat, w, log := s.Dir, s.Store, s.Hub, s.Status, s.Writer, s.Log
 	tokens := auth.NewTokens(st.DB(), clk)
 	var ret store.Retention
 	ret.SetDefaults()

@@ -6,6 +6,9 @@ Each entry gives the date, the decision and the reason.
 ## 2026-11-16: trim pass
 
 - **The chat list's long-press menu and the channel dialog's pattern preview wait on the injected `Clock`,** not the global timer, and the chat list cancels a pending long press when it is unmounted (before, a press could open a menu on a page already gone, and tests could not drive either delay).
+- **Live Sources updates now carry a stream's labels.** The single-stream
+  store read left them out, so every live update sent empty labels; it now
+  shares the full stream list's query.
 
 ## 2026-11-16: track G polish (M5 Live and Sources, M6 search, stdio proxy, term)
 
@@ -220,7 +223,7 @@ Each entry gives the date, the decision and the reason.
   C's App test registers its own page name instead of `home`, and the
   LivePage test reads `data-next-seq` from the fixture.
 - **New DTOs** (`internal/dto/web_d.go`, fixtures in
-  `fixtures_d_test.go`): `ChatPrefs`, `ChatRead`, `AckRequest`, `Acked`.
+  `fixtures_test.go`): `ChatPrefs`, `ChatRead`, `AckRequest`, `Acked`.
   No new dependency.
 
 ## 2026-11-16: track E2 serial control
@@ -264,10 +267,9 @@ Each entry gives the date, the decision and the reason.
 
 ## 2026-11-16: merging tracks A, B, C, E1, F
 
-- **Other tracks add DTO fixtures from their own test file** by appending
-  to `trackFixtures` in an `init` (see `internal/dto/fixtures_c_test.go`),
-  so `fixtures_test.go` is not edited per track and its stale-file check
-  still knows every fixture. Request bodies (`*_create`) are skipped by
+- **Every DTO fixture is in the one list in `fixtures_test.go`** (the
+  per-track files and their `init` hook were merged in the trim pass), so
+  its stale-file check knows every fixture. Request bodies (`*_create`) are skipped by
   the TypeScript parse test: the client sends them, it never parses them.
 - **`deps.Messaging.ResolveChannel` returns binding patterns,** as track A
   decided; the comment in `internal/deps` now says so.

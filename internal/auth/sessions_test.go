@@ -9,16 +9,16 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/nebuloss/cafard/internal/clock"
 )
 
-func newSessions(t *testing.T) (*Tokens, *Sessions, *Pairings, *clockAdapter) {
+func newSessions(t *testing.T) (*Tokens, *Sessions, *Pairings, *clock.Fake) {
 	t.Helper()
 	tokens, c := newTokens(t)
 	s := NewSessions(tokens.db, c)
-	return tokens, s, NewPairings(tokens.db, c, s), &clockAdapter{c.Advance}
+	return tokens, s, NewPairings(tokens.db, c, s), c
 }
-
-type clockAdapter struct{ advance func(time.Duration) }
 
 func TestSessionLifecycle(t *testing.T) {
 	tokens, sessions, _, clk := newSessions(t)
@@ -58,15 +58,15 @@ func TestSessionLifecycle(t *testing.T) {
 	}
 
 	// Used after 20 days, it is renewed; left alone 30 days, it expires.
-	clk.advance(20 * 24 * time.Hour)
+	clk.Advance(20 * 24 * time.Hour)
 	if _, err := sessions.Lookup(ctx, secret); err != nil {
 		t.Fatalf("after 20 days: %v", err)
 	}
-	clk.advance(29 * 24 * time.Hour)
+	clk.Advance(29 * 24 * time.Hour)
 	if _, err := sessions.Lookup(ctx, secret); err != nil {
 		t.Fatalf("renewed session expired: %v", err)
 	}
-	clk.advance(31 * 24 * time.Hour)
+	clk.Advance(31 * 24 * time.Hour)
 	if _, err := sessions.Lookup(ctx, secret); !errors.Is(err, ErrInvalid) {
 		t.Errorf("expired session: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestPairingIsSingleUseAndExpires(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	clk.advance(PairingTTL + time.Second)
+	clk.Advance(PairingTTL + time.Second)
 	if _, _, err := pairings.Redeem(ctx, code2, ""); !errors.Is(err, ErrPairingUsed) {
 		t.Errorf("expired code: %v", err)
 	}

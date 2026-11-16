@@ -88,9 +88,6 @@ func (s *Store) tightenModes() error {
 // or entries_fts through it: only the writer does.
 func (s *Store) DB() *sql.DB { return s.db }
 
-// Path is the database file.
-func (s *Store) Path() string { return s.path }
-
 func (s *Store) Close() error { return s.db.Close() }
 
 // migrate applies every migration not recorded yet, in file name order,
@@ -135,24 +132,6 @@ func (s *Store) migrate(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-// Migrations lists the applied migrations, oldest first.
-func (s *Store) Migrations(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT name FROM schema_migrations ORDER BY name`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			return nil, err
-		}
-		out = append(out, n)
-	}
-	return out, rows.Err()
 }
 
 func nanos(t time.Time) int64 { return t.UTC().UnixNano() }

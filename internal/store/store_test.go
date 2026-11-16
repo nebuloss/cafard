@@ -46,13 +46,17 @@ func write(t *testing.T, st *store.Store, es ...store.Entry) []store.Entry {
 func TestDatabaseFileIsPrivate(t *testing.T) {
 	st := open(t)
 	write(t, st, line("push:a", "x", 6, t0))
+	var path string
+	if err := st.DB().QueryRow(`SELECT file FROM pragma_database_list WHERE name = 'main'`).Scan(&path); err != nil {
+		t.Fatal(err)
+	}
 	for _, suffix := range []string{"", "-wal"} {
-		info, err := os.Stat(st.Path() + suffix)
+		info, err := os.Stat(path + suffix)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if mode := info.Mode().Perm(); mode&0o077 != 0 && suffix == "" {
-			t.Errorf("%s mode = %o, want 0600", st.Path()+suffix, mode)
+			t.Errorf("%s mode = %o, want 0600", path+suffix, mode)
 		}
 	}
 }
@@ -79,12 +83,13 @@ func TestMigrationsAreRecordedAndReopenIsANoop(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		names, err := st.Migrations(context.Background())
-		if err != nil {
+		var first string
+		var count int
+		if err := st.DB().QueryRow(`SELECT min(name), count(*) FROM schema_migrations`).Scan(&first, &count); err != nil {
 			t.Fatal(err)
 		}
-		if len(names) == 0 || names[0] != "0001_0_core.sql" {
-			t.Errorf("migrations = %v", names)
+		if first != "0001_0_core.sql" || count != len(migrationFiles(t)) {
+			t.Errorf("migrations = %d from %s", count, first)
 		}
 		st.Close()
 	}
@@ -395,3 +400,28 @@ func seqs(es []store.Entry) []string {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func migrationFiles(t *testing.T) []string {
+	t.Helper()
+	names, err := filepath.Glob(filepath.Join("migrations", "*.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return names
+}
+
+func TestStreamRowCarriesLabels(t *testing.T) {
+	st := open(t)
+	ctx := context.Background()
+	write(t, st, line("serial:dut1", "boot", 6, t0))
+	if _, err := st.DB().ExecContext(ctx, `UPDATE streams SET labels = '{"board":"rk3588"}' WHERE id = 'serial:dut1'`); err != nil {
+		t.Fatal(err)
+	}
+	row, err := st.StreamRow(ctx, "serial:dut1")
+	if err != nil || row.Labels["board"] != "rk3588" || row.LastLine != "boot" {
+		t.Errorf("row = %+v, %v", row, err)
+	}
+	if _, err := st.StreamRow(ctx, "serial:nope"); err != store.ErrNotFound {
+		t.Errorf("missing stream err = %v", err)
+	}
+}

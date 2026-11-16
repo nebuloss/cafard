@@ -33,6 +33,9 @@ type server struct {
 	admin  string
 	dir    string
 	cancel context.CancelFunc
+
+	dbOnce sync.Once
+	st     *store.Store
 }
 
 var tokenLine = regexp.MustCompile(`(?m)^\s+(cfd_[A-Za-z0-9_-]+)$`)
@@ -96,15 +99,25 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
+// db is the running server's database, opened beside it once and closed
+// at the end of the test.
+func (s *server) db() *store.Store {
+	s.t.Helper()
+	s.dbOnce.Do(func() {
+		st, err := store.Open(context.Background(), filepath.Join(s.dir, store.FileName))
+		if err != nil {
+			s.t.Fatal(err)
+		}
+		s.st = st
+		s.t.Cleanup(func() { st.Close() })
+	})
+	return s.st
+}
+
 // token creates a principal and a token in the running server's database.
 func (s *server) token(name, kind string, scopes ...auth.Scope) string {
 	s.t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(s.dir, store.FileName))
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	defer st.Close()
-	tokens := auth.NewTokens(st.DB(), clock.System{})
+	tokens := auth.NewTokens(s.db().DB(), clock.System{})
 	if _, err := tokens.EnsurePrincipal(context.Background(), name, kind); err != nil {
 		s.t.Fatal(err)
 	}
@@ -117,13 +130,8 @@ func (s *server) token(name, kind string, scopes ...auth.Scope) string {
 
 func (s *server) count(stream string) int {
 	s.t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(s.dir, store.FileName))
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	defer st.Close()
 	var n int
-	if err := st.DB().QueryRow(`SELECT count(*) FROM entries WHERE stream = ?`, stream).Scan(&n); err != nil {
+	if err := s.db().DB().QueryRow(`SELECT count(*) FROM entries WHERE stream = ?`, stream).Scan(&n); err != nil {
 		s.t.Fatal(err)
 	}
 	return n
@@ -172,25 +180,11 @@ func (s *server) mcp(token string) *mcp.ClientSession {
 
 func call(t *testing.T, cs *mcp.ClientSession, name string, args map[string]any) (string, map[string]any) {
 	t.Helper()
-	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: args})
-	if err != nil {
-		t.Fatalf("%s: %v", name, err)
-	}
-	var text strings.Builder
-	for _, c := range res.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			text.WriteString(tc.Text)
-		}
-	}
-	var structured map[string]any
-	if res.StructuredContent != nil {
-		b, _ := json.Marshal(res.StructuredContent)
-		_ = json.Unmarshal(b, &structured)
-	}
+	res, text, structured := callResult(t, cs, name, args)
 	if res.IsError {
-		t.Fatalf("%s returned an error: %s", name, text.String())
+		t.Fatalf("%s returned an error: %s", name, text)
 	}
-	return text.String(), structured
+	return text, structured
 }
 
 func TestSeq100000ThroughPushLands(t *testing.T) {

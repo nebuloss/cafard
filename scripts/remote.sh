@@ -12,18 +12,8 @@ REMOTE_DIR=${REMOTE_DIR:-cafard}
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
-# The database holds messages and the photos people dropped, and cafard.yaml
-# may hold addresses and secrets. Neither leaves the machine it lives on.
-# Patterns are anchored to the tree root where they name a directory, so
-# they cannot match a same-named directory deeper down.
-rsync -a --delete \
-	--exclude '/.git/' \
-	--exclude '/node_modules/' \
-	--exclude '/data/' \
-	--exclude '*.db' \
-	--exclude '*.db-wal' \
-	--exclude '*.db-shm' \
-	--exclude '/cafard.yaml' \
+# scripts/rsync-excludes keeps the database and cafard.yaml here.
+rsync -a --delete --exclude-from="$repo_root/scripts/rsync-excludes" \
 	"$repo_root/" "$REMOTE_HOST:$REMOTE_DIR/"
 
 if [ "$#" -eq 0 ]; then

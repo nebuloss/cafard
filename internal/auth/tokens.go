@@ -69,12 +69,14 @@ func HashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func newSecret() (string, error) {
+// newSecret is 32 random bytes after prefix, which tells tokens and
+// session secrets apart.
+func newSecret(prefix string) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return TokenPrefix + base64.RawURLEncoding.EncodeToString(b), nil
+	return prefix + base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // EnsurePrincipal creates a principal, or returns the existing one if its
@@ -101,19 +103,15 @@ func (t *Tokens) EnsurePrincipal(ctx context.Context, name, kind string) (Princi
 	return p, nil
 }
 
-// Principal looks one up.
-func (t *Tokens) Principal(ctx context.Context, name string) (PrincipalRow, error) {
+const principalColumns = `name, kind, created_at, last_seen`
+
+func scanPrincipal(row interface{ Scan(...any) error }) (PrincipalRow, error) {
 	var (
 		p        PrincipalRow
 		created  int64
 		lastSeen sql.NullInt64
 	)
-	err := t.db.QueryRowContext(ctx, `SELECT name, kind, created_at, last_seen FROM principals WHERE name = ?`, name).
-		Scan(&p.Name, &p.Kind, &created, &lastSeen)
-	if errors.Is(err, sql.ErrNoRows) {
-		return PrincipalRow{}, fmt.Errorf("%w: principal %s", ErrNotFound, name)
-	}
-	if err != nil {
+	if err := row.Scan(&p.Name, &p.Kind, &created, &lastSeen); err != nil {
 		return PrincipalRow{}, err
 	}
 	p.CreatedAt = time.Unix(0, created).UTC()
@@ -124,9 +122,25 @@ func (t *Tokens) Principal(ctx context.Context, name string) (PrincipalRow, erro
 	return p, nil
 }
 
+// Principal looks one up.
+func (t *Tokens) Principal(ctx context.Context, name string) (PrincipalRow, error) {
+	p, err := scanPrincipal(t.db.QueryRowContext(ctx, `SELECT `+principalColumns+` FROM principals WHERE name = ?`, name))
+	if errors.Is(err, sql.ErrNoRows) {
+		return PrincipalRow{}, fmt.Errorf("%w: principal %s", ErrNotFound, name)
+	}
+	return p, err
+}
+
+// principalKind is a principal's kind, or sql.ErrNoRows.
+func principalKind(ctx context.Context, db *sql.DB, name string) (string, error) {
+	var kind string
+	err := db.QueryRowContext(ctx, `SELECT kind FROM principals WHERE name = ?`, name).Scan(&kind)
+	return kind, err
+}
+
 // Principals lists principals by name, optionally of one kind.
 func (t *Tokens) Principals(ctx context.Context, kind string) ([]PrincipalRow, error) {
-	rows, err := t.db.QueryContext(ctx, `SELECT name, kind, created_at, last_seen FROM principals
+	rows, err := t.db.QueryContext(ctx, `SELECT `+principalColumns+` FROM principals
 		WHERE ? = '' OR kind = ? ORDER BY name`, kind, kind)
 	if err != nil {
 		return nil, err
@@ -134,18 +148,9 @@ func (t *Tokens) Principals(ctx context.Context, kind string) ([]PrincipalRow, e
 	defer rows.Close()
 	var out []PrincipalRow
 	for rows.Next() {
-		var (
-			p        PrincipalRow
-			created  int64
-			lastSeen sql.NullInt64
-		)
-		if err := rows.Scan(&p.Name, &p.Kind, &created, &lastSeen); err != nil {
+		p, err := scanPrincipal(rows)
+		if err != nil {
 			return nil, err
-		}
-		p.CreatedAt = time.Unix(0, created).UTC()
-		if lastSeen.Valid {
-			ls := time.Unix(0, lastSeen.Int64).UTC()
-			p.LastSeen = &ls
 		}
 		out = append(out, p)
 	}
@@ -169,7 +174,7 @@ func (t *Tokens) CreateToken(ctx context.Context, principal, label string, scope
 	if err != nil {
 		return TokenRow{}, "", err
 	}
-	secret, err := newSecret()
+	secret, err := newSecret(TokenPrefix)
 	if err != nil {
 		return TokenRow{}, "", err
 	}
@@ -231,7 +236,13 @@ func (t *Tokens) RevokeToken(ctx context.Context, id int64) error {
 
 // CountAdminTokens is how many tokens carry the admin scope.
 func (t *Tokens) CountAdminTokens(ctx context.Context) (int, error) {
-	rows, err := t.db.QueryContext(ctx, `SELECT scopes FROM tokens`)
+	return countAdmin(ctx, t.db, `SELECT scopes FROM tokens`)
+}
+
+// countAdmin counts the rows of query, a list of scope sets, that hold
+// the admin scope.
+func countAdmin(ctx context.Context, db *sql.DB, query string, args ...any) (int, error) {
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
