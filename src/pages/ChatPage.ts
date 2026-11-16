@@ -1,5 +1,6 @@
 import { DisposableBag, type Disposable } from '@/core/Disposable.ts';
 import { Dom } from '@/core/Dom.ts';
+import { AnimationFrames, type FrameScheduler } from '@/core/FrameScheduler.ts';
 import type { Chat, Entry } from '@/model/types.ts';
 import { ApiError } from '@/net/ApiError.ts';
 import { linesText } from '@/render/format.ts';
@@ -19,9 +20,6 @@ import type { Services } from '@/App.ts';
 import type { Page } from '@/pages/Page.ts';
 import { mountShell } from '@/pages/Shell.ts';
 import { chatRenderers, copier, viewerOf } from '@/pages/chatParts.ts';
-
-/** How long arriving log lines are gathered before they reach the DOM. */
-const BATCH_MS = 50;
 
 /** Where a feed entry goes on a chat page (CONTRACTS.md 4, chat scope). */
 export interface Routing {
@@ -58,6 +56,7 @@ export class ChatPage implements Page {
   constructor(
     private readonly doc: Document,
     private readonly services: Services,
+    private readonly frames: FrameScheduler = new AnimationFrames(doc.defaultView),
   ) {}
 
   start(): Disposable {
@@ -70,7 +69,7 @@ export class ChatPage implements Page {
     const viewer = viewerOf(layout);
     const stream = streamOf(chat, viewer.name);
     const shell = mountShell(doc, services, bag, `/api/events?chat=${encodeURIComponent(chat)}`);
-    const toast = (text: string, tone: 'info' | 'error' = 'info'): void => void shell.toast?.show(text, tone);
+    const toast = shell.notify;
     const copy = copier(win);
     const r = chatRenderers(doc, viewer, services.clock);
     const queue = services.uploads;
@@ -84,12 +83,21 @@ export class ChatPage implements Page {
     let pane: LogsPane | null = null;
     let composer: Composer | null = null;
     if (paneEl !== null && r.logs !== null) {
-      pane = new LogsPane(paneEl, r.logs, services.api, services.storage, layout, doc, {
-        attach: (log) => composer?.addLog(log),
-        copy,
-        toast,
-        prompt: (q) => win?.prompt(q) ?? null,
-      });
+      pane = new LogsPane(
+        paneEl,
+        r.logs,
+        services.api,
+        services.storage,
+        layout,
+        doc,
+        {
+          attach: (log) => composer?.addLog(log),
+          copy,
+          toast,
+          prompt: (q) => win?.prompt(q) ?? null,
+        },
+        { frames: this.frames },
+      );
       bag.add(pane.mount());
     }
     const paneShown = (): boolean => paneEl !== null && paneEl.offsetParent !== null;
@@ -174,15 +182,6 @@ export class ChatPage implements Page {
 
     // The feed.
     const following = convEl?.dataset['follow'] === 'true';
-    let pending: Entry[] = [];
-    let timer: Disposable | null = null;
-    bag.defer(() => timer?.dispose());
-    const flush = (): void => {
-      timer = null;
-      const batch = pending;
-      pending = [];
-      pane?.append(batch);
-    };
     bag.add(
       shell.feed.events.on('entry', (e) => {
         const where = route(e, chat, stream, surface);
@@ -192,8 +191,7 @@ export class ChatPage implements Page {
           if (row !== null && row !== undefined && e.question?.open === true && e.sender?.name !== viewer.name) row.focus({ preventScroll: true });
         }
         if (where.logs) {
-          pending.push(e);
-          timer ??= services.clock.setTimeout(flush, BATCH_MS);
+          pane?.enqueue([e]);
           if (e.severity <= 3 && layout?.dataset['view'] !== 'logs') header?.errorDot(true);
         }
       }),

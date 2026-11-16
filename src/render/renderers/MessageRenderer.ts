@@ -38,8 +38,7 @@ export class MessageRenderer implements EntryRenderer {
     const sender = entry.sender;
     t.attr({ id: `m${entry.seq}`, 'data-seq': entry.seq, 'data-sender-kind': sender?.kind ?? '', 'data-mine': sender !== undefined && sender.name === this.context.viewer });
     t.text('sender', sender?.name ?? '').text('sender-kind', sender?.kind ?? '');
-    t.text('time', messageTime(entry.ts, this.context.now()));
-    t.slot('time').setAttribute('datetime', entry.ts);
+    t.time('time', messageTime(entry.ts, this.context.now()), entry.ts);
     t.children('body', ...textSegments(entry.segments, entry.text));
     const grid = this.images?.grid(imagesOf(entry)) ?? null;
     const logs = this.logs;

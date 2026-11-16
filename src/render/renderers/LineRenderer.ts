@@ -16,8 +16,7 @@ export class LineRenderer implements EntryRenderer {
   render(entry: Entry): HTMLElement {
     const row = this.template.clone();
     row.attr({ 'data-seq': entry.seq, 'data-sev': entry.severity, 'data-tone': streamTone(entry.stream) });
-    row.text('time', logTime(entry.ts));
-    row.slot('time').setAttribute('datetime', entry.ts);
+    row.time('time', logTime(entry.ts), entry.ts);
     row.text('stream', entry.stream);
     row.text('sev', severityLetter(entry.severity));
     row.slot('sev').setAttribute('title', severityName(entry.severity));
@@ -41,8 +40,7 @@ export class MessageLineRenderer implements EntryRenderer {
     const chat = entry.chat ?? entry.stream;
     const row = this.template.clone();
     row.attr({ 'data-kind': 'message', 'data-seq': entry.seq, 'data-sev': entry.severity, 'data-tone': streamTone(chat) });
-    row.text('time', logTime(entry.ts));
-    row.slot('time').setAttribute('datetime', entry.ts);
+    row.time('time', logTime(entry.ts), entry.ts);
     row.text('stream', chatLabel(chat));
     row.text('sev', '»');
     row.slot('sev').setAttribute('title', 'message');

@@ -9,6 +9,7 @@ import { ReadTracker, type ObserverLike } from '@/components/ReadTracker.ts';
 import { ChatPage, route, streamOf } from '@/pages/ChatPage.ts';
 import { HomePage } from '@/pages/HomePage.ts';
 import { FakeClock } from '@/testing/FakeClock.ts';
+import { FakeFrames } from '@/testing/FakeFrames.ts';
 import { fixture, loadPage } from '@/testing/pages.ts';
 import { fakeServices, flush } from '@/testing/services.ts';
 
@@ -49,13 +50,14 @@ describe('routing on a chat page', () => {
 describe('ChatPage', () => {
   it('shows a marker of a bound stream in the logs pane and as an event row', async () => {
     loadPage('chat');
-    const { services, sources, clock } = fakeServices((job) => ({ ...message, seq: 900, chat: job.chat, text: job.text, segments: [{ t: 'text', v: job.text }], sender: { name: 'admin', kind: 'human' } }));
-    running = new ChatPage(document, services).start();
+    const { services, sources } = fakeServices((job) => ({ ...message, seq: 900, chat: job.chat, text: job.text, segments: [{ t: 'text', v: job.text }], sender: { name: 'admin', kind: 'human' } }));
+    const frames = new FakeFrames();
+    running = new ChatPage(document, services, frames).start();
     const feed = sources[0];
     expect(feed?.url).toMatch(/^\/api\/events\?chat=chan%3Adut1&since_seq=\d+$/);
     feed?.emit('entry', { ...marker, seq: 500, text: 'test 42 starts' });
     feed?.emit('entry', { ...line, seq: 501, text: 'a line after it' });
-    clock.advance(50);
+    frames.run();
     const conv = document.querySelector('[data-component="ConversationView"]');
     const logs = document.querySelector('[data-component="LogsPane"] [data-slot="list"]');
     expect(conv?.lastElementChild?.className).toBe('event-row');
@@ -84,7 +86,7 @@ describe('ChatPage', () => {
   it('answers a question with its buttons through the queue', async () => {
     loadPage('chat');
     const { services, uploads } = fakeServices((job) => ({ ...message, seq: 901, chat: job.chat, text: job.choice ?? '' }));
-    running = new ChatPage(document, services).start();
+    running = new ChatPage(document, services, new FakeFrames()).start();
     const card = document.querySelector<HTMLElement>('.conversation .question[data-open]');
     const form = card?.querySelector('form');
     const done = card?.querySelector<HTMLButtonElement>('button[value="done"]');

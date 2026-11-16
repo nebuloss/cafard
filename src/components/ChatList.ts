@@ -1,6 +1,6 @@
 import type { Clock } from '@/core/Clock.ts';
 import type { Disposable } from '@/core/Disposable.ts';
-import { Dom, h } from '@/core/Dom.ts';
+import { Dom } from '@/core/Dom.ts';
 import type { EventBus } from '@/core/EventBus.ts';
 import type { Chat, Counts, Entry, Stream } from '@/model/types.ts';
 import type { CafardApi } from '@/net/CafardApi.ts';
@@ -9,6 +9,7 @@ import { ApiError } from '@/net/ApiError.ts';
 import { chatHref, messageTime, previewText } from '@/render/format.ts';
 import { ChatRowRenderer } from '@/render/renderers/ChatRowRenderer.ts';
 import { Component } from '@/components/Component.ts';
+import { popupMenu, type MenuItem } from '@/components/PopupMenu.ts';
 
 /** The sections of the list a chat goes in. */
 function sectionOf(chat: Chat): string {
@@ -116,29 +117,20 @@ export class ChatList extends Component {
   }
 
   private menu(row: HTMLElement): void {
-    Dom.find('.chat-popup', this.root)?.remove();
     const id = row.dataset['chat'] ?? '';
     const channel = id.startsWith('chan:');
     const pinned = row.hasAttribute('data-pinned');
     const muted = row.hasAttribute('data-muted');
-    const run = (label: string, action: () => Promise<unknown>): HTMLButtonElement => {
-      const b = h('button', { class: 'menu-item', type: 'button', role: 'menuitem' }, label);
-      b.addEventListener('click', () => {
-        popup.remove();
-        action().catch((error: unknown) => this.toast(error instanceof ApiError ? error.message : 'That did not work.'));
-      });
-      return b;
-    };
-    const popup = h(
-      'div',
-      { class: 'menu chat-popup', role: 'menu' },
+    const run = (label: string, action: () => Promise<unknown>): MenuItem => ({
+      label,
+      run: () => void action().catch((error: unknown) => this.toast(error instanceof ApiError ? error.message : 'That did not work.')),
+    });
+    popupMenu(this.root, row, 'chat-popup', [
       run(pinned ? 'Unpin' : 'Pin', () => this.api.setPrefs(id, { pinned: !pinned }).then((c) => this.chat(c))),
       run(muted ? 'Unmute' : 'Mute', () => this.api.setPrefs(id, { muted: !muted }).then((c) => this.chat(c))),
       channel ? run(row.closest('[data-section="unfollowed"]') === null ? 'Unfollow' : 'Follow', () => this.api.setPrefs(id, { followed: row.closest('[data-section="unfollowed"]') !== null })) : null,
       run('Mark read', () => this.api.markRead(id, Number.MAX_SAFE_INTEGER)),
-      channel ? h('a', { class: 'menu-item', role: 'menuitem', href: `${chatHref(id)}#settings` }, 'Settings') : null,
-    );
-    row.after(popup);
-    popup.querySelector('button')?.focus();
+      channel ? { label: 'Settings', href: `${chatHref(id)}#settings` } : null,
+    ]);
   }
 }
