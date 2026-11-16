@@ -3,6 +3,7 @@
 package netconsole
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,7 +18,6 @@ import (
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/textclean"
-	"github.com/nebuloss/cafard/internal/writer"
 )
 
 // DefaultAddr is the netconsole port.
@@ -172,7 +172,7 @@ func (s *Server) Handle(ctx context.Context, b []byte, ip netip.Addr, now time.T
 		src := s.plain[ip]
 		if src == nil {
 			if len(s.plain) >= maxSources {
-				s.flushPlain(ctx)
+				s.flushPlain()
 			}
 			src = &plainSource{}
 			src.sp = textclean.NewSplitter(textclean.DefaultFlushAfter, textclean.MaxLineBytes, func(line string, at time.Time) {
@@ -219,7 +219,7 @@ func (s *Server) Handle(ctx context.Context, b []byte, ip netip.Addr, now time.T
 
 // record stores one extended message, one entry per line of its text.
 func (s *Server) record(ctx context.Context, ip netip.Addr, rec Record, body []byte, at time.Time) {
-	text, dict := SplitBody(trimNewlines(body))
+	text, dict := SplitBody(bytes.TrimRight(body, "\n\x00"))
 	var meta ingestutil.Meta
 	meta.Add("seq", rec.Seq)
 	meta.Add("ts_usec", rec.TSUsec)
@@ -230,35 +230,12 @@ func (s *Server) record(ctx context.Context, ip netip.Addr, rec Record, body []b
 		meta.Add("facility", rec.Facility)
 	}
 	meta.Add("source_ip", ingestutil.AddrName(ip))
-	if len(rec.Fields) > 0 {
-		f := make(map[string]any, len(rec.Fields))
-		for k, v := range rec.Fields {
-			f[k] = v
-		}
-		meta.Add("fields", f)
-	}
-	if len(dict) > 0 {
-		d := make(map[string]any, len(dict))
-		for k, v := range dict {
-			d[k] = v
-		}
-		meta.Add("dict", d)
-	}
+	meta.Add("fields", ingestutil.AnyMap(rec.Fields))
+	meta.Add("dict", ingestutil.AnyMap(dict))
 	raw := meta.JSON()
-	lines := ingestutil.SplitLines(text)
-	if len(lines) == 0 {
-		lines = []string{""}
-	}
-	for _, line := range lines {
+	for _, line := range ingestutil.SplitLines(text) {
 		s.submit(ctx, s.entry(ip, line, at, rec.Level, raw))
 	}
-}
-
-func trimNewlines(b []byte) []byte {
-	for len(b) > 0 && (b[len(b)-1] == '\n' || b[len(b)-1] == 0) {
-		b = b[:len(b)-1]
-	}
-	return b
 }
 
 // StreamName is the stream of a source: its configured name, else its IP.
@@ -284,13 +261,7 @@ func (s *Server) entry(ip netip.Addr, line string, at time.Time, sev int, meta [
 
 func (s *Server) submit(ctx context.Context, e store.Entry) {
 	s.declare.Declare(e.Stream)
-	if err := s.d.Writer.Submit(ctx, e, true); err != nil {
-		if errors.Is(err, writer.ErrFull) {
-			s.d.Status.Dropped(e.Stream, 1)
-		} else if !errors.Is(err, writer.ErrClosed) {
-			s.log.Debug("netconsole entry refused", "stream", e.Stream, "err", err)
-		}
-	}
+	ingestutil.SubmitLossy(ctx, s.d, s.log, e)
 }
 
 // tick flushes partial plain lines and stale fragments.
@@ -322,7 +293,7 @@ func (s *Server) flushFrags(ctx context.Context, cutoff time.Time) {
 	}
 }
 
-func (s *Server) flushPlain(_ context.Context) {
+func (s *Server) flushPlain() {
 	for ip, src := range s.plain {
 		src.sp.Close()
 		delete(s.plain, ip)
@@ -330,6 +301,6 @@ func (s *Server) flushPlain(_ context.Context) {
 }
 
 func (s *Server) flushAll(ctx context.Context) {
-	s.flushPlain(ctx)
+	s.flushPlain()
 	s.flushFrags(ctx, time.Time{})
 }

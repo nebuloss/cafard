@@ -5,8 +5,11 @@ package ingestutil
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"sort"
@@ -15,9 +18,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/textclean"
+	"github.com/nebuloss/cafard/internal/writer"
 )
 
 // maxNameBytes keeps kind:name under the 200 bytes store.ValidateStreamID allows.
@@ -66,7 +71,8 @@ func PeerIP(a net.Addr) netip.Addr {
 
 // SplitLines normalises text the way every ingester does (UTF-8 repaired,
 // \n, \r\n and lone \r end lines, long lines split). A trailing newline
-// does not make an empty last line.
+// does not make an empty last line. Empty text is one empty line, so an
+// empty message still makes an entry.
 func SplitLines(b []byte) []string {
 	var lines []string
 	sp := textclean.NewSplitter(time.Hour, textclean.MaxLineBytes, func(line string, _ time.Time) {
@@ -74,7 +80,31 @@ func SplitLines(b []byte) []string {
 	})
 	sp.Write(b, time.Time{})
 	sp.Close()
+	if len(lines) == 0 {
+		lines = []string{""}
+	}
 	return lines
+}
+
+// AnyMap copies m into the map[string]any Meta.Add expects for objects.
+func AnyMap[V any](m map[string]V) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+// SubmitLossy queues e without waiting: a full queue counts a drop on
+// the stream, and other refusals (bar shutdown) are logged at debug.
+func SubmitLossy(ctx context.Context, d deps.Deps, log *slog.Logger, e store.Entry) {
+	if err := d.Writer.Submit(ctx, e, true); err != nil {
+		if errors.Is(err, writer.ErrFull) {
+			d.Status.Dropped(e.Stream, 1)
+		} else if !errors.Is(err, writer.ErrClosed) {
+			log.Debug("entry refused", "stream", e.Stream, "err", err)
+		}
+	}
 }
 
 // Allowlist is a set of source prefixes. An empty list allows everyone.

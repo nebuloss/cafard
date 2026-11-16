@@ -326,7 +326,7 @@ func TestRequestsLandAsEntries(t *testing.T) {
 func TestConcatenatedJSONRequests(t *testing.T) {
 	w := ingesttest.NewWriter()
 	body := sampleJSON + "\n" + `{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"next"},"traceId":"0102030405060708090a0b0c0d0e0f10"}]}]}]}` + "\n"
-	rec := do(NewHandler(ingesttest.Deps(w, ingesttest.NewStatus()), 8<<20), call{"application/json", "", []byte(body)})
+	rec := do(newHandler(w), call{"application/json", "", []byte(body)})
 	es := w.Entries()
 	if rec.Code != http.StatusOK || len(es) != 6 || es[5].Text != "next" || !strings.Contains(string(es[5].Meta), "0102030405060708090a0b0c0d0e0f10") {
 		t.Fatalf("status %d entries %+v", rec.Code, es)
@@ -334,7 +334,7 @@ func TestConcatenatedJSONRequests(t *testing.T) {
 	if !strings.Contains(string(es[0].Meta), "5b8efff798038103d269b633813fc60c") {
 		t.Errorf("first request lost its ids: %s", es[0].Meta)
 	}
-	if rec := do(NewHandler(ingesttest.Deps(w, ingesttest.NewStatus()), 8<<20), call{"application/json", "", []byte("  ")}); rec.Code != http.StatusBadRequest {
+	if rec := do(newHandler(w), call{"application/json", "", []byte("  ")}); rec.Code != http.StatusBadRequest {
 		t.Errorf("empty body: status %d", rec.Code)
 	}
 }
@@ -347,7 +347,7 @@ func TestPartialSuccess(t *testing.T) {
 		}
 		return nil
 	}
-	h := NewHandler(ingesttest.Deps(w, ingesttest.NewStatus()), 8<<20)
+	h := newHandler(w)
 	pb, _ := proto.Marshal(sampleLogs())
 	rec := do(h, call{"application/x-protobuf", "", pb})
 	if rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), encodeResponse(false, 1, "1 log records were refused.")) {
@@ -362,7 +362,7 @@ func TestPartialSuccess(t *testing.T) {
 func TestBusyWriter(t *testing.T) {
 	w := ingesttest.NewWriter()
 	w.SetFull(true)
-	h := NewHandler(ingesttest.Deps(w, ingesttest.NewStatus()), 8<<20)
+	h := newHandler(w)
 	h.wait = 50 * time.Millisecond
 	start := time.Now()
 	rec := do(h, call{"application/json", "", []byte(sampleJSON)})
@@ -382,7 +382,7 @@ func TestBusyWriter(t *testing.T) {
 	// Room for two entries: the first record (two lines) is stored, the rest refused.
 	w2 := ingesttest.NewWriter()
 	w2.Limit = 2
-	h2 := NewHandler(ingesttest.Deps(w2, ingesttest.NewStatus()), 8<<20)
+	h2 := newHandler(w2)
 	h2.wait = 20 * time.Millisecond
 	rec = do(h2, call{"application/json", "", []byte(sampleJSON)})
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"rejectedLogRecords":"3"`) {
@@ -393,7 +393,7 @@ func TestBusyWriter(t *testing.T) {
 	w3 := ingesttest.NewWriter()
 	w3.SetFull(true)
 	go func() { time.Sleep(30 * time.Millisecond); w3.SetFull(false) }()
-	rec = do(NewHandler(ingesttest.Deps(w3, ingesttest.NewStatus()), 8<<20), call{"application/json", "", []byte(sampleJSON)})
+	rec = do(newHandler(w3), call{"application/json", "", []byte(sampleJSON)})
 	if rec.Code != http.StatusOK || len(w3.Entries()) != 5 {
 		t.Fatalf("status %d, %d entries", rec.Code, len(w3.Entries()))
 	}
@@ -480,4 +480,9 @@ func checkRecords(t *testing.T, recs []record) {
 			}
 		}
 	}
+}
+
+// newHandler is the handler on w with an 8 MiB body limit.
+func newHandler(w *ingesttest.Writer) *Handler {
+	return NewHandler(ingesttest.Deps(w, ingesttest.NewStatus()), 8<<20)
 }
