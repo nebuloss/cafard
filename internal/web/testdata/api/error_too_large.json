@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "too_large",
+    "message": "The message text is 40 KiB; the limit is 32 KiB."
+  }
+}

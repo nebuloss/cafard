@@ -1,0 +1,12 @@
+{
+  "name": "guillaume",
+  "kind": "human",
+  "scopes": [
+    "read",
+    "message",
+    "serial_write",
+    "admin"
+  ],
+  "session_id": 12,
+  "theme": "system"
+}

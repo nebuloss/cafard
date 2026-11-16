@@ -1,0 +1,28 @@
+{
+  "id": "dm:codex-build",
+  "kind": "direct",
+  "name": "codex-build",
+  "peer": {
+    "name": "codex-build",
+    "kind": "agent",
+    "last_seen": "2026-11-16T09:44:12.7003001Z"
+  },
+  "patterns": [],
+  "streams": [],
+  "surface": "none",
+  "followed": true,
+  "pinned": false,
+  "muted": false,
+  "archived": false,
+  "source": "runtime",
+  "can_manage": false,
+  "unread": 1,
+  "open_questions": 0,
+  "last_activity": "2026-11-16T09:44:12.7003001Z",
+  "preview": {
+    "seq": 48420,
+    "sender": "codex-build",
+    "text": "Build 812 is green, artifacts in /srv/builds/812.",
+    "event": false
+  }
+}

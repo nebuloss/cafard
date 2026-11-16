@@ -18,7 +18,7 @@ import (
 func runArgs(t *testing.T, vars map[string]string, args ...string) (string, string, error) {
 	t.Helper()
 	var out, errOut strings.Builder
-	err := run(context.Background(), args, &out, &errOut, func(k string) string { return vars[k] })
+	err := run(context.Background(), args, strings.NewReader(""), &out, &errOut, func(k string) string { return vars[k] })
 	return out.String(), errOut.String(), err
 }
 
@@ -44,8 +44,8 @@ func TestUnknownCommandFails(t *testing.T) {
 }
 
 func TestUnimplementedCommandsSaySo(t *testing.T) {
-	_, _, err := runArgs(t, nil, "push")
-	if err == nil || !strings.Contains(err.Error(), "M1") {
+	_, _, err := runArgs(t, nil, "term")
+	if err == nil || !strings.Contains(err.Error(), "M6") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -79,12 +79,13 @@ func TestConfigFailsOnAnInvalidConfiguration(t *testing.T) {
 func TestServeAnswersHealthzAndShutsDownGracefully(t *testing.T) {
 	cfg := config.Default()
 	cfg.HTTPListen = "127.0.0.1:0"
+	cfg.DataDir = t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	addrs := make(chan net.Addr, 1)
 	done := make(chan error, 1)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	go func() { done <- serve(ctx, &cfg, log, func(a net.Addr) { addrs <- a }) }()
+	go func() { done <- serve(ctx, &cfg, log, io.Discard, func(a net.Addr) { addrs <- a }) }()
 
 	var addr net.Addr
 	select {

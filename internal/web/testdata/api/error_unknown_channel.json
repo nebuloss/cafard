@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "unknown_channel",
+    "message": "There is no channel \"dut3\". Existing channels: dut1, dut2, general."
+  }
+}

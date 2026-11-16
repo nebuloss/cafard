@@ -13,14 +13,22 @@ in `DECISIONS.md`.
 
 ## Status
 
-M0 (skeleton and pipeline) is done. Next is M1: store, writer, hub, tokens,
-`POST /api/log`, `cafard push` from stdin, and the MCP log tools.
+M0 and M1 are done. Next is M2 (track A: messaging, channels, claims,
+images, log attachments), which may run beside B, C, E1 and F now that git
+and the remote exist (CONTRACTS.md section 7).
 
-What exists: `cmd/cafard` (subcommands; `serve`, `config` and `version` work,
-the others say which milestone brings them), `internal/config`,
-`internal/web/assets` (embed, `bundleBuilt`, minimal `layout.html`),
-`src/core` with tests, `src/pages/PageRegistry.ts`, `src/App.ts`, CI and
-release workflows, `scripts/remote.sh`, `scripts/check-sinks.sh`.
+What exists:
+- `cmd/cafard`: `serve`, `config`, `version`, `token create|list|revoke`,
+  `push` from stdin. `term` and `mcp` say which milestone brings them.
+- `internal/store` (migrations, entry queries, retention janitor),
+  `writer`, `hub`, `status`, `textclean`, `auth` (tokens, bearer auth,
+  same-origin check, exposure guard), `deps`, `dto` with fixtures in
+  `internal/web/testdata/api`, `units`, `clock`.
+- `internal/ingest/httpapi` (`POST /api/log`), `internal/push`.
+- `internal/mcpserver`: streamable HTTP at `/mcp` with `whoami`,
+  `list_streams`, `read`, `tail`, `wait_for`, `context`, `mark`.
+- `internal/web/assets` (embed, `bundleBuilt`, minimal `layout.html`),
+  `src/core` with tests, CI and release workflows, `scripts/remote.sh`.
 
 ## Conventions come from the sibling projects
 
@@ -72,6 +80,20 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   keys whose feature has not landed.
 - **Build the mux once** (`newHandler` in `cmd/cafard/serve.go`). Registering
   the same pattern twice panics at start, not at compile time.
+- **Severity 0 is emergency.** `store.Entry{}` has severity 0, so every
+  producer sets `store.DefaultSeverity` (6) unless it knows better, and
+  `store.Query.MinSeverity` is a pointer for the same reason.
+- **A feature cannot import `internal/config`** (config imports the
+  features). Take your section as a `Register` argument; read root settings
+  from `deps.Server`.
+- **Add MCP tools inside `Register`, before `mcpserver.Register` mounts
+  `/mcp`.** `AddTool` panics afterwards: the per-scope SDK servers are
+  already built.
+- **Fixtures:** `go test ./internal/dto -update` rewrites
+  `internal/web/testdata/api/*.json`; CI fails if they are stale. A new DTO
+  gets a fixture in the same change.
+- **`go test -race ./cmd/cafard` takes about 100 s** on dev-build: the M1
+  "Done when" test pushes 100 000 lines through a real server.
 - **`scripts/check-sinks.sh` greps comments and strings too.** Do not name
   the forbidden sinks anywhere in `src/`, tests included.
 

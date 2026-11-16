@@ -186,7 +186,7 @@ cafard/
   go.mod  .gitignore  README.md  AGENTS.md  PLAN.md  CONTRACTS.md  DECISIONS.md
 ```
 
-Every feature package exposes `Register(mux *http.ServeMux, deps Deps)`
+Every feature package exposes `Register(mux, mcp, deps)` (CONTRACTS.md 1.2)
 (or the MCP equivalent) and owns its config sub-struct, so adding a
 feature adds one line to `main.go` and one to `internal/config`. Package
 ownership and the Go interfaces between packages are in CONTRACTS.md
@@ -342,7 +342,7 @@ CREATE TABLE blobs (
   width INTEGER, height INTEGER, created_at INTEGER NOT NULL,
   agent_sha256 TEXT, thumb_sha256 TEXT
 );
-CREATE TABLE schema_version (v INTEGER NOT NULL);
+CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL);
 ```
 
 Migrations are numbered SQL strings applied in a transaction at startup.

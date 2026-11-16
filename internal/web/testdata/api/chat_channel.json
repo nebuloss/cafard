@@ -1,0 +1,38 @@
+{
+  "id": "chan:dut1",
+  "kind": "channel",
+  "name": "dut1",
+  "title": "DUT 1 (RK3588 board)",
+  "topic": "Bring-up of the 6.18 kernel",
+  "patterns": [
+    "serial:dut1",
+    "syslog:dut1*"
+  ],
+  "streams": [
+    {
+      "id": "serial:dut1",
+      "status": "connected"
+    },
+    {
+      "id": "syslog:dut1",
+      "status": "idle"
+    }
+  ],
+  "surface": "markers",
+  "followed": true,
+  "pinned": true,
+  "muted": false,
+  "archived": false,
+  "source": "runtime",
+  "created_by": "guillaume",
+  "can_manage": true,
+  "unread": 3,
+  "open_questions": 1,
+  "last_activity": "2026-11-16T09:43:05.120004561Z",
+  "preview": {
+    "seq": 48410,
+    "sender": "claude-laptop",
+    "text": "Should I flash the board with the patched kernel?",
+    "event": false
+  }
+}

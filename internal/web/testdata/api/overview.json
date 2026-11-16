@@ -1,0 +1,186 @@
+{
+  "questions": [
+    {
+      "seq": 48410,
+      "ts": "2026-11-16T09:43:05.120004561Z",
+      "stream": "chan:dut1",
+      "kind": "message",
+      "severity": 6,
+      "text": "Should I flash the board with the patched kernel?\n```sh\nflashtool --port /dev/ttyUSB0 write boot.img\n```",
+      "chat": "chan:dut1",
+      "sender": {
+        "name": "claude-laptop",
+        "kind": "agent"
+      },
+      "recipient": "@humans",
+      "segments": [
+        {
+          "t": "text",
+          "v": "Should I flash the board with the patched kernel?\n"
+        },
+        {
+          "t": "codeblock",
+          "v": "flashtool --port /dev/ttyUSB0 write boot.img",
+          "lang": "sh"
+        }
+      ],
+      "question": {
+        "choices": [
+          "yes",
+          "no",
+          "wait"
+        ],
+        "open": false,
+        "answer": {
+          "by": "guillaume",
+          "choice": "yes",
+          "seq": 48412
+        }
+      }
+    }
+  ],
+  "direct": [
+    {
+      "id": "dm:codex-build",
+      "kind": "direct",
+      "name": "codex-build",
+      "peer": {
+        "name": "codex-build",
+        "kind": "agent",
+        "last_seen": "2026-11-16T09:44:12.7003001Z"
+      },
+      "patterns": [],
+      "streams": [],
+      "surface": "none",
+      "followed": true,
+      "pinned": false,
+      "muted": false,
+      "archived": false,
+      "source": "runtime",
+      "can_manage": false,
+      "unread": 1,
+      "open_questions": 0,
+      "last_activity": "2026-11-16T09:44:12.7003001Z",
+      "preview": {
+        "seq": 48420,
+        "sender": "codex-build",
+        "text": "Build 812 is green, artifacts in /srv/builds/812.",
+        "event": false
+      }
+    }
+  ],
+  "recent": [
+    {
+      "seq": 48395,
+      "ts": "2026-11-16T09:42:30.551209874Z",
+      "stream": "chan:dut1",
+      "kind": "message",
+      "severity": 6,
+      "text": "The new kernel boots but `dwc3` fails to init, see the log. Photo of the board attached. Patch at https://git.example.com/kernel/commit/4a1f",
+      "meta": {
+        "client": "claude-code"
+      },
+      "chat": "chan:dut1",
+      "sender": {
+        "name": "claude-laptop",
+        "kind": "agent"
+      },
+      "recipient": "@humans",
+      "reply_to": 48390,
+      "segments": [
+        {
+          "t": "text",
+          "v": "The new kernel boots but "
+        },
+        {
+          "t": "code",
+          "v": "dwc3"
+        },
+        {
+          "t": "text",
+          "v": " fails to init, see the log. Photo of the board attached. Patch at "
+        },
+        {
+          "t": "link",
+          "v": "https://git.example.com/kernel/commit/4a1f",
+          "href": "https://git.example.com/kernel/commit/4a1f"
+        }
+      ],
+      "attachments": [
+        {
+          "type": "image",
+          "sha256": "9f2c6a1e4b7d3f8a0c5e2b9d6a3f7c1e8b4d0a6f3c9e5b2d8a1f7c4e0b6d3a9f",
+          "mime": "image/jpeg",
+          "width": 4032,
+          "height": 3024,
+          "url": "/blob/9f2c6a1e4b7d3f8a0c5e2b9d6a3f7c1e8b4d0a6f3c9e5b2d8a1f7c4e0b6d3a9f",
+          "thumb_url": "/blob/9f2c6a1e4b7d3f8a0c5e2b9d6a3f7c1e8b4d0a6f3c9e5b2d8a1f7c4e0b6d3a9f?v=thumb",
+          "preview": true
+        },
+        {
+          "type": "log",
+          "stream": "serial:dut1",
+          "streams": [
+            "serial:dut1"
+          ],
+          "from_seq": 48211,
+          "to_seq": 48390,
+          "title": "boot with the new kernel",
+          "lines": 180,
+          "first_ts": "2026-11-16T09:41:02.118734502Z",
+          "last_ts": "2026-11-16T09:41:09.873120044Z",
+          "snapshot": true,
+          "expired": false,
+          "preview": [
+            {
+              "seq": 48211,
+              "ts": "2026-11-16T09:41:02.118734502Z",
+              "stream": "serial:dut1",
+              "kind": "line",
+              "severity": 6,
+              "host": "bench-pi",
+              "text": "[    2.315842] mmc0: new HS200 MMC card at address 0001"
+            },
+            {
+              "seq": 48212,
+              "ts": "2026-11-16T09:41:02.240117893Z",
+              "stream": "serial:dut1",
+              "kind": "line",
+              "severity": 6,
+              "host": "bench-pi",
+              "text": "[    2.402113] EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode"
+            },
+            {
+              "seq": 48213,
+              "ts": "2026-11-16T09:41:02.512904417Z",
+              "stream": "serial:dut1",
+              "kind": "line",
+              "severity": 3,
+              "host": "bench-pi",
+              "text": "[    2.689001] dwc3 fe800000.usb: failed to initialize core: -110"
+            }
+          ]
+        }
+      ],
+      "seen_by": [
+        "guillaume"
+      ]
+    },
+    {
+      "seq": 48390,
+      "ts": "2026-11-16T09:41:00.000312998Z",
+      "src_ts": "2026-11-16T09:40:59.9980012Z",
+      "stream": "serial:dut1",
+      "kind": "marker",
+      "severity": 5,
+      "app": "flashtool",
+      "text": "flashed linux-6.18-rc3 to dut1",
+      "chat": "chan:dut1",
+      "sender": {
+        "name": "codex-build",
+        "kind": "agent"
+      },
+      "event": true
+    }
+  ]
+}

@@ -94,7 +94,7 @@ func TestEmptyFileIsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *cfg != Default() {
+	if !reflect.DeepEqual(*cfg, Default()) {
 		t.Errorf("cfg = %+v, want defaults", *cfg)
 	}
 }
@@ -234,7 +234,7 @@ func TestMarshalRoundTrips(t *testing.T) {
 	if err := decodeYAML(out, &back); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if back != c {
+	if !reflect.DeepEqual(back, c) {
 		t.Errorf("round trip = %+v, want %+v", back, c)
 	}
 }

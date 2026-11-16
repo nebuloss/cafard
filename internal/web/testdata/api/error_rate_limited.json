@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "You sent 30 messages in the last minute; wait 12 s.",
+    "retry_after_s": 12
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "text": "Kernel 6.18-rc3 boots, USB still fails. Log and photo attached.",
+  "to": "@humans",
+  "channel": "dut1",
+  "reply_to": 48390,
+  "images": [
+    {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "mime": "image/png"
+    }
+  ],
+  "logs": [
+    {
+      "stream": "serial:dut1",
+      "from_seq": 48211,
+      "to_seq": 48390,
+      "title": "boot with the new kernel"
+    },
+    {
+      "channel": "dut1",
+      "from_seq": 48391,
+      "grep": "usb|dwc3",
+      "min_severity": 4
+    }
+  ]
+}

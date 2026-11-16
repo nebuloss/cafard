@@ -65,26 +65,36 @@ by a later track, except through an interface defined in `internal/deps`.
 ```go
 // internal/deps
 type Deps struct {
-	Config    *config.Config
+	Server    Server           // root settings: public_url, http_listen, secure, tls, data_dir
 	Store     *store.Store
 	Writer    writer.Writer
 	Hub       hub.Hub
 	Status    status.Registry
 	Auth      auth.Authenticator
+	Tokens    *auth.Tokens
+	Janitor   *store.Janitor   // Add(store.Task) for acks, blobs, claims, sessions
 	Blobs     BlobStore        // nil until track A; an interface, see below
 	Messaging Messaging        // nil until track A; an interface, see below
 	Clock     clock.Clock      // interface { Now() time.Time; After(d) <-chan time.Time }
 	Log       *slog.Logger
+	Version   string
 }
 
-// Every feature package:
-func Register(mux *http.ServeMux, mcp *mcpserver.Server, d deps.Deps) (start func(ctx context.Context) error, err error)
+// Every feature package (cfg only when the feature has a config section):
+func Register(mux *http.ServeMux, mcp *mcpserver.Server, d deps.Deps[, cfg *Config]) (start func(ctx context.Context) error, err error)
 ```
 
 - `start` runs the feature's background work (listeners, janitor, port
   readers) until the context is cancelled. It is `nil` when there is none.
 - `main` builds the mux once (a grafit gotcha), calls every `Register`,
   starts everything in an `errgroup`, and shuts down on SIGINT and SIGTERM.
+- A feature gets its own config section as an argument, not through
+  `Deps`: `internal/config` imports every feature package for its section
+  type, so a feature cannot import `internal/config`.
+- MCP tools are added with `mcpserver.AddTool(s, scope, tool, handler)`
+  inside `Register`, before `/mcp` serves. A handler returns the agent's
+  text, the structured output, and a `*dto.APIError` for errors the agent
+  should read.
 
 ### 1.3 Entries
 

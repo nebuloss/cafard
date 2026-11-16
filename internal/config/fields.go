@@ -133,6 +133,27 @@ func setString(v reflect.Value, s string) error {
 	return nil
 }
 
+// applyDefaults calls SetDefaults on every nested struct that has one.
+func applyDefaults(c *Config) {
+	walkStructs(reflect.ValueOf(c).Elem(), func(v reflect.Value) {
+		if d, ok := v.Addr().Interface().(Defaulter); ok {
+			d.SetDefaults()
+		}
+	})
+}
+
+func walkStructs(v reflect.Value, visit func(reflect.Value)) {
+	t := v.Type()
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if !f.IsExported() || f.Type.Kind() != reflect.Struct || isScalar(f.Type) {
+			continue
+		}
+		visit(v.Field(i))
+		walkStructs(v.Field(i), visit)
+	}
+}
+
 // validateFeatures calls Validate on every nested struct that has one.
 func validateFeatures(c *Config) error {
 	return validateIn(reflect.ValueOf(c).Elem(), "")

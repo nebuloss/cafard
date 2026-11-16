@@ -38,7 +38,7 @@ var version = "dev"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	err := run(ctx, os.Args[1:], os.Stdout, os.Stderr, os.Getenv)
+	err := run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr, os.Getenv)
 	stop()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "cafard: "+err.Error())
@@ -48,6 +48,7 @@ func main() {
 
 // env is the process environment, injected so tests do not touch os.Getenv.
 type env struct {
+	stdin          io.Reader
 	stdout, stderr io.Writer
 	getenv         func(string) string
 }
@@ -58,14 +59,14 @@ var commands = map[string]command{
 	"serve":   cmdServe,
 	"config":  cmdConfig,
 	"version": cmdVersion,
-	"push":    notYet("M1"),
-	"token":   notYet("M1"),
+	"push":    cmdPush,
+	"token":   cmdToken,
 	"term":    notYet("M6"),
 	"mcp":     notYet("M6"),
 }
 
-func run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv func(string) string) error {
-	e := env{stdout: stdout, stderr: stderr, getenv: getenv}
+func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) error {
+	e := env{stdin: stdin, stdout: stdout, stderr: stderr, getenv: getenv}
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
 		return errors.New("no command given")

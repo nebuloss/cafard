@@ -13,6 +13,9 @@ package config
 
 import (
 	"fmt"
+
+	"github.com/nebuloss/cafard/internal/mcpserver"
+	"github.com/nebuloss/cafard/internal/store"
 	"net"
 	"net/url"
 	"strconv"
@@ -33,6 +36,9 @@ type Config struct {
 	TLSCert   string `yaml:"tls_cert"`
 	TLSKey    string `yaml:"tls_key"`
 	LogLevel  string `yaml:"log_level"`
+
+	Retention store.Retention  `yaml:"retention"`
+	MCP       mcpserver.Config `yaml:"mcp"`
 }
 
 // Validator is implemented by feature sub-structs that check themselves.
@@ -40,13 +46,20 @@ type Validator interface {
 	Validate() error
 }
 
+// Defaulter is implemented by feature sub-structs that have defaults.
+type Defaulter interface {
+	SetDefaults()
+}
+
 // Default is the configuration with nothing set.
 func Default() Config {
-	return Config{
+	c := Config{
 		DataDir:    "/var/lib/cafard",
 		HTTPListen: "0.0.0.0:8790",
 		LogLevel:   "info",
 	}
+	applyDefaults(&c)
+	return c
 }
 
 // Validate checks the root keys, then every feature sub-struct.

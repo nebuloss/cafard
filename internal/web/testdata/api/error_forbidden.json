@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "forbidden",
+    "message": "This token lacks the serial_write scope."
+  }
+}

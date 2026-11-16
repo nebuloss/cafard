@@ -3,6 +3,64 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: M1 store, ingest and core MCP
+
+- **`Deps` carries root settings (`deps.Server`), not `*config.Config`,
+  and a feature's config section is a `Register` argument.**
+  `internal/config` imports each feature for its section type, so a
+  feature importing `internal/config` through `Deps` was an import cycle.
+  CONTRACTS.md 1.2 updated. `Deps` also gained `Tokens`, `Janitor` and
+  `Version`.
+- **Feature defaults:** a section type with `SetDefaults()` gets it called
+  by `config.Default()`, as `Validate()` is called after loading.
+- **Migrations are recorded by file name** in `schema_migrations(name,
+  applied_at)`, replacing the single `schema_version` number, because
+  numbers are reserved per track and may land out of order.
+- **The janitor deletes entries through the writer** (`writer.W.Exec`, a
+  function run in the writer goroutine between batches, in its own
+  transaction), in chunks of 5000 rows. "Only the writer writes entries"
+  covers deletes too. Size retention counts text bytes plus 64 per row.
+- **`store.Query.MinSeverity` is a `*int`** (nil keeps everything): 0 is a
+  real severity, so a zero-value default would have meant "emergencies
+  only". `store.Entry.Severity` has the same trap; producers set
+  `store.DefaultSeverity` (6) explicitly. `hub.Filter.MinSeverity` keeps
+  the contract's `int` with 7 for "all".
+- **Stream globs never match message streams** unless the pattern itself
+  starts with `chan:` or `dm:`, so `streams=["*"]` cannot leak a direct
+  message. Log tools also drop `chan:*`/`dm:*` patterns outright.
+- **`wait_for` takes "now" before subscribing,** then subscribes, then
+  reads the store, then drains; an entry committed at any point after
+  "now" is seen exactly once. A test commits entries at random moments
+  around the subscription to pin it.
+- **MCP tools are registered through `mcpserver.AddTool`,** which infers
+  the schemas with `github.com/google/jsonschema-go` (already required by
+  the SDK, now a direct dependency) and returns errors as `isError`
+  results whose structured content is `{code, message}`. One SDK server is
+  built per scope set, so `tools/list` hides what a token cannot call.
+  Sessions are bound to the principal (`TokenInfo.UserID`), so a token
+  cannot take over another principal's session.
+- **`/mcp` accepts a token only if it has `read`.** Every MCP tool needs
+  at least `read`, so an ingest-only device token gets 401 there.
+- **The SDK's auth middleware answers 401 on `/mcp`** in its own format
+  (with `WWW-Authenticate`), not the cafard error DTO: MCP clients expect
+  it.
+- **New dependencies:** `github.com/modelcontextprotocol/go-sdk` v1.8.0
+  (brings `golang.org/x/oauth2`, `golang.org/x/time`,
+  `github.com/segmentio/encoding`, all pure Go), `modernc.org/sqlite`,
+  `golang.org/x/sync` (errgroup). The cross-builds stay `CGO_ENABLED=0`.
+- **First start prints the admin token to stdout,** never to the log. The
+  admin token gets `ingest read message admin`; scopes are independent, so
+  admin does not imply `serial_write`.
+- **`POST /api/log` also accepts `Content-Encoding: gzip`;** `cafard push`
+  sends gzip. Lines get the request's receive time in `ts`, and NDJSON
+  `ts` becomes `src_ts`. Body limit 16 MiB after decompression.
+- **`cafard push` retries forever with backoff (1 s to 30 s, or the
+  server's `Retry-After`)** while the server is unreachable or busy, and
+  stops at once on a refusal (4xx), printing the server's sentence. The
+  disk spool comes with M5.
+- **`token` subcommands:** `cafard token create|list|revoke`, opening the
+  database directly; SQLite WAL lets it run beside a live server.
+
 ## 2026-11-16: M0 skeleton
 
 - **Templates and static files live under `internal/web/assets/`**

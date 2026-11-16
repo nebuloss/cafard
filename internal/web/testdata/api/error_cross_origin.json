@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "cross_origin",
+    "message": "This request came from another site and was refused."
+  }
+}

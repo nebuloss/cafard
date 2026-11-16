@@ -1,0 +1,26 @@
+{
+  "id": "serial:dut1",
+  "kind": "serial",
+  "transport": "rfc2217",
+  "labels": {
+    "bench": "desk-left",
+    "board": "rk3588"
+  },
+  "status": "connected",
+  "last_seq": 48405,
+  "last_activity": "2026-11-16T09:42:16.331952087Z",
+  "rate_per_min": 42.6,
+  "dropped": 0,
+  "claim": {
+    "principal": "claude-laptop",
+    "note": "flashing the 6.18 kernel",
+    "expires_at": "2026-11-16T10:12:00Z"
+  },
+  "line_state": {
+    "dtr": true,
+    "rts": false,
+    "cts": true,
+    "dcd": false
+  },
+  "last_line": "[   76.445871] usb usb1-port1: connect-debounce failed"
+}
