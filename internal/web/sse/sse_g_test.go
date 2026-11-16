@@ -21,7 +21,7 @@ func TestStreamStatusCarriesTheLastLine(t *testing.T) {
 	deadline := time.After(5 * time.Second)
 	for {
 		var st dto.Stream
-		_ = json.Unmarshal([]byte(c.next(t, "stream_status").data), &st)
+		_ = json.Unmarshal([]byte(c.next(t, "stream_status").Data), &st)
 		if st.ID == "serial:dut1" && st.LastLine == "U-Boot 2024.04" && st.LastSeq > 0 {
 			return
 		}

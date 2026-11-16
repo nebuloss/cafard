@@ -135,7 +135,7 @@ func Line(stream, text string) store.Entry {
 }
 
 // Request is a request with optional cookie; body is a form when it is
-// url.Values, raw otherwise.
+// url.Values, a multipart form when it is Multipart, raw JSON otherwise.
 func (e *Env) Do(method, target string, cookie *http.Cookie, body any, header ...string) *httptest.ResponseRecorder {
 	e.T.Helper()
 	var r *http.Request
@@ -148,6 +148,10 @@ func (e *Env) Do(method, target string, cookie *http.Cookie, body any, header ..
 	case string:
 		r = httptest.NewRequest(method, target, strings.NewReader(b))
 		r.Header.Set("Content-Type", "application/json")
+	case Multipart:
+		ctype, buf := b.encode()
+		r = httptest.NewRequest(method, target, buf)
+		r.Header.Set("Content-Type", ctype)
 	default:
 		e.T.Fatalf("body type %T", body)
 	}

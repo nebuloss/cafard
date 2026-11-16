@@ -23,23 +23,19 @@ func newEnv(t *testing.T) *webtest.Env {
 	return e
 }
 
-func decode[T any](t *testing.T, rec interface{ Body() []byte }) T {
+func decode[T any](t *testing.T, b []byte) T {
 	t.Helper()
 	var v T
-	if err := json.Unmarshal(rec.Body(), &v); err != nil {
-		t.Fatalf("decode: %v\n%s", err, rec.Body())
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatalf("decode: %v\n%s", err, b)
 	}
 	return v
 }
 
-type body struct{ b []byte }
-
-func (b body) Body() []byte { return b.b }
-
 func get[T any](t *testing.T, e *webtest.Env, path, token string) (int, T) {
 	t.Helper()
 	rec := e.Do("GET", path, nil, nil, "Authorization", "Bearer "+token)
-	return rec.Code, decode[T](t, body{rec.Body.Bytes()})
+	return rec.Code, decode[T](t, rec.Body.Bytes())
 }
 
 func TestEntriesNeverReturnMessages(t *testing.T) {
@@ -125,7 +121,7 @@ func TestMeMarksAndPrincipals(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("mark: %d %s", rec.Code, rec.Body)
 	}
-	created := decode[dto.MarkCreated](t, body{rec.Body.Bytes()})
+	created := decode[dto.MarkCreated](t, rec.Body.Bytes())
 	m, err := e.Store.Get(t.Context(), created.Seq)
 	if err != nil || m.Kind != store.KindMarker || m.Sender != "codex" || m.Text != "codex: test 42 starts" {
 		t.Errorf("marker %+v %v", m, err)
@@ -160,8 +156,8 @@ func TestPairingsCannotGrantMoreThanTheAdminHolds(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("pairing: %d %s", rec.Code, rec.Body)
 	}
-	p := decode[dto.Pairing](t, body{rec.Body.Bytes()})
-	if !strings.HasPrefix(p.URL, "https://cafard.lan/p/") || p.QRURL != "/pair/"+strconv.FormatInt(p.ID, 10)+"/qr.svg" || p.NewName != "phone" {
+	p := decode[dto.Pairing](t, rec.Body.Bytes())
+	if !strings.HasPrefix(p.URL, "https://cafard.lan/p/") || p.QRURL != "/pair/"+webtest.Itoa(p.ID)+"/qr.svg" || p.NewName != "phone" {
 		t.Errorf("pairing = %+v", p)
 	}
 	rec = e.Do("POST", "/api/pairings", nil, `{"new_name":"phone2","scopes":["serial_write"]}`, "Authorization", "Bearer "+tok)

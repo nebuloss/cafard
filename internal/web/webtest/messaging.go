@@ -7,7 +7,7 @@ import (
 )
 
 // StartMessaging builds the real messaging service over the stack, as
-// serve does, and puts it in Deps (track D's chat pages need it). Call it
+// serve does, and puts it in Deps (the chat pages need it). Call it
 // before mounting anything that copies Deps.
 func (e *Env) StartMessaging() *messaging.Service {
 	e.T.Helper()

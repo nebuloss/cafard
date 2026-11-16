@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,10 +17,11 @@ import (
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/web/webtest"
 )
 
-// Track D: the M3 "Done when" checks a test can run, through a real
-// server and a browser session.
+// The M3 "Done when" checks a test can run, through a real server and a
+// browser session.
 
 // noRedirect is a client that shows redirects instead of following them.
 var noRedirect = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -230,13 +230,7 @@ func TestALogRangeAttachedFromTheUIReachesAnAgent(t *testing.T) {
 	}
 }
 
-// sseEvent is one event of /api/events.
-type sseEvent struct {
-	name string
-	data string
-}
-
-func (s *server) events(ctx context.Context, cookie *http.Cookie, query string) <-chan sseEvent {
+func (s *server) events(ctx context.Context, cookie *http.Cookie, query string) <-chan webtest.Event {
 	s.t.Helper()
 	req, _ := http.NewRequestWithContext(ctx, "GET", s.base+"/api/events?"+query, nil)
 	req.AddCookie(cookie)
@@ -247,30 +241,11 @@ func (s *server) events(ctx context.Context, cookie *http.Cookie, query string) 
 	if resp.StatusCode != http.StatusOK {
 		s.t.Fatalf("events: %d", resp.StatusCode)
 	}
-	out := make(chan sseEvent, 64)
-	go func() {
-		defer resp.Body.Close()
-		defer close(out)
-		sc := bufio.NewScanner(resp.Body)
-		var ev sseEvent
-		for sc.Scan() {
-			line := sc.Text()
-			switch {
-			case strings.HasPrefix(line, "event: "):
-				ev.name = strings.TrimPrefix(line, "event: ")
-			case strings.HasPrefix(line, "data: "):
-				ev.data = strings.TrimPrefix(line, "data: ")
-			case line == "" && ev.name != "":
-				out <- ev
-				ev = sseEvent{}
-			}
-		}
-	}()
-	return out
+	return webtest.ReadEvents(resp.Body)
 }
 
 // waitEvent reads events until match accepts one.
-func waitEvent(t *testing.T, ch <-chan sseEvent, what string, match func(sseEvent) bool) sseEvent {
+func waitEvent(t *testing.T, ch <-chan webtest.Event, what string, match func(webtest.Event) bool) webtest.Event {
 	t.Helper()
 	timeout := time.After(10 * time.Second)
 	for {
@@ -295,18 +270,20 @@ func TestCountsUpdateWhenAQuestionArrives(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	feed := s.events(ctx, cookie, "scope=home")
-	counts := func(ev sseEvent) dto.Counts {
+	counts := func(ev webtest.Event) dto.Counts {
 		var c dto.Counts
-		_ = json.Unmarshal([]byte(ev.data), &c)
+		_ = json.Unmarshal([]byte(ev.Data), &c)
 		return c
 	}
-	first := waitEvent(t, feed, "first counts", func(ev sseEvent) bool { return ev.name == "counts" })
+	first := waitEvent(t, feed, "first counts", func(ev webtest.Event) bool { return ev.Name == "counts" })
 	if c := counts(first); c.OpenQuestions != 0 {
 		t.Fatalf("first counts = %+v", c)
 	}
 	call(t, agent, "ask_human", map[string]any{"question": "Reset the board?", "choices": []string{"yes"}, "timeout_s": 0})
-	waitEvent(t, feed, "the question entry", func(ev sseEvent) bool { return ev.name == "entry" && strings.Contains(ev.data, "Reset the board?") })
-	ev := waitEvent(t, feed, "counts with the question", func(ev sseEvent) bool { return ev.name == "counts" && counts(ev).OpenQuestions == 1 })
+	waitEvent(t, feed, "the question entry", func(ev webtest.Event) bool {
+		return ev.Name == "entry" && strings.Contains(ev.Data, "Reset the board?")
+	})
+	ev := waitEvent(t, feed, "counts with the question", func(ev webtest.Event) bool { return ev.Name == "counts" && counts(ev).OpenQuestions == 1 })
 	c := counts(ev)
 	if len(c.Chats) != 1 || c.Chats[0].ID != "chan:general" || c.Chats[0].OpenQuestions != 1 {
 		t.Errorf("counts = %+v", c)
@@ -316,8 +293,10 @@ func TestCountsUpdateWhenAQuestionArrives(t *testing.T) {
 	_, b := s.browser(cookie, "GET", "/api/overview", "", nil, true)
 	_ = json.Unmarshal(b, &o)
 	s.sendForm(cookie, map[string]string{"chat": "chan:general", "reply_to": fmt.Sprint(o.Questions[0].Seq), "choice": "yes"})
-	waitEvent(t, feed, "answered", func(ev sseEvent) bool { return ev.name == "answered" && strings.Contains(ev.data, `"choice":"yes"`) })
-	waitEvent(t, feed, "counts back to 0", func(ev sseEvent) bool { return ev.name == "counts" && counts(ev).OpenQuestions == 0 })
+	waitEvent(t, feed, "answered", func(ev webtest.Event) bool {
+		return ev.Name == "answered" && strings.Contains(ev.Data, `"choice":"yes"`)
+	})
+	waitEvent(t, feed, "counts back to 0", func(ev webtest.Event) bool { return ev.Name == "counts" && counts(ev).OpenQuestions == 0 })
 }
 
 func TestAMarkerInABoundChannelIsInTheLogsAndTheChat(t *testing.T) {
@@ -329,15 +308,15 @@ func TestAMarkerInABoundChannelIsInTheLogsAndTheChat(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	feed := s.events(ctx, cookie, "chat=chan:run-42")
-	waitEvent(t, feed, "counts", func(ev sseEvent) bool { return ev.name == "counts" })
+	waitEvent(t, feed, "counts", func(ev webtest.Event) bool { return ev.Name == "counts" })
 	call(t, agent, "mark", map[string]any{"stream": "serial:dut1", "label": "test 42 starts"})
 	s.ingest("serial:dut1", "a line after the marker\n")
 	// The chat page's feed carries the marker and the bound stream's lines.
-	waitEvent(t, feed, "the marker", func(ev sseEvent) bool {
-		return ev.name == "entry" && strings.Contains(ev.data, "test 42 starts") && strings.Contains(ev.data, `"stream":"serial:dut1"`)
+	waitEvent(t, feed, "the marker", func(ev webtest.Event) bool {
+		return ev.Name == "entry" && strings.Contains(ev.Data, "test 42 starts") && strings.Contains(ev.Data, `"stream":"serial:dut1"`)
 	})
-	waitEvent(t, feed, "the line", func(ev sseEvent) bool {
-		return ev.name == "entry" && strings.Contains(ev.data, "a line after the marker")
+	waitEvent(t, feed, "the line", func(ev webtest.Event) bool {
+		return ev.Name == "entry" && strings.Contains(ev.Data, "a line after the marker")
 	})
 
 	// Server-rendered: an event row in the chat, and a marker row in its logs.
@@ -376,24 +355,24 @@ func TestTheChatFeedCarriesReceiptsAndChatChanges(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	feed := s.events(ctx, cookie, "chat=dm:codex-build")
-	waitEvent(t, feed, "counts", func(ev sseEvent) bool { return ev.name == "counts" })
+	waitEvent(t, feed, "counts", func(ev webtest.Event) bool { return ev.Name == "counts" })
 	_, out := call(t, agent, "send", map[string]any{"text": "build 812 is green", "to": "admin"})
 	seq := num(out["seq"])
-	waitEvent(t, feed, "the message", func(ev sseEvent) bool { return ev.name == "entry" && strings.Contains(ev.data, "build 812") })
+	waitEvent(t, feed, "the message", func(ev webtest.Event) bool { return ev.Name == "entry" && strings.Contains(ev.Data, "build 812") })
 	// The agent reads it: the human's page gets the receipt.
 	call(t, agent, "ack", map[string]any{"seqs": []int64{seq}})
 	resp, _ := s.browser(cookie, "POST", "/api/acks", "application/json", strings.NewReader(fmt.Sprintf(`{"seqs":[%d]}`, seq)), true)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("ack: %d", resp.StatusCode)
 	}
-	waitEvent(t, feed, "seen", func(ev sseEvent) bool { return ev.name == "seen" && strings.Contains(ev.data, `"by":"admin"`) })
+	waitEvent(t, feed, "seen", func(ev webtest.Event) bool { return ev.Name == "seen" && strings.Contains(ev.Data, `"by":"admin"`) })
 	resp, b := s.browser(cookie, "PUT", "/api/chats/dm:codex-build/prefs", "application/json", strings.NewReader(`{"pinned":true}`), true)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("prefs: %d %s", resp.StatusCode, b)
 	}
-	ev := waitEvent(t, feed, "chat", func(ev sseEvent) bool { return ev.name == "chat" })
+	ev := waitEvent(t, feed, "chat", func(ev webtest.Event) bool { return ev.Name == "chat" })
 	var chat dto.Chat
-	if err := json.Unmarshal([]byte(ev.data), &chat); err != nil || chat.ID != "dm:codex-build" || !chat.Pinned {
-		t.Errorf("chat event = %s", ev.data)
+	if err := json.Unmarshal([]byte(ev.Data), &chat); err != nil || chat.ID != "dm:codex-build" || !chat.Pinned {
+		t.Errorf("chat event = %s", ev.Data)
 	}
 }

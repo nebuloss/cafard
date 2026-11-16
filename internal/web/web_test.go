@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -29,7 +28,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite internal/web/testdata/pages/*.html")
 
-// env is the web stack with the real messaging service (track D).
+// env is the web stack with the real messaging service.
 type env struct {
 	*webtest.Env
 	svc *messaging.Service
@@ -65,14 +64,13 @@ func seed(e *env) {
 }
 
 // The tpl-* twins each page lists, and the slots each twin carries
-// (CONTRACTS.md 6.2). Track D adds its pages and twins here.
+// (CONTRACTS.md 6.2).
 var twinSlots = map[string][]string{
-	"tpl-line":        {"time", "stream", "sev", "text"},
-	"tpl-marker":      {"time", "text"},
-	"tpl-stream-dot":  {},
-	"tpl-stream-card": {"name", "status", "transport", "rate", "last", "preview", "dropped", "claim", "line-state", "open"},
-	"tpl-toast":       {"text", "action"},
-	// Track D.
+	"tpl-line":               {"time", "stream", "sev", "text"},
+	"tpl-marker":             {"time", "text"},
+	"tpl-stream-dot":         {},
+	"tpl-stream-card":        {"name", "status", "transport", "rate", "last", "preview", "dropped", "claim", "line-state", "open"},
+	"tpl-toast":              {"text", "action"},
 	"tpl-chat-row":           {"name", "preview", "time", "unread", "questions", "dots"},
 	"tpl-message":            {"sender", "sender-kind", "time", "body", "reply-quote", "attachments", "seen-by", "menu"},
 	"tpl-question":           {"sender", "time", "body", "choices", "reply-form", "answer"},
@@ -91,7 +89,6 @@ var pageTwins = map[string][]string{
 	"agents":  {"tpl-toast"},
 	"pair":    {"tpl-toast"},
 	"live":    {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
-	// Track D.
 	"home": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
 		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-toast"},
 	"chat": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
@@ -174,7 +171,8 @@ func TestEveryPageCarriesItsTwins(t *testing.T) {
 }
 
 // noBundle lists, per page, what must be in the server-rendered HTML for
-// the page to work with no script at all. Track D adds the chat pages.
+// the page to work with no script at all; noBundleChats in chat_test.go
+// adds the chat pages.
 var noBundle = map[string][]string{
 	"/streams": {
 		`data-stream="serial:dut1"`, "rfc2217", "flashed linux-6.18-rc3", `href="/live?streams=serial%3Adut1"`,
@@ -184,14 +182,13 @@ var noBundle = map[string][]string{
 		"U-Boot 2024.04", `class="marker"`, "flashed linux-6.18-rc3", `<form class="filter-bar" method="get" action="/live"`,
 		"Live updates need JavaScript",
 	},
-	// Track D: the chats (noBundleChats in chat_test.go).
 }
 
 func TestThePageWorksWithoutTheBundle(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	seed(e)
 	cookie := e.Admin()
-	for path, wants := range noBundleChats(e) {
+	for path, wants := range noBundleChats() {
 		noBundle[path] = wants
 	}
 	for path, wants := range noBundle {
@@ -434,15 +431,13 @@ func TestPairingSignsAPhoneInOnce(t *testing.T) {
 	if !strings.Contains(e.Do("GET", "/pair", cookie, nil).Body.String(), "Chrome on Android (paired)") {
 		t.Error("the phone session is not listed")
 	}
-	if rec := e.Do("POST", "/sessions/"+itoa(me.SessionID)+"/revoke", cookie, url.Values{}); rec.Code != http.StatusSeeOther {
+	if rec := e.Do("POST", "/sessions/"+webtest.Itoa(me.SessionID)+"/revoke", cookie, url.Values{}); rec.Code != http.StatusSeeOther {
 		t.Errorf("revoke: %d", rec.Code)
 	}
 	if rec := e.Do("GET", "/api/me", phone, nil); rec.Code != http.StatusUnauthorized {
 		t.Errorf("revoked phone: %d", rec.Code)
 	}
 }
-
-func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
 func TestAPersonCanRevokeOnlyTheirOwnSessions(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
@@ -464,10 +459,10 @@ func TestAPersonCanRevokeOnlyTheirOwnSessions(t *testing.T) {
 			adminID = s.ID
 		}
 	}
-	if rec := e.Do("DELETE", "/api/sessions/"+itoa(adminID), alice, nil); rec.Code != http.StatusNotFound {
+	if rec := e.Do("DELETE", "/api/sessions/"+webtest.Itoa(adminID), alice, nil); rec.Code != http.StatusNotFound {
 		t.Errorf("alice revoking admin: %d", rec.Code)
 	}
-	if rec := e.Do("POST", "/sessions/"+itoa(adminID)+"/revoke", alice, url.Values{}); rec.Code != http.StatusNotFound {
+	if rec := e.Do("POST", "/sessions/"+webtest.Itoa(adminID)+"/revoke", alice, url.Values{}); rec.Code != http.StatusNotFound {
 		t.Errorf("alice revoking admin by form: %d", rec.Code)
 	}
 }

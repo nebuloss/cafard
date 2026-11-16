@@ -8,38 +8,35 @@ import (
 	"testing"
 )
 
-func TestLayoutEmitsTheScriptOnlyWhenScripted(t *testing.T) {
+func TestLayout(t *testing.T) {
 	tpl, err := Templates(template.FuncMap{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scripted := range []bool{false, true} {
+	const script = `src="/app/main.js"`
+	for _, c := range []struct {
+		name      string
+		l         Layout
+		want, not []string
+	}{
+		{"no script without the bundle", Layout{Title: "Chats", Page: "home"}, []string{`data-page="home"`}, []string{script}},
+		{"the script with the bundle", Layout{Title: "Chats", Page: "home", Scripted: true}, []string{`data-page="home"`, script}, nil},
+		{"the title is escaped", Layout{Title: "<script>x</script>"}, nil, []string{"<script>x"}},
+	} {
 		var out strings.Builder
-		err := tpl.ExecuteTemplate(&out, "layout", Layout{Title: "Chats", Page: "home", Scripted: scripted})
-		if err != nil {
+		if err := tpl.ExecuteTemplate(&out, "layout", c.l); err != nil {
 			t.Fatal(err)
 		}
-		has := strings.Contains(out.String(), `src="/app/main.js"`)
-		if has != scripted {
-			t.Errorf("scripted=%v: script tag present=%v\n%s", scripted, has, out.String())
+		for _, w := range c.want {
+			if !strings.Contains(out.String(), w) {
+				t.Errorf("%s: no %s in\n%s", c.name, w, out.String())
+			}
 		}
-		if !strings.Contains(out.String(), `data-page="home"`) {
-			t.Errorf("no data-page in\n%s", out.String())
+		for _, n := range c.not {
+			if strings.Contains(out.String(), n) {
+				t.Errorf("%s: %s in\n%s", c.name, n, out.String())
+			}
 		}
-	}
-}
-
-func TestLayoutEscapesTheTitle(t *testing.T) {
-	tpl, err := Templates(template.FuncMap{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out strings.Builder
-	if err := tpl.ExecuteTemplate(&out, "layout", Layout{Title: "<script>x</script>"}); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(out.String(), "<script>x") {
-		t.Errorf("title not escaped:\n%s", out.String())
 	}
 }
 
