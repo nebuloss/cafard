@@ -93,6 +93,9 @@ type markOut struct {
 
 const maxLabel = 1000
 
+// logKinds are what the log tools return: never messages.
+var logKinds = []store.Kind{store.KindLine, store.KindMarker}
+
 func registerLogTools(s *Server) {
 	AddTool(s, auth.ScopeRead, mcp.Tool{Name: "whoami", Description: "Who you are to cafard: principal name, kind and scopes."}, s.whoami)
 	AddTool(s, auth.ScopeRead, mcp.Tool{Name: "list_streams", Description: "The log sources: id, status (connected, idle, down), rate, last activity, drops."}, s.listStreams)
@@ -160,6 +163,16 @@ func (s *Server) streamIDs(ctx context.Context, patterns []string) ([]string, er
 	return ids, nil
 }
 
+// selectIDs resolves channel= and streams= to existing log stream ids;
+// nil means all.
+func (s *Server) selectIDs(ctx context.Context, in selectIn) ([]string, error) {
+	patterns, err := s.resolve(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return s.streamIDs(ctx, patterns)
+}
+
 func compile(pattern, what string) (*regexp.Regexp, error) {
 	if pattern == "" {
 		return nil, nil
@@ -174,11 +187,7 @@ func compile(pattern, what string) (*regexp.Regexp, error) {
 func (s *Server) listStreams(ctx context.Context, _ *Call, in listStreamsIn) (string, listStreamsOut, error) {
 	var keep map[string]bool
 	if in.Channel != "" {
-		patterns, err := s.resolve(ctx, selectIn{Channel: in.Channel})
-		if err != nil {
-			return "", listStreamsOut{}, err
-		}
-		ids, err := s.streamIDs(ctx, patterns)
+		ids, err := s.selectIDs(ctx, selectIn{Channel: in.Channel})
 		if err != nil {
 			return "", listStreamsOut{}, err
 		}
@@ -267,11 +276,7 @@ func formatPage(entries []store.Entry, more bool, next int64) (string, Page) {
 }
 
 func (s *Server) read(ctx context.Context, _ *Call, in readIn) (string, Page, error) {
-	patterns, err := s.resolve(ctx, in.selectIn)
-	if err != nil {
-		return "", Page{}, err
-	}
-	ids, err := s.streamIDs(ctx, patterns)
+	ids, err := s.selectIDs(ctx, in.selectIn)
 	if err != nil {
 		return "", Page{}, err
 	}
@@ -279,7 +284,7 @@ func (s *Server) read(ctx context.Context, _ *Call, in readIn) (string, Page, er
 	if err != nil {
 		return "", Page{}, err
 	}
-	q := store.Query{Streams: ids, MinSeverity: in.MinSeverity, Pattern: re, Kinds: []store.Kind{store.KindLine, store.KindMarker}}
+	q := store.Query{Streams: ids, MinSeverity: in.MinSeverity, Pattern: re, Kinds: logKinds}
 	if in.UntilSeq != nil {
 		q.UntilSeq = *in.UntilSeq
 	}
@@ -309,11 +314,7 @@ func (s *Server) read(ctx context.Context, _ *Call, in readIn) (string, Page, er
 }
 
 func (s *Server) tail(ctx context.Context, _ *Call, in tailIn) (string, Page, error) {
-	patterns, err := s.resolve(ctx, in.selectIn)
-	if err != nil {
-		return "", Page{}, err
-	}
-	ids, err := s.streamIDs(ctx, patterns)
+	ids, err := s.selectIDs(ctx, in.selectIn)
 	if err != nil {
 		return "", Page{}, err
 	}
@@ -324,7 +325,7 @@ func (s *Server) tail(ctx context.Context, _ *Call, in tailIn) (string, Page, er
 		return "", Page{}, err
 	}
 	res, err := s.deps.Store.Read(ctx, store.Query{Streams: ids, Desc: true, Limit: clampLimit(in.Lines, 50, textclean.AgentDefaults.MaxLines),
-		Kinds: []store.Kind{store.KindLine, store.KindMarker}})
+		Kinds: logKinds})
 	if err != nil {
 		return "", Page{}, err
 	}
@@ -365,7 +366,7 @@ func (s *Server) waitFor(ctx context.Context, c *Call, in waitIn) (string, waitO
 		contextN = max(0, min(*in.ContextLines, 200))
 	}
 
-	w := &waiter{s: s, re: re, patterns: patterns, kinds: []store.Kind{store.KindLine, store.KindMarker}}
+	w := &waiter{s: s, re: re, patterns: patterns, kinds: logKinds}
 	if patterns != nil && len(patterns) == 0 {
 		return "No stream matches, so nothing can arrive.", waitOut{TimedOut: true}, nil
 	}

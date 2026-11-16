@@ -39,7 +39,7 @@ func (s *Server) search(ctx context.Context, c *Call, in searchIn) (string, Page
 	if err != nil {
 		return "", Page{}, err
 	}
-	now := s.now()
+	now := s.deps.Clock.Now()
 	from, err := ParseTime(in.From, now, "from")
 	if err != nil {
 		return "", Page{}, err
@@ -51,15 +51,11 @@ func (s *Server) search(ctx context.Context, c *Call, in searchIn) (string, Page
 	if !from.IsZero() && !to.IsZero() && to.Before(from) {
 		return "", Page{}, dto.Errorf(dto.CodeBadRequest, "to (%s) is before from (%s).", to.Format(time.RFC3339), from.Format(time.RFC3339))
 	}
-	patterns, err := s.resolve(ctx, selectIn{Channel: in.Channel, Streams: in.Streams})
+	ids, err := s.selectIDs(ctx, selectIn{Channel: in.Channel, Streams: in.Streams})
 	if err != nil {
 		return "", Page{}, err
 	}
-	ids, err := s.streamIDs(ctx, patterns)
-	if err != nil {
-		return "", Page{}, err
-	}
-	kinds := []store.Kind{store.KindLine, store.KindMarker}
+	kinds := logKinds
 	var keep func(store.Entry) bool
 	if in.Channel != "" && s.deps.Messaging != nil {
 		// The channel's own messages, each checked for the caller: a
@@ -74,7 +70,7 @@ func (s *Server) search(ctx context.Context, c *Call, in searchIn) (string, Page
 			ids = all
 		}
 		ids = append(slices.Clone(ids), chat)
-		kinds = append(kinds, store.KindMessage)
+		kinds = slices.Concat(logKinds, []store.Kind{store.KindMessage})
 		p := c.Principal
 		keep = func(e store.Entry) bool {
 			if !store.IsMessageStream(e.Stream) {
@@ -105,13 +101,6 @@ func (s *Server) search(ctx context.Context, c *Call, in searchIn) (string, Page
 		}
 	}
 	return text, page, nil
-}
-
-func (s *Server) now() time.Time {
-	if s.deps.Clock != nil {
-		return s.deps.Clock.Now()
-	}
-	return time.Now()
 }
 
 // channelName is a channel= argument as messaging names it.

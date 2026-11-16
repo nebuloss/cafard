@@ -34,11 +34,7 @@ type principalServer struct {
 
 func (s *Server) wrapResource(scope auth.Scope, h ResourceHandler) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		var p auth.Principal
-		ok := false
-		if req.Extra != nil && req.Extra.TokenInfo != nil {
-			p, ok = req.Extra.TokenInfo.Extra[principalKey].(auth.Principal)
-		}
+		p, ok := principalOf(req.Extra)
 		if !ok || !p.Has(scope) {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
