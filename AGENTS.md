@@ -96,6 +96,20 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   "Done when" test pushes 100 000 lines through a real server.
 - **`scripts/check-sinks.sh` greps comments and strings too.** Do not name
   the forbidden sinks anywhere in `src/`, tests included.
+- **Network ingest (track B):** `config.Default()` binds syslog on
+  `:5514` and netconsole on `:6666`. Tests that start a server use
+  `testConfig()` (`cmd/cafard/ingest_network_test.go`), which turns them
+  off; tests that need them bind loopback ports of their own. Listeners
+  start after the HTTP server reports ready, so wait for the port
+  (`waitBound`) before sending.
+- **OTLP JSON ids are hex, protojson wants base64.** `traceId`/`spanId`
+  are lifted out of the JSON before `protojson` sees it. Never import
+  `go.opentelemetry.io/proto/otlp/collector/...`, even in a test: it puts
+  gRPC in `go.mod`. The response types are encoded by hand and checked
+  against `dynamicpb` copies of the reference messages.
+- **Stream names from the network are untrusted.** Pass hostnames and
+  service names through `ingestutil.StreamName`, or the writer refuses
+  the entry (glob characters, spaces, 200 bytes).
 
 ## Rules that are easy to break
 
