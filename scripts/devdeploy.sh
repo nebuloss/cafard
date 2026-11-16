@@ -46,16 +46,9 @@ cd "$repo_root"
 version="dev-$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo '-dirty')"
 
 say "syncing to $BUILD_HOST:$REMOTE_DIR"
-# Same excludes as remote.sh: the database and cafard.yaml never leave the
-# machine they live on. node_modules stays on dev-build, installed there.
-rsync -az --delete \
-	--exclude '/.git/' \
-	--exclude '/node_modules' \
-	--exclude '/data/' \
-	--exclude '*.db' \
-	--exclude '*.db-wal' \
-	--exclude '*.db-shm' \
-	--exclude '/cafard.yaml' \
+# scripts/rsync-excludes, shared with remote.sh: the database and
+# cafard.yaml never leave the machine they live on.
+rsync -az --delete --exclude-from=scripts/rsync-excludes \
 	./ "$BUILD_HOST:$REMOTE_DIR/"
 
 say "building $version for linux/$GOARCH (frontend included)"
