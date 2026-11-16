@@ -3,6 +3,45 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: track E2 serial control
+
+- **`serial_write` and `serial_control` are added in `serial.Register`**
+  (scope `serial_write`), only when at least one port is configured: with
+  no port they could only fail. No shared file changed for them.
+- **The claim gate asserts `deps.Messaging` to `serial.ClaimChecker`**
+  (`Holds`), and to `mcpserver.ClaimSource` (`ActiveClaims`) to name the
+  holder; serial never imports messaging and `internal/deps` is unchanged.
+  Without messaging every write is refused.
+- **Gate order and codes:** unknown stream `not_found` (lists the
+  ports), not `writable` `forbidden` (names the config key), claim held by
+  someone else `conflict` (names the holder and the expiry), no claim at
+  all `forbidden` ("claim it first"). The scope is checked by `AddTool`
+  and hides the tools. All three gates apply to every call, even an empty
+  `serial_control` that only reads the line state, as PLAN 7 says "same
+  three gates". Then: port down `busy` with `retry_after_s` 5; raw `tcp`
+  or plain Telnet control `bad_request` with E1's reason; invalid
+  arguments `bad_request`; a port that fails mid-way `busy`.
+- **The marker is written before the bytes or the control action,**
+  with `Writer.Commit`, so the board's echo and answer always come after
+  it in seq order; the tools return its seq (`marker_seq`) as a cursor. If
+  the action then fails, a second marker says so (`serial: write by
+  agent-a failed: ...`, severity 4). Refusals (gates, unsupported
+  transport, down port, bad arguments) are checked before the marker and
+  leave none. Markers carry `sender` = the principal and
+  `meta.serial` = `write` | `control` (`write_failed`, `control_failed`).
+- **Marker texts:** a write is `<principal>> <data>` with the newline
+  included, `\r \n \t \\` and other control bytes, invalid UTF-8,
+  C1 and bidi controls escaped, cut after about 300 bytes with
+  `... (N bytes in all)`. A control action is `serial: <principal>
+  set 57600 baud, set DTR off, set RTS on, sent a 250 ms break, pulsed
+  DTR for 100 ms` (the steps asked, in the order they run).
+- **One `serial_write` sends at most 16 KiB**, newline included
+  (`too_large` beyond). `newline` is a pointer so `""` (no newline) and
+  absent (`\r`) differ. `pulse.line` is case-insensitive.
+- **No test hook in the serial package:** the end-to-end test configures
+  real ports against loopback TCP fakes (an RFC 2217 peer and raw TCP
+  peers), so the server's own `Open` runs.
+
 ## 2026-11-16: merging tracks A, B, C, E1, F
 
 - **Other tracks add DTO fixtures from their own test file** by appending
