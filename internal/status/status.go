@@ -226,6 +226,17 @@ func (m *Memory) notify(s *source, now time.Time) {
 	}
 }
 
+// Get returns one source's status.
+func (m *Memory) Get(stream string) (dto.Stream, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sources[stream]
+	if !ok {
+		return dto.Stream{}, false
+	}
+	return m.view(s, m.clock.Now()), true
+}
+
 // Snapshot lists every source by id. last_seq, labels, last_line and claim
 // are left for the caller, which has the store.
 func (m *Memory) Snapshot() []dto.Stream {

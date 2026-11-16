@@ -14,24 +14,24 @@ func TestStatesFollowActivityAndConnection(t *testing.T) {
 	c := clock.NewFake(t0)
 	m := New(c)
 	m.Declare(Source{Stream: "serial:dut1", Transport: "local"})
-	if s, _ := get(m, "serial:dut1"); s.Status != dto.StreamIdle || s.Transport != "local" {
+	if s, _ := m.Get("serial:dut1"); s.Status != dto.StreamIdle || s.Transport != "local" {
 		t.Errorf("declared = %+v", s)
 	}
 	m.Seen("serial:dut1", t0)
-	if s, _ := get(m, "serial:dut1"); s.Status != dto.StreamConnected || s.LastActivity == nil {
+	if s, _ := m.Get("serial:dut1"); s.Status != dto.StreamConnected || s.LastActivity == nil {
 		t.Errorf("after a line = %+v", s)
 	}
 	c.Advance(IdleAfter + time.Second)
-	if s, _ := get(m, "serial:dut1"); s.Status != dto.StreamIdle {
+	if s, _ := m.Get("serial:dut1"); s.Status != dto.StreamIdle {
 		t.Errorf("after silence = %s", s.Status)
 	}
 	m.SetConnected("serial:dut1", false, "unplugged")
-	if s, _ := get(m, "serial:dut1"); s.Status != dto.StreamDown {
+	if s, _ := m.Get("serial:dut1"); s.Status != dto.StreamDown {
 		t.Errorf("after unplug = %s", s.Status)
 	}
 	m.SetConnected("serial:dut1", true, "")
 	m.Seen("serial:dut1", c.Now())
-	if s, _ := get(m, "serial:dut1"); s.Status != dto.StreamConnected {
+	if s, _ := m.Get("serial:dut1"); s.Status != dto.StreamConnected {
 		t.Errorf("after replug = %s", s.Status)
 	}
 }
@@ -46,11 +46,11 @@ func TestRateIsLinesPerMinuteOverFiveMinutes(t *testing.T) {
 	for range 50 {
 		m.Seen("push:a", c.Now())
 	}
-	if s, _ := get(m, "push:a"); s.RatePerMin != 20 {
+	if s, _ := m.Get("push:a"); s.RatePerMin != 20 {
 		t.Errorf("rate = %v, want 20", s.RatePerMin)
 	}
 	c.Advance(5 * time.Minute)
-	if s, _ := get(m, "push:a"); s.RatePerMin != 0 {
+	if s, _ := m.Get("push:a"); s.RatePerMin != 0 {
 		t.Errorf("rate after the window = %v", s.RatePerMin)
 	}
 }
@@ -98,13 +98,4 @@ func TestWatchIsThrottledPerStream(t *testing.T) {
 	default:
 		t.Fatal("going idle was not notified")
 	}
-}
-
-func get(m *Memory, id string) (dto.Stream, bool) {
-	for _, s := range m.Snapshot() {
-		if s.ID == id {
-			return s, true
-		}
-	}
-	return dto.Stream{}, false
 }
