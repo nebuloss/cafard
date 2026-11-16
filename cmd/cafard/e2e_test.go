@@ -37,11 +37,14 @@ type server struct {
 
 var tokenLine = regexp.MustCompile(`(?m)^\s+(cfd_[A-Za-z0-9_-]+)$`)
 
-func startServer(t *testing.T) *server {
+func startServer(t *testing.T, opts ...func(*config.Config)) *server {
 	t.Helper()
-	cfg := config.Default()
+	cfg := testConfig()
 	cfg.HTTPListen = "127.0.0.1:0"
 	cfg.DataDir = t.TempDir()
+	for _, o := range opts {
+		o(&cfg)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	addrs := make(chan net.Addr, 1)
 	done := make(chan error, 1)

@@ -3,6 +3,79 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: track B network ingest (M4)
+
+- **Three config sections and three `Register` lines** (`syslog`,
+  `netconsole`, `otlp`), one per package of CONTRACTS.md 1.1, instead of
+  the one-field / one-line rule of 7.3, which assumes one package per
+  track. Each type has its own `SetDefaults` and `Validate`.
+- **Shared helpers in `internal/ingest/ingestutil`** (stream names from
+  untrusted text, capped meta, allowlists, declare-once) and fakes in
+  `internal/ingest/ingestutil/ingesttest`. Both are track B packages.
+- **Dependencies:** `go.opentelemetry.io/proto/otlp` v1.11.1 (only
+  `logs/v1`, `common/v1`, `resource/v1` are imported) and
+  `google.golang.org/protobuf` v1.36.12 (`proto`, `protojson`,
+  `protowire`; tests also use `dynamicpb`, `protodesc`, `descriptorpb`).
+  **`go mod graph` does list `google.golang.org/grpc` and grpc-gateway,
+  as requirements of the otlp module's own go.mod** (the module also holds
+  the collector packages). Nothing pulls them into the build: they are not
+  in our `go.mod` or `go.sum`, and `go list -deps -test ./...` has no
+  grpc, genproto or collector package. Every otlp version has those
+  requirements, so this is the best available.
+- **Reference types for the response test** are `dynamicpb` messages
+  built from descriptors copied from `logs_service.proto` and
+  `google/rpc/status.proto` (without `details`): the generated collector
+  package cannot be imported, even in a test, without putting gRPC in
+  `go.mod`. Protobuf bytes are compared exactly; JSON is compared as
+  values, because `protojson` output is deliberately unstable.
+- **OTLP errors are `google.rpc.Status` bodies** in the request's
+  encoding (as the OTLP/HTTP spec says), with gRPC codes 3, 8 or 14; 415
+  for an unknown Content-Type or Content-Encoding (JSON body then). The
+  401/403 from `auth.Require` keep the cafard error format.
+- **OTLP queues with `Submit` instead of `CommitBatch`:** a lossy submit
+  first, then, if the queue is full, a blocking one bounded by 2 s per
+  entry. If nothing could be queued the answer is 503 with
+  `Retry-After: 5`; if the wait ran out part-way, the request succeeds
+  with `partial_success` counting the records not stored (a 503 then
+  would make the client resend records already stored). Records the
+  writer refuses also count as rejected. The response comes before the
+  commit, which the writer does within 50 ms and flushes on shutdown.
+- **OTLP JSON bodies may hold several requests in a row** (Vector's
+  legacy `json` codec sends newline-delimited objects); their resources
+  are concatenated. Invalid or all-zero hex ids are dropped, not refused.
+- **OTLP bodies become one entry per line**, as everywhere else; every
+  line of a record shares its severity, `src_ts` and meta. A record with
+  no body uses `event_name` as text.
+- **Meta is capped at 4 KiB by dropping, not cutting:** scalar fields
+  first, then object fields (`sd`, `attributes`, `resource`) keep the keys
+  that fit, sorted, and `"truncated": true` marks the loss.
+- **Syslog TCP streams are down when their last connection closes**
+  (counted per stream across connections). `logger -T` opens one
+  connection per run, so its stream shows down between runs. UDP streams
+  are never marked connected or down.
+- **RFC 3164 timestamps have no zone or year:** read in the server's
+  local zone, current year, or last year when that lands more than two
+  days in the future. RFC 3339 stamps (rsyslog high precision) and a
+  trailing year or fraction are also read. A hostname is only taken from
+  a 3164 message that has a timestamp.
+- **RFC 6587:** octet counting is chosen when the first non-blank byte
+  of a connection is 1-9; a frame that stops making sense switches the
+  connection to newlines for good. Frames over 256 KiB keep their first
+  256 KiB. Newline framing goes through `textclean.Splitter` (500 ms
+  partial-line flush). At most 512 TCP connections at once.
+- **Netconsole:** plain datagrams go through one `Splitter` per source IP,
+  so `pr_cont` pieces join into one line and a prompt is flushed after
+  500 ms. Extended messages split by the kernel (`ncfrag=`) are
+  reassembled, or stored as received after 2 s. The boot-relative
+  timestamp goes to `meta.ts_usec`, not `src_ts`, which has no absolute
+  time to give. Severity is the low 3 bits of the level field.
+- **`syslog.allow` applies to syslog only,** as in PLAN.md 11; refused UDP
+  datagrams are ignored and refused TCP peers disconnected at once.
+- **Shared test file edits:** `startServer` in `cmd/cafard/e2e_test.go`
+  takes optional config tweaks and starts from `testConfig()`, and
+  `TestServeAnswersHealthzAndShutsDownGracefully` uses it too, so no test
+  binds the default ports 5514 and 6666 on a shared machine.
+
 ## 2026-11-16: track F deployment
 
 - **The installer, not the service, does the first start.** `cafard serve`

@@ -64,23 +64,26 @@ mcp:
   # Requests without an Origin header (terminal agents) are not affected.
   allowed_origins: []
 
-# --- syslog: available once syslog ingest lands (track B) --------------------
+# --- syslog -----------------------------------------------------------------
 # Anyone who can reach these ports can write lines; restrict with allow.
-# Port 514 needs CAP_NET_BIND_SERVICE (see the systemd unit).
-# syslog:
-#   udp: ":5514"
-#   tcp: ":5514"
-#   allow: ["10.0.50.0/24"]
+# Port 514 needs CAP_NET_BIND_SERVICE (see the systemd unit). An empty
+# address turns a listener off.
+syslog:
+  udp: ":5514"
+  tcp: ":5514"
+  # allow: ["10.0.50.0/24"]
 
-# --- netconsole: available once netconsole ingest lands (track B) ------------
-# netconsole:
-#   udp: ":6666"
-#   names: { "10.0.50.42": dut1 }
+# --- netconsole -------------------------------------------------------------
+# Kernel command line: netconsole=@/,6666@<server-ip>/
+netconsole:
+  udp: ":6666"
+  # names: { "10.0.50.42": dut1 }
 
-# --- otlp: available once OTLP/HTTP logs ingest lands (track B) --------------
-# otlp:
-#   enabled: true
-#   max_body_mib: 8
+# --- otlp -------------------------------------------------------------------
+# POST /v1/logs, OTLP/HTTP protobuf or JSON, with an ingest token.
+otlp:
+  enabled: true
+  max_body_mib: 8
 
 # --- messaging: available once messaging lands (track A) ---------------------
 # messaging:

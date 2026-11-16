@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/nebuloss/cafard/internal/config"
 )
 
 func runArgs(t *testing.T, vars map[string]string, args ...string) (string, string, error) {
@@ -77,7 +75,7 @@ func TestConfigFailsOnAnInvalidConfiguration(t *testing.T) {
 }
 
 func TestServeAnswersHealthzAndShutsDownGracefully(t *testing.T) {
-	cfg := config.Default()
+	cfg := testConfig()
 	cfg.HTTPListen = "127.0.0.1:0"
 	cfg.DataDir = t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())

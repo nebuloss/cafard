@@ -14,6 +14,9 @@ package config
 import (
 	"fmt"
 
+	"github.com/nebuloss/cafard/internal/ingest/netconsole"
+	"github.com/nebuloss/cafard/internal/ingest/otlp"
+	"github.com/nebuloss/cafard/internal/ingest/syslog"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/store"
 	"net"
@@ -39,6 +42,10 @@ type Config struct {
 
 	Retention store.Retention  `yaml:"retention"`
 	MCP       mcpserver.Config `yaml:"mcp"`
+
+	Syslog     syslog.Config     `yaml:"syslog"`
+	Netconsole netconsole.Config `yaml:"netconsole"`
+	OTLP       otlp.Config       `yaml:"otlp"`
 }
 
 // Validator is implemented by feature sub-structs that check themselves.
