@@ -1,9 +1,5 @@
 // Package pages serves the server-rendered pages and their form posts.
 // Every page works without the bundle; the bundle only enhances it.
-//
-// Track C owns the shell and the pages of this file set; track D adds its
-// pages (home, chat, drop) in files of its own, through AddTwin and the
-// same render and auth helpers.
 package pages
 
 import (
@@ -36,7 +32,7 @@ type Site struct {
 	pages map[string]*template.Template // by file, "pages/streams.html"
 	twins map[string]twin               // by id, "tpl-line"
 
-	chats *chatSite // track D's pages; nil without messaging
+	chats *chatSite // the chat pages; nil without messaging
 }
 
 // twin is a partial rendered with zero values inside <template id=...>.
@@ -82,15 +78,6 @@ func New(d deps.Deps, sessions *auth.Sessions, pairings *auth.Pairings, kinds *v
 // AddTwin declares a <template> twin: id, the partial that renders it, and
 // the zero value it is rendered with.
 func (s *Site) AddTwin(id, tmpl string, zero any) { s.twins[id] = twin{tmpl: tmpl, zero: zero} }
-
-// Twins lists the declared twin ids, for the template test.
-func (s *Site) Twins() map[string]string {
-	out := map[string]string{}
-	for id, t := range s.twins {
-		out[id] = t.tmpl
-	}
-	return out
-}
 
 // Page is the data every page template gets: the shell, and the page's own
 // data under .Data.
@@ -240,8 +227,7 @@ func SafeNext(next string) string {
 	return next
 }
 
-// Mount registers track C's pages. Track D's pages mount themselves next
-// to these; home is in home.go, a placeholder D replaces.
+// Mount registers the pages.
 func (s *Site) Mount(mux *http.ServeMux) {
 	s.mountAccount(mux)
 	s.mountStreams(mux)

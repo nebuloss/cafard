@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
@@ -74,19 +73,14 @@ func TokenSnippets(base, principal, secret string, scopes auth.ScopeSet) []dto.S
 				Text: fmt.Sprintf("# export CAFARD_TOKEN=%s in the shell that runs codex\n[mcp_servers.cafard]\nurl = %q\nbearer_token_env_var = \"CAFARD_TOKEN\"", secret, mcpURL)},
 			dto.Snippet{Label: "Other MCP clients (JSON)", Language: dto.LangJSON,
 				Text: fmt.Sprintf("{\n  \"mcpServers\": {\n    \"cafard\": {\n      \"type\": \"http\",\n      \"url\": %q,\n      \"headers\": { \"Authorization\": \"Bearer %s\" }\n    }\n  }\n}", mcpURL, secret)},
-			// Track G: for clients that only start local commands.
+			// For clients that only start local commands.
 			dto.Snippet{Label: "Clients that speak stdio only (cafard mcp)", Language: dto.LangJSON,
 				Text: fmt.Sprintf("{\n  \"mcpServers\": {\n    \"cafard\": {\n      \"command\": \"cafard\",\n      \"args\": [\"mcp\", \"--server\", %q],\n      \"env\": { \"CAFARD_TOKEN\": \"%s\" }\n    }\n  }\n}", base, secret)},
 		)
 	}
 	if scopes.Has(auth.ScopeIngest) {
-		out = append(out,
-			dto.Snippet{Label: "OpenTelemetry exporter", Language: dto.LangEnv, Text: otelEnv(base, secret)},
-			dto.Snippet{Label: "cafard push (Linux)", Language: dto.LangShell,
-				Text: fmt.Sprintf("journalctl -f | cafard push --server %s --token %s --stream %s", base, secret, principal)},
-			dto.Snippet{Label: "cafard push (Windows PowerShell)", Language: dto.LangShell,
-				Text: fmt.Sprintf("Get-Content C:\\logs\\app.log -Wait | .\\cafard.exe push --server %s --token %s --stream %s", base, secret, principal)},
-		)
+		out = append(out, dto.Snippet{Label: "OpenTelemetry exporter", Language: dto.LangEnv, Text: otelEnv(base, secret)})
+		out = append(out, pushSnippets(base, secret, principal)...)
 	}
 	out = append(out, dto.Snippet{Label: "Environment", Language: dto.LangEnv,
 		Text: fmt.Sprintf("CAFARD_SERVER=%s\nCAFARD_TOKEN=%s", base, secret)})
@@ -113,13 +107,23 @@ func Host(base string) string {
 func SourceCommands(base string) []dto.Snippet {
 	host := Host(base)
 	const tok = "cfd_YOUR_TOKEN"
-	return []dto.Snippet{
+	out := []dto.Snippet{
 		{Label: "Syslog", Language: dto.LangShell, Text: fmt.Sprintf("logger -n %s -P 5514 -T hello", host)},
 		{Label: "Netconsole (kernel command line)", Language: dto.LangShell, Text: fmt.Sprintf("netconsole=@/,6666@%s/", host)},
 		{Label: "OpenTelemetry exporter", Language: dto.LangEnv, Text: otelEnv(base, tok)},
-		{Label: "cafard push (Linux)", Language: dto.LangShell, Text: fmt.Sprintf("journalctl -f | cafard push --server %s --token %s --stream laptop", base, tok)},
-		{Label: "cafard push (Windows PowerShell)", Language: dto.LangShell, Text: fmt.Sprintf("Get-Content C:\\logs\\app.log -Wait | .\\cafard.exe push --server %s --token %s --stream laptop", base, tok)},
-		{Label: "curl", Language: dto.LangShell, Text: fmt.Sprintf("echo hello | curl -H \"Authorization: Bearer %s\" --data-binary @- \"%s/api/log?stream=laptop\"", tok, base)},
+	}
+	out = append(out, pushSnippets(base, tok, "laptop")...)
+	return append(out, dto.Snippet{Label: "curl", Language: dto.LangShell,
+		Text: fmt.Sprintf("echo hello | curl -H \"Authorization: Bearer %s\" --data-binary @- \"%s/api/log?stream=laptop\"", tok, base)})
+}
+
+// pushSnippets are the cafard push commands for Linux and Windows.
+func pushSnippets(base, token, stream string) []dto.Snippet {
+	return []dto.Snippet{
+		{Label: "cafard push (Linux)", Language: dto.LangShell,
+			Text: fmt.Sprintf("journalctl -f | cafard push --server %s --token %s --stream %s", base, token, stream)},
+		{Label: "cafard push (Windows PowerShell)", Language: dto.LangShell,
+			Text: fmt.Sprintf("Get-Content C:\\logs\\app.log -Wait | .\\cafard.exe push --server %s --token %s --stream %s", base, token, stream)},
 	}
 }
 
@@ -127,6 +131,3 @@ func SourceCommands(base string) []dto.Snippet {
 func MCPCommand(base string) string {
 	return fmt.Sprintf("claude mcp add --transport http cafard %s/mcp --header \"Authorization: Bearer cfd_YOUR_TOKEN\"", base)
 }
-
-// Join is strings.Join for templates that cannot call functions.
-func Join(s []string) string { return strings.Join(s, ", ") }

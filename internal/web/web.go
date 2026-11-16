@@ -1,5 +1,5 @@
 // Package web mounts the browser side of cafard: the pages, the JSON API
-// and the SSE feed (track C), with the sessions and pairings they share.
+// and the SSE feed, with the sessions and pairings they share.
 package web
 
 import (
@@ -17,8 +17,8 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// Register mounts pages, /api/* (but /api/log and the message routes of
-// track A) and /api/events. It has no background work of its own; expired
+// Register mounts pages, /api/* (but /api/log and the message routes,
+// which api.RegisterMessages mounts) and /api/events. It has no background work of its own; expired
 // sessions and pairings are removed by the janitor.
 func Register(mux *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(context.Context) error, error) {
 	sessions := auth.NewSessions(d.Store.DB(), d.Clock)
@@ -30,7 +30,7 @@ func Register(mux *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(contex
 		return nil, err
 	}
 	a := api.New(d, sessions, pairings, kinds)
-	// Track D: the chat pages and API need the messaging service itself.
+	// The chat pages and API need the messaging service itself.
 	if svc, ok := d.Messaging.(*messaging.Service); ok {
 		shares := view.NewShares(d.Clock)
 		svc.SetStagedLookup(shares.Lookup)

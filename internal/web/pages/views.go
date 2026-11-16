@@ -55,11 +55,24 @@ type LogItem struct {
 // same (src/render/format.ts), so server and live rows agree.
 func LogTime(t time.Time) string { return t.UTC().Format("15:04:05.000") }
 
+// iso is the datetime attribute of a <time>.
+func iso(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
+// dayOrTime is t in the layout today when t is today (UTC), the date
+// otherwise.
+func dayOrTime(t, now time.Time, today string) string {
+	u := t.UTC()
+	if u.Format("2006-01-02") == now.UTC().Format("2006-01-02") {
+		return u.Format(today)
+	}
+	return u.Format("Jan 2 15:04")
+}
+
 // Line is the view of a line entry.
 func Line(e store.Entry) LineView {
 	return LineView{
 		Seq: e.Seq, Sev: e.Severity, Tone: view.Tone(e.Stream),
-		ISO: e.TS.UTC().Format(time.RFC3339Nano), Time: LogTime(e.TS),
+		ISO: iso(e.TS), Time: LogTime(e.TS),
 		Stream: e.Stream, SevLetter: view.SeverityLetter(e.Severity), SevName: view.SeverityName(e.Severity),
 		Segments: view.ANSI(e.Text),
 	}
@@ -81,29 +94,15 @@ func MessageLine(e store.Entry, viewer string) LineView {
 	}
 	return LineView{
 		Kind: string(store.KindMessage), Seq: e.Seq, Sev: e.Severity, Tone: view.Tone(chat),
-		ISO: e.TS.UTC().Format(time.RFC3339Nano), Time: LogTime(e.TS),
-		Stream: ChatLabel(chat), SevLetter: "»", SevName: "message",
+		ISO: iso(e.TS), Time: LogTime(e.TS),
+		Stream: view.ChatLabel(chat), SevLetter: "»", SevName: "message",
 		Segments: []view.Segment{{Text: text}},
 	}
 }
 
 // Marker is the view of a marker entry.
 func Marker(e store.Entry) MarkerView {
-	return MarkerView{Seq: e.Seq, ISO: e.TS.UTC().Format(time.RFC3339Nano), Time: LogTime(e.TS), Text: e.Stream + ": " + view.StripText(e.Text)}
-}
-
-// LogItems converts entries.
-func LogItems(es []store.Entry) []LogItem {
-	out := make([]LogItem, 0, len(es))
-	for _, e := range es {
-		if e.Kind == store.KindMarker {
-			m := Marker(e)
-			out = append(out, LogItem{Marker: &m})
-		} else {
-			out = append(out, LogItem{Line: Line(e)})
-		}
-	}
-	return out
+	return MarkerView{Seq: e.Seq, ISO: iso(e.TS), Time: LogTime(e.TS), Text: e.Stream + ": " + view.StripText(e.Text)}
 }
 
 // Activity is a last-activity time: the time of day when it is today
@@ -112,11 +111,7 @@ func Activity(t *dto.Time, now time.Time) string {
 	if t == nil {
 		return "never"
 	}
-	u := t.UTC()
-	if u.Format("2006-01-02") == now.UTC().Format("2006-01-02") {
-		return u.Format("15:04:05")
-	}
-	return u.Format("Jan 2 15:04")
+	return dayOrTime(t.Time, now, "15:04:05")
 }
 
 func onOff(b *bool) string {

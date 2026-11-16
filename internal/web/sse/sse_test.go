@@ -1,13 +1,11 @@
 package sse_test
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -50,13 +48,8 @@ func (fakeMessaging) ChatOf(e store.Entry) string {
 	return ""
 }
 
-type event struct {
-	name, id, data string
-	comment        bool
-}
-
 type client struct {
-	events chan event
+	events <-chan webtest.Event
 	cancel func()
 }
 
@@ -73,39 +66,17 @@ func connect(t *testing.T, srv *httptest.Server, path, token string, header ...s
 		cancel()
 		t.Fatal(err)
 	}
-	c := &client{events: make(chan event, 1000), cancel: func() { cancel(); resp.Body.Close() }}
+	c := &client{cancel: func() { cancel(); resp.Body.Close() }}
 	t.Cleanup(c.cancel)
 	if resp.StatusCode != 200 {
 		return c, resp
 	}
-	go func() {
-		defer close(c.events)
-		sc := bufio.NewScanner(resp.Body)
-		var ev event
-		for sc.Scan() {
-			line := sc.Text()
-			switch {
-			case line == "":
-				if ev.name != "" || ev.comment {
-					c.events <- ev
-				}
-				ev = event{}
-			case strings.HasPrefix(line, ": "):
-				ev.comment, ev.data = true, line[2:]
-			case strings.HasPrefix(line, "event: "):
-				ev.name = line[7:]
-			case strings.HasPrefix(line, "id: "):
-				ev.id = line[4:]
-			case strings.HasPrefix(line, "data: "):
-				ev.data = line[6:]
-			}
-		}
-	}()
+	c.events = webtest.ReadEvents(resp.Body)
 	return c, resp
 }
 
 // next returns the next event that is not a heartbeat (unless want is "ping").
-func (c *client) next(t *testing.T, want string) event {
+func (c *client) next(t *testing.T, want string) webtest.Event {
 	t.Helper()
 	timeout := time.After(5 * time.Second)
 	for {
@@ -114,13 +85,13 @@ func (c *client) next(t *testing.T, want string) event {
 			if !ok {
 				t.Fatalf("stream closed waiting for %s", want)
 			}
-			if ev.comment && want != "ping" {
+			if ev.Comment && want != "ping" {
 				continue
 			}
-			if want == "ping" && !ev.comment {
+			if want == "ping" && !ev.Comment {
 				continue
 			}
-			if want != "" && want != "ping" && ev.name != want {
+			if want != "" && want != "ping" && ev.Name != want {
 				continue
 			}
 			return ev
@@ -140,8 +111,8 @@ func (c *client) none(t *testing.T, d time.Duration) {
 			if !ok {
 				return
 			}
-			if ev.name == "entry" || ev.name == "reset" {
-				t.Errorf("unexpected %s: %s", ev.name, ev.data)
+			if ev.Name == "entry" || ev.Name == "reset" {
+				t.Errorf("unexpected %s: %s", ev.Name, ev.Data)
 			}
 		case <-deadline:
 			return
@@ -164,10 +135,10 @@ func newServer(t *testing.T, o webtest.Options, tune func(*sse.Handler)) (*webte
 	return e, srv
 }
 
-func entryOf(t *testing.T, ev event) dto.Entry {
+func entryOf(t *testing.T, ev webtest.Event) dto.Entry {
 	t.Helper()
 	var e dto.Entry
-	if err := json.Unmarshal([]byte(ev.data), &e); err != nil {
+	if err := json.Unmarshal([]byte(ev.Data), &e); err != nil {
 		t.Fatal(err)
 	}
 	return e
@@ -181,18 +152,18 @@ func TestCountsFirstThenStreamStatus(t *testing.T) {
 		t.Errorf("content type %q", ct)
 	}
 	first := c.next(t, "")
-	if first.name != "counts" {
-		t.Fatalf("first event %q", first.name)
+	if first.Name != "counts" {
+		t.Fatalf("first event %q", first.Name)
 	}
 	e.Status.SetConnected("serial:dut1", false, "unplugged")
 	ev := c.next(t, "stream_status")
 	var st dto.Stream
-	_ = json.Unmarshal([]byte(ev.data), &st)
+	_ = json.Unmarshal([]byte(ev.Data), &st)
 	if st.ID != "serial:dut1" || st.Status != dto.StreamDown {
 		t.Errorf("stream_status %+v", st)
 	}
 	var counts dto.Counts
-	_ = json.Unmarshal([]byte(c.next(t, "counts").data), &counts)
+	_ = json.Unmarshal([]byte(c.next(t, "counts").Data), &counts)
 	if counts.SourcesDown != 1 {
 		t.Errorf("counts after a source went down: %+v", counts)
 	}
@@ -210,12 +181,10 @@ func TestLiveEntriesFollowTheFilter(t *testing.T) {
 	seq := e.Commit(store.Entry{Stream: "serial:dut1", Kind: store.KindLine, Severity: 3, Text: "\x1b[31merror\x1b[0m"})
 	ev := c.next(t, "entry")
 	got := entryOf(t, ev)
-	if ev.id != itoa(seq) || got.Seq != seq || got.Text != "\x1b[31merror\x1b[0m" || got.Severity != 3 {
-		t.Errorf("entry id=%s %+v", ev.id, got)
+	if ev.ID != webtest.Itoa(seq) || got.Seq != seq || got.Text != "\x1b[31merror\x1b[0m" || got.Severity != 3 {
+		t.Errorf("entry id=%s %+v", ev.ID, got)
 	}
 }
-
-func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
 func TestReplayFromLastEventID(t *testing.T) {
 	e, srv := newServer(t, webtest.Options{}, nil)
@@ -223,7 +192,7 @@ func TestReplayFromLastEventID(t *testing.T) {
 	first := e.Commit(webtest.Line("serial:dut1", "one"))
 	e.Commit(webtest.Line("serial:dut1", "two"), webtest.Line("serial:dut1", "three"))
 
-	c, _ := connect(t, srv, "/api/events", tok, "Last-Event-ID", itoa(first))
+	c, _ := connect(t, srv, "/api/events", tok, "Last-Event-ID", webtest.Itoa(first))
 	c.next(t, "counts")
 	if got := entryOf(t, c.next(t, "entry")); got.Text != "two" {
 		t.Errorf("replay starts at %q", got.Text)
@@ -238,7 +207,7 @@ func TestReplayFromLastEventID(t *testing.T) {
 	c.none(t, 50*time.Millisecond)
 
 	// since_seq wins over Last-Event-ID and is inclusive.
-	c2, _ := connect(t, srv, "/api/events?since_seq="+itoa(first), tok, "Last-Event-ID", "999")
+	c2, _ := connect(t, srv, "/api/events?since_seq="+webtest.Itoa(first), tok, "Last-Event-ID", "999")
 	if got := entryOf(t, c2.next(t, "entry")); got.Text != "one" {
 		t.Errorf("since_seq replay starts at %q", got.Text)
 	}
@@ -251,12 +220,12 @@ func TestATooLongReplayIsAReset(t *testing.T) {
 		e.Commit(webtest.Line("serial:dut1", "x"))
 	}
 	c, _ := connect(t, srv, "/api/events?since_seq=1", tok)
-	if ev := c.next(t, ""); ev.name != "counts" {
-		t.Fatalf("first %q", ev.name)
+	if ev := c.next(t, ""); ev.Name != "counts" {
+		t.Fatalf("first %q", ev.Name)
 	}
 	ev := c.next(t, "")
-	if ev.name != "reset" {
-		t.Fatalf("got %q, want reset", ev.name)
+	if ev.Name != "reset" {
+		t.Fatalf("got %q, want reset", ev.Name)
 	}
 }
 
@@ -278,8 +247,8 @@ func TestHeartbeat(t *testing.T) {
 	e, srv := newServer(t, webtest.Options{}, func(h *sse.Handler) { h.Heartbeat = 20 * time.Millisecond })
 	tok := e.Principal("alice", auth.KindHuman, auth.ScopeRead)
 	c, _ := connect(t, srv, "/api/events?scope=status", tok)
-	if ev := c.next(t, "ping"); ev.data != "ping" {
-		t.Errorf("heartbeat %q", ev.data)
+	if ev := c.next(t, "ping"); ev.Data != "ping" {
+		t.Errorf("heartbeat %q", ev.Data)
 	}
 }
 

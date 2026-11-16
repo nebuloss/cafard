@@ -17,7 +17,7 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// Track D: a conversation, /c/{name} and /dm/{peer} (PLAN 9.6.3). The
+// A conversation, /c/{name} and /dm/{peer} (PLAN 9.6.3). The
 // server renders the latest 50 rows, the composer, and for a bound
 // channel the logs of its streams; the bundle follows from there.
 
@@ -175,7 +175,7 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	ctx := r.Context()
 	svc := s.chats.svc
 	q := r.URL.Query()
-	base := ChatHref(chat.ID)
+	base := view.ChatHref(chat.ID)
 	f := q.Get("f")
 	if !messaging.ValidFilter(f) || f == messaging.FilterAll {
 		f = ""
@@ -326,17 +326,7 @@ func (s *Site) logsPane(ctx context.Context, r *http.Request, ch *messaging.Chan
 	q := r.URL.Query()
 	pane := &LogsPaneView{Action: base, Re: q.Get("re"), Streams: ch.Patterns}
 	f, apiErr := view.ParseLogFilter(url.Values{"channel": {ch.Name}, "sev": {q.Get("sev")}, "re": {q.Get("re")}})
-	sev := q.Get("sev")
-	if f.MinSev != nil {
-		sev = strconv.Itoa(*f.MinSev)
-	}
-	if sev == "" {
-		sev = "7"
-	}
-	for _, o := range sevLabels {
-		o.Selected = o.Value == sev
-		pane.Severities = append(pane.Severities, o)
-	}
+	pane.Severities, _ = sevOptions(q.Get("sev"), f)
 	if apiErr != nil {
 		pane.Error = apiErr.Message
 		return pane
@@ -361,7 +351,7 @@ func (s *Site) logsPane(ctx context.Context, r *http.Request, ch *messaging.Chan
 		pane.Error = "The lines could not be read."
 		return pane
 	}
-	pane.Items, pane.NextSeq = LogItems(pg.Entries), pg.NextSeq
+	pane.Items, pane.NextSeq = LiveItems(pg.Entries, ""), pg.NextSeq
 	pane.Showing = "the last " + strconv.Itoa(limit) + " lines"
 	return pane
 }

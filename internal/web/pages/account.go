@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/nebuloss/cafard/internal/auth"
-	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
@@ -108,12 +107,7 @@ func (s *Site) redeem(w http.ResponseWriter, r *http.Request) {
 // theme stores the choice for this browser. A year, so a phone does not
 // go light again a week later; the value is one of three words.
 func (s *Site) theme(w http.ResponseWriter, r *http.Request, _ auth.Principal) {
-	choice := dto.Theme(r.PostFormValue("theme"))
-	switch choice {
-	case dto.ThemeLight, dto.ThemeDark, dto.ThemeSystem:
-	default:
-		choice = dto.ThemeSystem
-	}
+	choice := view.ParseTheme(r.PostFormValue("theme"))
 	http.SetCookie(w, &http.Cookie{
 		Name: view.ThemeCookie, Value: string(choice), Path: "/",
 		Expires: s.d.Clock.Now().Add(365 * 24 * time.Hour), SameSite: http.SameSiteLaxMode, Secure: s.d.Server.Secure,
@@ -127,20 +121,18 @@ func (s *Site) theme(w http.ResponseWriter, r *http.Request, _ auth.Principal) {
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
-// revokeSession signs a browser out: any session for an admin, one's own
-// sessions for everyone else.
+// revokeSession signs a browser out (view.RevokeSession says whose).
 func (s *Site) revokeSession(w http.ResponseWriter, r *http.Request, p auth.Principal) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	id, perr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	err := auth.ErrNotFound
+	if perr == nil {
+		err = view.RevokeSession(r.Context(), s.sessions, p, id)
+	}
+	if errors.Is(err, auth.ErrNotFound) {
+		s.Fail(w, r, &p, http.StatusNotFound, "Not found", "There is no such session.")
+		return
+	}
 	if err != nil {
-		s.Fail(w, r, &p, http.StatusNotFound, "Not found", "There is no such session.")
-		return
-	}
-	row, err := s.sessions.Get(r.Context(), id)
-	if err != nil || (!p.Has(auth.ScopeAdmin) && row.Principal != p.Name) {
-		s.Fail(w, r, &p, http.StatusNotFound, "Not found", "There is no such session.")
-		return
-	}
-	if err := s.sessions.Revoke(r.Context(), id); err != nil && !errors.Is(err, auth.ErrNotFound) {
 		s.Oops(w, r, &p, err)
 		return
 	}

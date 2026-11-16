@@ -13,7 +13,8 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-func (a *API) mountC(mux *http.ServeMux) {
+// Mount registers the account, stream, entry, token and session routes.
+func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("GET /api/me", a.Read(auth.ScopeRead, a.me))
 	mux.Handle("GET /api/principals", a.Read(auth.ScopeRead, a.principals))
 	mux.Handle("GET /api/streams", a.Read(auth.ScopeRead, a.streams))
@@ -296,12 +297,10 @@ func (a *API) revokeSession(w http.ResponseWriter, r *http.Request, p auth.Princ
 		dto.WriteError(w, notFound)
 		return
 	}
-	row, err := a.sessions.Get(r.Context(), id)
-	if err != nil || (!p.Has(auth.ScopeAdmin) && row.Principal != p.Name) {
+	if err := view.RevokeSession(r.Context(), a.sessions, p, id); errors.Is(err, auth.ErrNotFound) {
 		dto.WriteError(w, notFound)
 		return
-	}
-	if err := a.sessions.Revoke(r.Context(), id); err != nil && !errors.Is(err, auth.ErrNotFound) {
+	} else if err != nil {
 		a.Fail(w, r, err)
 		return
 	}
@@ -318,11 +317,7 @@ func (a *API) createPairing(w http.ResponseWriter, r *http.Request, p auth.Princ
 	if !Decode(w, r, &req) {
 		return
 	}
-	var raw []string
-	for _, s := range req.Scopes {
-		raw = append(raw, string(s))
-	}
-	scopes, err := auth.ParseScopes(strings.Join(raw, " "))
+	scopes, err := view.ParseScopes(req.Scopes)
 	if err != nil {
 		dto.WriteError(w, dto.Errorf(dto.CodeBadRequest, "%v.", err))
 		return

@@ -5,12 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
-	"mime/multipart"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
@@ -25,28 +20,13 @@ import (
 	"github.com/nebuloss/cafard/internal/web/webtest"
 )
 
-// Track D: the chat pages, their JSON API and the share target.
+// The chat pages, their JSON API and the share target.
 
 var (
 	agentCodex  = auth.Principal{Name: "codex-build", Kind: auth.KindAgent, Scopes: auth.NewScopeSet(auth.ScopeRead, auth.ScopeMessage), TokenID: 1}
 	agentClaude = auth.Principal{Name: "claude-laptop", Kind: auth.KindAgent, Scopes: auth.NewScopeSet(auth.ScopeRead, auth.ScopeMessage), TokenID: 2}
 	adminP      = auth.Principal{Name: "admin", Kind: auth.KindHuman, Scopes: auth.NewScopeSet(auth.ScopeRead, auth.ScopeMessage, auth.ScopeAdmin), SessionID: 1}
 )
-
-func testPNG(t testing.TB, w, h int) []byte {
-	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := range h {
-		for x := range w {
-			img.Set(x, y, color.RGBA{uint8(x * 4), uint8(y * 4), 120, 255})
-		}
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
-}
 
 // seeded is what seedChats made, for the checks.
 var seeded struct {
@@ -69,7 +49,7 @@ func seedChats(e *env) {
 	if _, err := e.svc.CreateChannel(ctx, adminP, dto.ChannelCreate{Name: "dut1", Title: "DUT 1 (x86 board)", Patterns: []string{"serial:dut1"}}); err != nil {
 		t.Fatal(err)
 	}
-	b, err := e.svc.Blobs().Put(ctx, bytes.NewReader(testPNG(t, 64, 48)), "")
+	b, err := e.svc.Blobs().Put(ctx, bytes.NewReader(webtest.PNG(t, 64, 48)), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +73,7 @@ func seedChats(e *env) {
 }
 
 // noBundleChats is what the chat pages must render with no script.
-func noBundleChats(_ *env) map[string][]string {
+func noBundleChats() map[string][]string {
 	q := fmt.Sprint(seeded.question)
 	return map[string][]string{
 		"/": {
@@ -195,44 +175,16 @@ func TestHomeAnswersAQuestionWithThePlainForm(t *testing.T) {
 	}
 }
 
-func multipartBody(t *testing.T, fields map[string]string, files ...[]byte) (string, *bytes.Buffer) {
-	t.Helper()
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	for k, v := range fields {
-		_ = mw.WriteField(k, v)
-	}
-	for i, f := range files {
-		w, _ := mw.CreateFormFile("files[]", fmt.Sprintf("IMG_%d.png", i))
-		_, _ = w.Write(f)
-	}
-	_ = mw.Close()
-	return mw.FormDataContentType(), &buf
-}
-
-func (e *env) post(path string, cookie *http.Cookie, ctype string, body *bytes.Buffer, header ...string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest("POST", path, body)
-	r.Header.Set("Content-Type", ctype)
-	r.AddCookie(cookie)
-	for i := 0; i+1 < len(header); i += 2 {
-		r.Header.Set(header[i], header[i+1])
-	}
-	rec := httptest.NewRecorder()
-	e.Mux.ServeHTTP(rec, r)
-	return rec
-}
-
 func TestTheShareTargetStagesFilesForTheDropForm(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	seed(e)
 	cookie := e.Admin()
-	ctype, body := multipartBody(t, map[string]string{"title": "scope", "text": "Screen after reset"}, testPNG(t, 40, 30))
-	rec := e.post("/share", cookie, ctype, body, "Sec-Fetch-Site", "cross-site")
+	shared := webtest.Multipart{Fields: map[string]string{"title": "scope", "text": "Screen after reset"}, Files: [][]byte{webtest.PNG(t, 40, 30)}}
+	rec := e.Do("POST", "/share", cookie, shared, "Sec-Fetch-Site", "cross-site")
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("cross-site share: %d", rec.Code)
 	}
-	ctype, body = multipartBody(t, map[string]string{"title": "scope", "text": "Screen after reset"}, testPNG(t, 40, 30))
-	rec = e.post("/share", cookie, ctype, body, "Sec-Fetch-Site", "same-origin")
+	rec = e.Do("POST", "/share", cookie, shared, "Sec-Fetch-Site", "same-origin")
 	loc := rec.Header().Get("Location")
 	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/drop?share=shr_") {
 		t.Fatalf("share: %d %s", rec.Code, loc)

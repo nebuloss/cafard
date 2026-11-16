@@ -18,6 +18,7 @@ import (
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/hub"
+	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/textclean"
@@ -59,7 +60,8 @@ func (h *Handler) selection(ctx context.Context, r *http.Request, p auth.Princip
 		if h.d.Messaging == nil {
 			return nil, nil
 		}
-		return &hub.Filter{Streams: []string{"chan:*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}, nil
+		f := messageFilter(&p)
+		return &f, nil
 	case "", "live":
 	default:
 		return nil, dto.Errorf(dto.CodeBadRequest, "scope is status, home or live, not %q.", q.Get("scope"))
@@ -99,9 +101,7 @@ func (h *Handler) chatSelection(ctx context.Context, chat string, p auth.Princip
 	if h.d.Messaging == nil {
 		return nil, dto.Errorf(dto.CodeNotFound, "There is no chat %q: there are no chats yet.", chat)
 	}
-	switch {
-	case strings.HasPrefix(chat, "chan:"):
-		name := strings.TrimPrefix(chat, "chan:")
+	if name, ok := strings.CutPrefix(chat, "chan:"); ok {
 		bound, err := h.d.Messaging.ResolveChannel(ctx, name)
 		if err != nil {
 			return nil, dto.Errorf(dto.CodeNotFound, "There is no chat %q.", chat)
@@ -113,22 +113,23 @@ func (h *Handler) chatSelection(ctx context.Context, chat string, p auth.Princip
 			}
 		}
 		return &hub.Filter{Streams: streams, MinSeverity: 7, Viewer: &p}, nil
-	case strings.HasPrefix(chat, "dm:"):
-		peer := strings.TrimPrefix(chat, "dm:")
+	}
+	if peer, ok := strings.CutPrefix(chat, "dm:"); ok {
 		if auth.ValidateName(peer) != nil {
 			return nil, dto.Errorf(dto.CodeNotFound, "There is no chat %q.", chat)
 		}
-		a, b := p.Name, peer
-		if b < a {
-			a, b = b, a
-		}
-		return &hub.Filter{Streams: []string{"dm:" + a + "~" + b}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}, nil
+		return &hub.Filter{Streams: []string{messaging.DMStream(p.Name, peer)}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}, nil
 	}
 	return nil, dto.Errorf(dto.CodeBadRequest, "chat is chan:<name> or dm:<peer>, not %q.", chat)
 }
 
+// messageFilter is every message p may see, in any chat.
+func messageFilter(p *auth.Principal) hub.Filter {
+	return hub.Filter{Streams: []string{"chan:*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: p}
+}
+
 // chatWatcher is what messaging offers for the seen, answered and chat
-// events (track D).
+// events.
 type chatWatcher interface {
 	WatchChats(buffer int) (<-chan messaging.ChatEvent, func())
 	ChatOfStream(ctx context.Context, viewer auth.Principal, stream string) (dto.Chat, error)
@@ -275,16 +276,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	watcher, _ := h.d.Messaging.(chatWatcher)
 	var chatEvents <-chan messaging.ChatEvent
-	if watcher != nil && h.d.Messaging != nil {
+	if watcher != nil {
 		ch, stop := watcher.WatchChats(256)
 		defer stop()
 		chatEvents = ch
 	}
 	sc := scopeOf(r, p)
 	var countsSub hub.Subscription
-	if _, ok := h.d.Messaging.(view.Counter); ok && h.d.Messaging != nil {
+	if _, ok := h.d.Messaging.(view.Counter); ok {
 		// Any message the viewer can see may change the badges.
-		countsSub = h.d.Hub.Subscribe(hub.Filter{Streams: []string{"chan:*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}, 256)
+		countsSub = h.d.Hub.Subscribe(messageFilter(&p), 256)
 		defer countsSub.Close()
 	}
 
@@ -427,22 +428,16 @@ func (h *Handler) replay(ctx context.Context, s *stream, f *hub.Filter, p auth.P
 	return last, false, nil
 }
 
-// claimSource is what messaging offers for the claim holder of a stream.
-type claimSource interface {
-	ActiveClaims(ctx context.Context) (map[string]dto.Claim, error)
-}
-
-// enrich adds to a status change what the status registry does not know
-// (track G): the last line, last seq and labels from the store, and the
-// claim holder, so the Sources page shows them live. A missing claim
-// means none.
+// enrich adds to a status change what the status registry does not know:
+// the last line, last seq and labels from the store, and the claim
+// holder, so the Sources page shows them live. A missing claim means none.
 func (h *Handler) enrich(ctx context.Context, st dto.Stream) dto.Stream {
 	if row, err := h.d.Store.StreamRow(ctx, st.ID); err == nil {
 		st.LastSeq, st.Labels = row.LastSeq, row.Labels
 		st.LastLine = textclean.StripANSI(row.LastLine)
 	}
 	st.Claim = nil
-	if cs, ok := h.d.Messaging.(claimSource); ok && h.d.Messaging != nil {
+	if cs, ok := h.d.Messaging.(mcpserver.ClaimSource); ok {
 		if claims, err := cs.ActiveClaims(ctx); err == nil {
 			if c, ok := claims[st.ID]; ok {
 				st.Claim = &c

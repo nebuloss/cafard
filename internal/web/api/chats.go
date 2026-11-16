@@ -12,7 +12,7 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// Track D: the chat JSON API (CONTRACTS.md 2.3): the list, the overview,
+// The chat JSON API (CONTRACTS.md 2.3): the list, the overview,
 // timelines, prefs, read state, channels and staged shares.
 
 // chatsAPI holds what the chat routes need on top of API.

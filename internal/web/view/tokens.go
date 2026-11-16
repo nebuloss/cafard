@@ -17,11 +17,7 @@ func CreateToken(ctx context.Context, tokens *auth.Tokens, base string, req dto.
 	if err := auth.ValidateName(name); err != nil {
 		return dto.TokenCreated{}, dto.Errorf(dto.CodeBadRequest, "%s.", capitalise(err.Error()))
 	}
-	var raw []string
-	for _, s := range req.Scopes {
-		raw = append(raw, string(s))
-	}
-	scopes, err := auth.ParseScopes(strings.Join(raw, " "))
+	scopes, err := ParseScopes(req.Scopes)
 	if err != nil {
 		return dto.TokenCreated{}, dto.Errorf(dto.CodeBadRequest, "%s.", capitalise(err.Error()))
 	}
@@ -55,4 +51,27 @@ func capitalise(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// RevokeSession signs a browser out: any session for an admin, one's own
+// for everyone else. A session p may not see is auth.ErrNotFound, so ids
+// leak nothing; one already gone counts as revoked.
+func RevokeSession(ctx context.Context, sessions *auth.Sessions, p auth.Principal, id int64) error {
+	row, err := sessions.Get(ctx, id)
+	if err != nil || (!p.Has(auth.ScopeAdmin) && row.Principal != p.Name) {
+		return auth.ErrNotFound
+	}
+	if err := sessions.Revoke(ctx, id); err != nil && !errors.Is(err, auth.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+// ParseScopes checks scopes from a request.
+func ParseScopes(s []dto.Scope) (auth.ScopeSet, error) {
+	raw := make([]string, len(s))
+	for i, sc := range s {
+		raw[i] = string(sc)
+	}
+	return auth.ParseScopes(strings.Join(raw, " "))
 }

@@ -17,7 +17,12 @@ func ThemeOf(r *http.Request) dto.Theme {
 	if err != nil {
 		return dto.ThemeSystem
 	}
-	switch t := dto.Theme(c.Value); t {
+	return ParseTheme(c.Value)
+}
+
+// ParseTheme is one of the three themes; anything else follows the device.
+func ParseTheme(s string) dto.Theme {
+	switch t := dto.Theme(s); t {
 	case dto.ThemeLight, dto.ThemeDark, dto.ThemeSystem:
 		return t
 	}
