@@ -135,31 +135,30 @@ func setString(v reflect.Value, s string) error {
 
 // applyDefaults calls SetDefaults on every nested struct that has one.
 func applyDefaults(c *Config) {
-	walkStructs(reflect.ValueOf(c).Elem(), func(v reflect.Value) {
+	_ = walkStructs(reflect.ValueOf(c).Elem(), "", func(_ string, v reflect.Value) error {
 		if d, ok := v.Addr().Interface().(Defaulter); ok {
 			d.SetDefaults()
 		}
+		return nil
 	})
 }
 
-func walkStructs(v reflect.Value, visit func(reflect.Value)) {
-	t := v.Type()
-	for i := range t.NumField() {
-		f := t.Field(i)
-		if !f.IsExported() || f.Type.Kind() != reflect.Struct || isScalar(f.Type) {
-			continue
+// validateStructs calls Validate on every nested struct that has one and
+// names the key of the first that fails.
+func validateStructs(v reflect.Value) error {
+	return walkStructs(v, "", func(name string, v reflect.Value) error {
+		if val, ok := v.Addr().Interface().(Validator); ok {
+			if err := val.Validate(); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
 		}
-		visit(v.Field(i))
-		walkStructs(v.Field(i), visit)
-	}
+		return nil
+	})
 }
 
-// validateFeatures calls Validate on every nested struct that has one.
-func validateFeatures(c *Config) error {
-	return validateIn(reflect.ValueOf(c).Elem(), "")
-}
-
-func validateIn(v reflect.Value, prefix string) error {
+// walkStructs visits every nested struct field with its dotted key, a
+// parent before its fields, and stops at the first error.
+func walkStructs(v reflect.Value, prefix string, visit func(name string, v reflect.Value) error) error {
 	t := v.Type()
 	for i := range t.NumField() {
 		f := t.Field(i)
@@ -173,13 +172,10 @@ func validateIn(v reflect.Value, prefix string) error {
 		if prefix != "" {
 			name = prefix + "." + name
 		}
-		fv := v.Field(i)
-		if val, ok := fv.Addr().Interface().(Validator); ok {
-			if err := val.Validate(); err != nil {
-				return fmt.Errorf("%s: %w", name, err)
-			}
+		if err := visit(name, v.Field(i)); err != nil {
+			return err
 		}
-		if err := validateIn(fv, name); err != nil {
+		if err := walkStructs(v.Field(i), name, visit); err != nil {
 			return err
 		}
 	}
@@ -196,46 +192,24 @@ func (c *Config) Redacted() Config {
 
 const redactedText = "<redacted>"
 
+// redact walks structs only: no secret lives in a list or a map.
 func redact(v reflect.Value) {
-	switch v.Kind() {
-	case reflect.Struct:
-		t := v.Type()
-		for i := range t.NumField() {
-			f := t.Field(i)
-			if !f.IsExported() {
-				continue
+	if v.Kind() != reflect.Struct {
+		return
+	}
+	t := v.Type()
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		fv := v.Field(i)
+		if f.Tag.Get("secret") == "true" && fv.Kind() == reflect.String {
+			if fv.String() != "" {
+				fv.SetString(redactedText)
 			}
-			fv := v.Field(i)
-			if f.Tag.Get("secret") == "true" && fv.Kind() == reflect.String {
-				if fv.String() != "" {
-					fv.SetString(redactedText)
-				}
-				continue
-			}
-			redact(fv)
+			continue
 		}
-	case reflect.Slice:
-		if v.IsNil() {
-			return
-		}
-		cp := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
-		reflect.Copy(cp, v)
-		for i := range cp.Len() {
-			redact(cp.Index(i))
-		}
-		v.Set(cp)
-	case reflect.Map:
-		if v.IsNil() || v.Type().Elem().Kind() != reflect.Struct {
-			return
-		}
-		cp := reflect.MakeMapWithSize(v.Type(), v.Len())
-		iter := v.MapRange()
-		for iter.Next() {
-			e := reflect.New(v.Type().Elem()).Elem()
-			e.Set(iter.Value())
-			redact(e)
-			cp.SetMapIndex(iter.Key(), e)
-		}
-		v.Set(cp)
+		redact(fv)
 	}
 }
