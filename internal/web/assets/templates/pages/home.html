@@ -1,7 +1,7 @@
 {{/* Home: the chat list with "Needs you" on top; on wide screens the list
      and the overview pane (PLAN 9.6.3). Everything is a link or a plain
      form; HomePage keeps it live. */}}
-<div class="home-layout">
+<div class="home-layout" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}">
   <div class="pane-list">
     {{if .Data.CanSend}}<p class="list-actions only-scripted"><input class="list-search" type="search" placeholder="Filter chats" aria-label="Filter chats" data-slot="search"><button class="icon-btn" type="button" data-action="new-channel" aria-label="New channel" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></button></p>{{end}}
     {{template "partials/chat_list.html" .Data.List}}
@@ -12,7 +12,7 @@
 {{if .Data.CanSend}}
 <a class="fab extended quick-drop-fab" href="/drop" data-action="quick-drop"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg>Quick drop</a>
 {{template "partials/quick_drop_sheet.html" .Data.Drop}}
-<dialog class="dialog new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
+<dialog class="modal new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
   <form class="panel stack" method="dialog">
     <h2 id="new-channel-title">New channel</h2>
     <div class="banner error" data-slot="error" role="alert" hidden></div>

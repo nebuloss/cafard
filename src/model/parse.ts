@@ -1,12 +1,18 @@
 import { ApiError } from '@/net/ApiError.ts';
 import type {
+  Acked,
   Answer,
+  Answered,
   Attachment,
+  Chat,
+  ChatPreview,
   ChatCount,
   Claim,
   Counts,
   Entry,
   EntryKind,
+  ImageAttachment,
+  Overview,
   ErrorBody,
   LineState,
   MarkCreated,
@@ -18,8 +24,11 @@ import type {
   Question,
   Reset,
   Scope,
+  Seen,
   Segment,
   Sender,
+  Share,
+  StreamRef,
   Session,
   Snippet,
   SnippetLanguage,
@@ -355,4 +364,81 @@ export function parseMarkCreated(raw: unknown): MarkCreated {
 /** A {key: T[]} wrapper, as /api/streams and friends answer. */
 export function parseList<T>(key: string, item: (raw: unknown, path: string) => T): (raw: unknown) => T[] {
   return (raw) => arr(obj(raw, 'body'), key, 'body', item);
+}
+
+// Track D: chats.
+
+export function parseImage(raw: unknown, path = 'image'): ImageAttachment {
+  const a = parseAttachment(raw, path);
+  if (a.type !== 'image') fail(path, 'an image');
+  return a;
+}
+
+function parseStreamRef(raw: unknown, path: string): StreamRef {
+  const o = obj(raw, path);
+  return { id: str(o, 'id', path), status: oneOf(o, 'status', path, STATES) };
+}
+
+function parseChatPreview(raw: unknown, path: string): ChatPreview {
+  const o = obj(raw, path);
+  return compact({ seq: num(o, 'seq', path), sender: optStr(o, 'sender', path), text: str(o, 'text', path), event: bool(o, 'event', path) });
+}
+
+export function parseChat(raw: unknown, path = 'chat'): Chat {
+  const o = obj(raw, path);
+  return compact({
+    id: str(o, 'id', path),
+    kind: oneOf(o, 'kind', path, ['channel', 'direct'] as const),
+    name: str(o, 'name', path),
+    title: optStr(o, 'title', path),
+    topic: optStr(o, 'topic', path),
+    peer: o['peer'] === undefined ? undefined : parsePrincipal(o['peer'], `${path}.peer`),
+    patterns: arr(o, 'patterns', path, asString),
+    streams: arr(o, 'streams', path, parseStreamRef),
+    surface: oneOf(o, 'surface', path, ['none', 'markers', 'errors'] as const),
+    followed: bool(o, 'followed', path),
+    pinned: bool(o, 'pinned', path),
+    muted: bool(o, 'muted', path),
+    archived: bool(o, 'archived', path),
+    source: oneOf(o, 'source', path, ['runtime', 'config'] as const),
+    created_by: optStr(o, 'created_by', path),
+    can_manage: bool(o, 'can_manage', path),
+    unread: num(o, 'unread', path),
+    open_questions: num(o, 'open_questions', path),
+    last_activity: optStr(o, 'last_activity', path),
+    preview: o['preview'] === undefined ? undefined : parseChatPreview(o['preview'], `${path}.preview`),
+  });
+}
+
+export function parseOverview(raw: unknown): Overview {
+  const o = obj(raw, 'overview');
+  return {
+    questions: arr(o, 'questions', 'overview', parseEntry),
+    direct: arr(o, 'direct', 'overview', parseChat),
+    recent: arr(o, 'recent', 'overview', parseEntry),
+  };
+}
+
+export function parseShare(raw: unknown): Share {
+  const o = obj(raw, 'share');
+  return compact({
+    id: str(o, 'id', 'share'),
+    text: optStr(o, 'text', 'share'),
+    files: arr(o, 'files', 'share', parseImage),
+    expires_at: str(o, 'expires_at', 'share'),
+  });
+}
+
+export function parseSeen(raw: unknown): Seen {
+  const o = obj(raw, 'seen');
+  return { seq: num(o, 'seq', 'seen'), by: str(o, 'by', 'seen') };
+}
+
+export function parseAnswered(raw: unknown): Answered {
+  const o = obj(raw, 'answered');
+  return { seq: num(o, 'seq', 'answered'), answer: parseAnswer(o['answer'], 'answered.answer') };
+}
+
+export function parseAcked(raw: unknown): Acked {
+  return { acked: num(obj(raw, 'acked'), 'acked', 'acked') };
 }

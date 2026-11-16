@@ -310,6 +310,9 @@ func TestChatAPIListsPagesAndMarksRead(t *testing.T) {
 	if len(page.Items) != 1 || page.Items[0].Question == nil {
 		t.Errorf("questions filter = %+v", page.Items)
 	}
+	if rec := e.Do("GET", "/api/chats/chan%3Adut1/timeline", cookie, nil); rec.Code != http.StatusOK {
+		t.Errorf("escaped chat id (as the bundle sends it): %d", rec.Code)
+	}
 	if rec := e.Do("GET", "/api/chats/chan:dut1/timeline?f=nope", cookie, nil); rec.Code != http.StatusBadRequest {
 		t.Errorf("bad filter: %d", rec.Code)
 	}
@@ -445,5 +448,31 @@ func TestChatPagesEscapeHostileMessages(t *testing.T) {
 	e.Commit(store.Entry{Stream: "serial:dut1", Kind: store.KindMarker, Severity: 6, Text: "<img src=x onerror=alert(4)>"})
 	if body := e.Do("GET", "/c/dut1", cookie, nil).Body.String(); strings.Contains(body, "<img src=x") {
 		t.Error("a hostile marker reached the page")
+	}
+}
+
+func TestTheServiceWorkerAndShareTargetAreServed(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	rec := e.Do("GET", "/sw.js", nil, nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Type"), "javascript") || !strings.Contains(rec.Body.String(), "/?share=") {
+		t.Errorf("/sw.js: %d %s", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	if strings.Contains(rec.Body.String(), "/api/") {
+		t.Error("the service worker names an API route; it must never cache one")
+	}
+	var m struct {
+		ShareTarget struct {
+			Action, Method, Enctype string
+			Params                  struct {
+				Files []struct{ Name string }
+			}
+		} `json:"share_target"`
+	}
+	if err := json.Unmarshal(e.Do("GET", "/manifest.webmanifest", nil, nil).Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	st := m.ShareTarget
+	if st.Action != "/share" || st.Method != "POST" || st.Enctype != "multipart/form-data" || len(st.Params.Files) != 1 || st.Params.Files[0].Name != "files[]" {
+		t.Errorf("share target = %+v", st)
 	}
 }

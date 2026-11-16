@@ -1,7 +1,7 @@
 {{/* The chat list (ChatList): the same on the phone's home and in the
      list pane of a chat. Data: ChatListView. */}}
 <nav class="chat-list" data-component="ChatList" aria-label="Chats">
-  {{if .NeedsYou.Any}}{{template "partials/needs_you.html" .NeedsYou}}{{end}}
+  {{template "partials/needs_you.html" .NeedsYou}}
   <h2 class="list-heading">Channels</h2>
   <div class="chat-rows" data-section="channels">{{range .Channels}}{{template "partials/chat_row.html" .}}{{end}}</div>
   {{if .Unfollowed}}

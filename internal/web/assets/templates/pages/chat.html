@@ -2,7 +2,7 @@
      messages and event rows, filter chips, an "Older" link, the composer,
      and the logs of a bound channel; ?view=logs shows the logs instead of
      the conversation. The panes are laid out by CSS only. */}}
-<div class="chat-layout" data-view="{{.Data.View}}"{{if .Data.Logs}} data-bound{{end}} data-chat="{{.Data.Chat}}">
+<div class="chat-layout" data-view="{{.Data.View}}"{{if .Data.Logs}} data-bound{{end}} data-chat="{{.Data.Chat}}" data-surface="{{.Data.Surface}}" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}">
   <div class="pane-list">{{template "partials/chat_list.html" .Data.List}}</div>
   <div class="pane-head">
     {{template "partials/channel_header.html" .Data.Header}}

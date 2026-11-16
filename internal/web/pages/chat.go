@@ -113,6 +113,7 @@ type chatData struct {
 	Dialog    *DialogView
 	View      string // "chat" or "logs"
 	Chat      string
+	Surface   string
 	NextSeq   int64
 	Follow    bool
 	Filter    string
@@ -179,7 +180,7 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	if !messaging.ValidFilter(f) || f == messaging.FilterAll {
 		f = ""
 	}
-	data := chatData{Chat: chat.ID, View: "chat", Filter: f, Shortcuts: true,
+	data := chatData{Chat: chat.ID, Surface: string(chat.Surface), View: "chat", Filter: f, Shortcuts: true,
 		Composer: ComposerView{Chat: chat.ID, Placeholder: "Message " + ChatName(chat), CanSend: p.Has(auth.ScopeMessage),
 			MaxFiles: svc.Blobs().Config().MaxFiles}}
 	bound := ch != nil && len(ch.Patterns) > 0

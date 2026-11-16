@@ -3,6 +3,7 @@ import type { DisposableBag } from '@/core/Disposable.ts';
 import { ConnectionBadge } from '@/components/ConnectionBadge.ts';
 import { NavBadges } from '@/components/NavBadges.ts';
 import { Toast } from '@/components/Toast.ts';
+import { Shortcuts } from '@/components/Shortcuts.ts';
 import { LiveFeed } from '@/net/LiveFeed.ts';
 import type { Services } from '@/App.ts';
 
@@ -30,6 +31,12 @@ export function mountShell(doc: Document, services: Services, bag: DisposableBag
     bag.add(toast.mount());
   }
   bindConfirms(doc, bag);
+  // The keys of PLAN 9.6.9, on every page (track D); "?" needs the dialog the chat pages carry.
+  const keys = Dom.find('[data-component="ShortcutsDialog"]', doc) ?? doc.body;
+  bag.add(new Shortcuts(keys, doc, (path) => doc.defaultView?.location.assign(path), () => Dom.find<HTMLElement>('form.composer textarea, form.drop-form textarea, [data-slot="search"]', doc)).mount());
+  // The service worker keeps the shell offline and steers the share target
+  // (track D). Browsers only allow it on HTTPS or localhost.
+  void doc.defaultView?.navigator.serviceWorker?.register('/sw.js').catch(() => {});
   return { toast, feed };
 }
 

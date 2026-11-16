@@ -87,7 +87,7 @@
 <main id="main">
 
 
-<div class="chat-layout" data-view="chat" data-bound data-chat="chan:dut1">
+<div class="chat-layout" data-view="chat" data-bound data-chat="chan:dut1" data-surface="markers" data-viewer="admin" data-viewer-kind="human">
   <div class="pane-list">
 <nav class="chat-list" data-component="ChatList" aria-label="Chats">
   
@@ -267,7 +267,7 @@
 </div>
 </div>
 
-<dialog class="dialog channel-dialog" data-component="ChannelDialog" data-channel="dut1" aria-labelledby="channel-dialog-title">
+<dialog class="modal channel-dialog" data-component="ChannelDialog" data-channel="dut1" aria-labelledby="channel-dialog-title">
   <form class="panel stack" method="dialog">
     <h2 id="channel-dialog-title">#dut1 settings</h2>
     <div class="banner error" data-slot="error" role="alert" hidden></div>
@@ -314,7 +314,7 @@
 </dialog>
 
 
-<dialog class="dialog shortcuts" data-component="ShortcutsDialog" aria-labelledby="shortcuts-title">
+<dialog class="modal shortcuts" data-component="ShortcutsDialog" aria-labelledby="shortcuts-title">
   <div class="panel">
     <h2 id="shortcuts-title">Keyboard shortcuts</h2>
     <dl class="keys">
@@ -332,7 +332,7 @@
   </div>
 </dialog>
 
-
+<noscript><img class="seen-beacon" src="/seen?seqs=6%2C7" alt="" width="1" height="1"></noscript>
 
 </main>
 <div class="toast-region" data-component="Toast" aria-live="polite">

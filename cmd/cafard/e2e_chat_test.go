@@ -368,3 +368,32 @@ func TestAMarkerInABoundChannelIsInTheLogsAndTheChat(t *testing.T) {
 		t.Errorf("timeline = %s", b)
 	}
 }
+
+func TestTheChatFeedCarriesReceiptsAndChatChanges(t *testing.T) {
+	s := startServer(t)
+	_, agent := s.agent("codex-build")
+	cookie := s.session()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	feed := s.events(ctx, cookie, "chat=dm:codex-build")
+	waitEvent(t, feed, "counts", func(ev sseEvent) bool { return ev.name == "counts" })
+	_, out := call(t, agent, "send", map[string]any{"text": "build 812 is green", "to": "admin"})
+	seq := num(out["seq"])
+	waitEvent(t, feed, "the message", func(ev sseEvent) bool { return ev.name == "entry" && strings.Contains(ev.data, "build 812") })
+	// The agent reads it: the human's page gets the receipt.
+	call(t, agent, "ack", map[string]any{"seqs": []int64{seq}})
+	resp, _ := s.browser(cookie, "POST", "/api/acks", "application/json", strings.NewReader(fmt.Sprintf(`{"seqs":[%d]}`, seq)), true)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("ack: %d", resp.StatusCode)
+	}
+	waitEvent(t, feed, "seen", func(ev sseEvent) bool { return ev.name == "seen" && strings.Contains(ev.data, `"by":"admin"`) })
+	resp, b := s.browser(cookie, "PUT", "/api/chats/dm:codex-build/prefs", "application/json", strings.NewReader(`{"pinned":true}`), true)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("prefs: %d %s", resp.StatusCode, b)
+	}
+	ev := waitEvent(t, feed, "chat", func(ev sseEvent) bool { return ev.name == "chat" })
+	var chat dto.Chat
+	if err := json.Unmarshal([]byte(ev.data), &chat); err != nil || chat.ID != "dm:codex-build" || !chat.Pinned {
+		t.Errorf("chat event = %s", ev.data)
+	}
+}

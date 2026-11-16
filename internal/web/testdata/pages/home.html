@@ -87,7 +87,7 @@
 <main id="main">
 
 
-<div class="home-layout">
+<div class="home-layout" data-viewer="admin" data-viewer-kind="human">
   <div class="pane-list">
     <p class="list-actions only-scripted"><input class="list-search" type="search" placeholder="Filter chats" aria-label="Filter chats" data-slot="search"><button class="icon-btn" type="button" data-action="new-channel" aria-label="New channel" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></button></p>
     
@@ -114,7 +114,7 @@
   <h2 class="list-heading">Channels</h2>
   <div class="chat-rows" data-section="channels"><a class="chat-row" href="/c/dut1" data-chat="chan:dut1"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#dut1</span><span class="chat-dots" data-slot="dots">
 <span class="stream-dot" data-status="connected" title="serial:dut1: connected"></span>
-</span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: Power-cycle dut1?</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+</span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: Power-cycle dut1?</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">2</span></span></span></a>
 <a class="chat-row" href="/c/general" data-chat="chan:general"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#general</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
 </div>
   
@@ -168,7 +168,7 @@
 </section>
 </div>
 <p class="reply-quote" data-slot="reply-quote"></p>
-<p class="seen-by" data-slot="seen-by">seen by admin</p>
+<p class="seen-by" data-slot="seen-by"></p>
 <div class="msg-menu only-scripted" data-slot="menu"><button class="icon-btn small" type="button" data-action="reply" aria-label="Reply"><svg aria-hidden="true"><use href="/static/icons.svg#reply"></use></svg></button><button class="icon-btn small" type="button" data-action="menu" aria-label="More actions" aria-haspopup="menu"><svg aria-hidden="true"><use href="/static/icons.svg#more_vert"></use></svg></button></div>
 </article>
 <article class="question" id="m7" data-seq="7" data-open tabindex="-1">
@@ -221,7 +221,7 @@
 
 </dialog>
 
-<dialog class="dialog new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
+<dialog class="modal new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
   <form class="panel stack" method="dialog">
     <h2 id="new-channel-title">New channel</h2>
     <div class="banner error" data-slot="error" role="alert" hidden></div>
@@ -242,7 +242,7 @@
 </dialog>
 
 
-<dialog class="dialog shortcuts" data-component="ShortcutsDialog" aria-labelledby="shortcuts-title">
+<dialog class="modal shortcuts" data-component="ShortcutsDialog" aria-labelledby="shortcuts-title">
   <div class="panel">
     <h2 id="shortcuts-title">Keyboard shortcuts</h2>
     <dl class="keys">

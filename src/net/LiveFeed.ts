@@ -3,8 +3,8 @@ import type { Clock } from '@/core/Clock.ts';
 import { DisposableBag, disposable, type Disposable } from '@/core/Disposable.ts';
 import { EventBus } from '@/core/EventBus.ts';
 import { Observable } from '@/core/Observable.ts';
-import { parseCounts, parseEntry, parseReset, parseStream } from '@/model/parse.ts';
-import type { Counts, Entry, Reset, Stream } from '@/model/types.ts';
+import { parseAnswered, parseChat, parseCounts, parseEntry, parseReset, parseSeen, parseStream } from '@/model/parse.ts';
+import type { Answered, Chat, Counts, Entry, Reset, Seen, Stream } from '@/model/types.ts';
 
 /** The part of EventSource LiveFeed uses, so tests can fake it. */
 export interface EventSourceLike {
@@ -24,13 +24,16 @@ export type FeedState =
   | { readonly state: 'retrying'; readonly attempt: number; readonly inMs: number }
   | { readonly state: 'closed' };
 
-/** What the feed emits. Track D adds seen, answered and chat. */
+/** What the feed emits (CONTRACTS.md 4). */
 export interface FeedEvents {
   entry: Entry;
   counts: Counts;
   stream_status: Stream;
   /** The server asks for a reload through the JSON API, then restart(). */
   reset: Reset;
+  seen: Seen;
+  answered: Answered;
+  chat: Chat;
 }
 
 const parsers: { readonly [K in keyof FeedEvents]: (raw: unknown) => FeedEvents[K] } = {
@@ -38,6 +41,9 @@ const parsers: { readonly [K in keyof FeedEvents]: (raw: unknown) => FeedEvents[
   counts: parseCounts,
   stream_status: (raw) => parseStream(raw),
   reset: parseReset,
+  seen: parseSeen,
+  answered: parseAnswered,
+  chat: (raw) => parseChat(raw),
 };
 
 /**

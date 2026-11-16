@@ -1,7 +1,7 @@
 {{/* Channel settings (ChannelDialog): title, topic, bindings with a glob
      preview, surface, mute, follow, pin, archive, rename and delete. It
      needs the bundle, which sends it through the JSON API. Data: DialogView. */}}
-<dialog class="dialog channel-dialog" data-component="ChannelDialog" data-channel="{{.Name}}" aria-labelledby="channel-dialog-title">
+<dialog class="modal channel-dialog" data-component="ChannelDialog" data-channel="{{.Name}}" aria-labelledby="channel-dialog-title">
   <form class="panel stack" method="dialog">
     <h2 id="channel-dialog-title">#{{.Name}} settings</h2>
     <div class="banner error" data-slot="error" role="alert" hidden></div>
