@@ -14,6 +14,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/hub"
+	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/textclean"
 )
@@ -219,39 +220,10 @@ func (s *Server) listStreams(ctx context.Context, _ *Call, in listStreamsIn) (st
 // streams merges the store's streams with the live status. Message
 // streams are left out.
 func (s *Server) streams(ctx context.Context) ([]dto.Stream, error) {
-	rows, err := s.deps.Store.Streams(ctx)
+	out, err := status.Streams(ctx, s.deps.Store, s.deps.Status)
 	if err != nil {
 		return nil, err
 	}
-	live := map[string]dto.Stream{}
-	if s.deps.Status != nil {
-		for _, st := range s.deps.Status.Snapshot() {
-			live[st.ID] = st
-		}
-	}
-	out := make([]dto.Stream, 0, len(rows)+len(live))
-	seen := map[string]bool{}
-	for _, r := range rows {
-		if store.IsMessageStream(r.ID) {
-			continue
-		}
-		seen[r.ID] = true
-		st, ok := live[r.ID]
-		if !ok {
-			st = dto.Stream{ID: r.ID, Kind: r.Kind, Transport: "internal", Status: dto.StreamIdle}
-			if r.LastTS != nil {
-				st.LastActivity = dto.TimePtr(*r.LastTS)
-			}
-		}
-		st.Kind, st.LastSeq, st.Labels, st.LastLine = r.Kind, r.LastSeq, r.Labels, textclean.StripANSI(r.LastLine)
-		out = append(out, st)
-	}
-	for id, st := range live {
-		if !seen[id] && !store.IsMessageStream(id) {
-			out = append(out, st)
-		}
-	}
-	slices.SortFunc(out, func(a, b dto.Stream) int { return strings.Compare(a.ID, b.ID) })
 	if cs, ok := s.deps.Messaging.(ClaimSource); ok {
 		claims, err := cs.ActiveClaims(ctx)
 		if err != nil {

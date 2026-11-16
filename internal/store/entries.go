@@ -169,38 +169,57 @@ type Stream struct {
 	LastLine  string
 }
 
+const streamSelect = `SELECT s.id, s.kind, s.labels, s.created_at, s.last_seq, e.ts, e.text
+		FROM streams s LEFT JOIN entries e ON e.seq = s.last_seq`
+
+func scanStream(row scanner) (Stream, error) {
+	var (
+		st      Stream
+		labels  string
+		created int64
+		ts      sql.NullInt64
+		text    sql.NullString
+	)
+	if err := row.Scan(&st.ID, &st.Kind, &labels, &created, &st.LastSeq, &ts, &text); err != nil {
+		return Stream{}, err
+	}
+	st.CreatedAt = fromNanos(created)
+	if ts.Valid {
+		t := fromNanos(ts.Int64)
+		st.LastTS = &t
+	}
+	st.LastLine = text.String
+	if err := json.Unmarshal([]byte(labels), &st.Labels); err != nil {
+		st.Labels = nil
+	}
+	return st, nil
+}
+
 // Streams lists every stream, message streams included, by id.
 func (s *Store) Streams(ctx context.Context) ([]Stream, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT s.id, s.kind, s.labels, s.created_at, s.last_seq, e.ts, e.text
-		FROM streams s LEFT JOIN entries e ON e.seq = s.last_seq ORDER BY s.id`)
+	rows, err := s.db.QueryContext(ctx, streamSelect+` ORDER BY s.id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []Stream
 	for rows.Next() {
-		var (
-			st      Stream
-			labels  string
-			created int64
-			ts      sql.NullInt64
-			text    sql.NullString
-		)
-		if err := rows.Scan(&st.ID, &st.Kind, &labels, &created, &st.LastSeq, &ts, &text); err != nil {
+		st, err := scanStream(rows)
+		if err != nil {
 			return nil, err
-		}
-		st.CreatedAt = fromNanos(created)
-		if ts.Valid {
-			t := fromNanos(ts.Int64)
-			st.LastTS = &t
-		}
-		st.LastLine = text.String
-		if err := json.Unmarshal([]byte(labels), &st.Labels); err != nil {
-			st.Labels = nil
 		}
 		out = append(out, st)
 	}
 	return out, rows.Err()
+}
+
+// StreamRow is one stream with its latest entry, or ErrNotFound.
+func (s *Store) StreamRow(ctx context.Context, id string) (Stream, error) {
+	st, err := scanStream(s.db.QueryRowContext(ctx, streamSelect+` WHERE s.id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Stream{}, ErrNotFound
+	}
+	return st, err
 }
 
 // MatchStreams resolves stream ids and path.Match globs against the
@@ -212,29 +231,20 @@ func (s *Store) MatchStreams(ctx context.Context, patterns []string) ([]string, 
 		return nil, err
 	}
 	defer rows.Close()
-	var all []string
+	var out []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		all = append(all, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return MatchPatterns(all, patterns), nil
-}
-
-// MatchPatterns filters ids by patterns with the rule of MatchStreams.
-func MatchPatterns(ids, patterns []string) []string {
-	var out []string
-	for _, id := range ids {
 		if StreamMatches(id, patterns) {
 			out = append(out, id)
 		}
 	}
-	return out
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // StreamMatches applies the rule of MatchStreams to one id. A glob never
@@ -403,7 +413,7 @@ func (q Query) filters() (where []string, args []any) {
 			args = append(args, id)
 		}
 	} else {
-		where = append(where, "stream NOT LIKE 'chan:%' AND stream NOT LIKE 'dm:%'")
+		where = append(where, deviceWhere)
 	}
 	if len(q.Kinds) > 0 {
 		ph := strings.Repeat("?,", len(q.Kinds))

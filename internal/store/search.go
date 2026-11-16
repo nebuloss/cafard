@@ -2,9 +2,7 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"strings"
 	"time"
 
@@ -141,31 +139,4 @@ func queryError(err error) error {
 		return &QueryError{Reason: msg}
 	}
 	return err
-}
-
-// StreamRow is one stream with its latest entry, or ErrNotFound.
-func (s *Store) StreamRow(ctx context.Context, id string) (Stream, error) {
-	var (
-		st      Stream
-		labels  string
-		created int64
-		ts      sql.NullInt64
-		text    sql.NullString
-	)
-	err := s.db.QueryRowContext(ctx, `SELECT s.id, s.kind, s.labels, s.created_at, s.last_seq, e.ts, e.text
-		FROM streams s LEFT JOIN entries e ON e.seq = s.last_seq WHERE s.id = ?`, id).
-		Scan(&st.ID, &st.Kind, &labels, &created, &st.LastSeq, &ts, &text)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Stream{}, ErrNotFound
-	}
-	if err != nil {
-		return Stream{}, err
-	}
-	st.CreatedAt = fromNanos(created)
-	if ts.Valid {
-		t := fromNanos(ts.Int64)
-		st.LastTS = &t
-	}
-	st.LastLine = text.String
-	return st, nil
 }

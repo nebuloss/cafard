@@ -3,6 +3,12 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: trim pass
+
+- **Live Sources updates now carry a stream's labels.** The single-stream
+  store read left them out, so every live update sent empty labels; it now
+  shares the full stream list's query.
+
 ## 2026-11-16: track G polish (M5 Live and Sources, M6 search, stdio proxy, term)
 
 - **The FTS index holds ANSI-stripped text** (migration

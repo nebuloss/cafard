@@ -166,6 +166,7 @@ func (j *Janitor) PassEntries(ctx context.Context) (PassResult, error) {
 // entryOverhead approximates a row's bytes beyond its text.
 const entryOverhead = 64
 
+// deviceWhere keeps the log streams, leaving messages out.
 const deviceWhere = `stream NOT LIKE 'chan:%' AND stream NOT LIKE 'dm:%'`
 
 // trimLines deletes the oldest device-stream entries until their size is
