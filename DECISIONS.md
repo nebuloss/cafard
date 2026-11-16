@@ -3,6 +3,47 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: track F deployment
+
+- **The installer, not the service, does the first start.** `cafard serve`
+  prints the admin token on stdout on an empty database, and under systemd
+  or OpenRC stdout is the journal or `/var/log/cafard.log`: the token would
+  be kept in a log. So `install.sh`, when the data directory has no
+  `cafard.db`, runs `cafard token create --name admin --kind human --scopes
+  ingest,read,message,admin --label "first start"` (what `Tokens.Bootstrap`
+  does), prints the token to the terminal only, and chowns the data
+  directory to `cafard`. The server then finds a principal and prints
+  nothing. If `Bootstrap`'s name or scopes change, change the installer too.
+- **The installer sets `public_url`** in a NEW `/etc/cafard.yaml` to
+  `http://<first address>:8790` (or `CAFARD_INSTALL_PUBLIC_URL`), because
+  pairing QR codes pointing at `localhost` are useless to a phone. An
+  existing file is never edited.
+- **Installer variables are `CAFARD_INSTALL_*`** (`VERSION`, `REPO`,
+  `PUBLIC_URL`), not `CAFARD_*`, which cafard itself reads as config keys.
+- **Paths:** binary `/usr/local/bin/cafard` (as grafit), config
+  `/etc/cafard.yaml`, data `/var/lib/cafard`, OpenRC log
+  `/var/log/cafard.log`.
+- **SHA256SUMS fails closed in every case:** missing file, asset not
+  listed, mismatch, and also no `sha256sum` on the machine (grafit only
+  warned on the last).
+- **The container drop-in is installed on exit status 226/NAMESPACE, and
+  also 219/CGROUP** (what a refused device cgroup policy gives). Any other
+  failure stops the installer with the journal, so a bad configuration is
+  not mistaken for a container. The drop-in also resets `DevicePolicy` to
+  `auto`: in an LXC container the host's device list (`dev0:`) is the
+  allowlist.
+- **No systemd test in containers:** dev-build has neither docker nor
+  podman. `install.sh` was tested from a checkout in chroots of the
+  Debian trixie and Alpine 3.24 LXC images (namespaced, no network), and
+  the hardened unit on dev-build's own systemd; see the track report.
+- **CI checks the unit with `systemd-analyze verify`** and the OpenRC script
+  with shellcheck. The release smoke test now also starts the binary and
+  checks `/healthz` reports exactly the tag, that `/app/main.js` is served
+  (the bundle is embedded), and that the example config loads.
+- **`scripts/devdeploy.sh` builds in its own tree on dev-build**
+  (`REMOTE_DIR=cafard-deploy`), keeping its `node_modules` there, and takes
+  `GOARCH` for arm appliances.
+
 ## 2026-11-16: M1 store, ingest and core MCP
 
 - **`Deps` carries root settings (`deps.Server`), not `*config.Config`,

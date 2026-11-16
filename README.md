@@ -104,6 +104,22 @@ A token only sees the tools its scopes allow. Requests that carry an
 
 The janitor runs every 10 minutes.
 
+## Install as a service
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nebuloss/cafard/main/deploy/install.sh | sudo sh
+```
+
+On Debian (systemd) or Alpine (OpenRC), from a release (checked against
+`SHA256SUMS`) or, run as `sudo deploy/install.sh`, from a checkout. It
+creates the `cafard` user (in `dialout`), `/etc/cafard.yaml` from
+`deploy/cafard.yaml.example`, the data directory, and the admin token,
+printed once to your terminal and never to a log. Re-run it to upgrade.
+`deploy/README.md` covers reverse proxies (SSE and long MCP calls), TLS,
+serial ports in a Proxmox container, the Windows push client and updates.
+`scripts/devdeploy.sh` pushes a development build to a box already
+installed.
+
 ## Releases
 
 A `v*` tag builds `cafard-linux-{amd64,arm64,armv7}` and

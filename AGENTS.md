@@ -97,6 +97,18 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
 - **`scripts/check-sinks.sh` greps comments and strings too.** Do not name
   the forbidden sinks anywhere in `src/`, tests included.
 
+- **`deploy/cafard.yaml.example` is tested** (`cmd/cafard/deploy_example_test.go`):
+  it must load, equal the defaults, and mention every key `cafard config`
+  prints. When your feature adds a config section, replace its commented
+  "available once ... lands" block in the example with the real keys, or
+  the test fails after the merge.
+- **The installer creates the admin token, not the first `serve`**, so it
+  never lands in the journal (DECISIONS, track F). Changing the name or
+  scopes in `Tokens.Bootstrap` means changing `deploy/install.sh` too.
+- **The systemd unit allows only ttyUSB, ttyACM and ttyS devices** and only
+  `/var/lib/cafard` for writes. A feature that opens another device class
+  or writes elsewhere must change `deploy/cafard.service`.
+
 ## Rules that are easy to break
 
 - **No `innerHTML` and its relatives in `src/`.** Log lines and messages come

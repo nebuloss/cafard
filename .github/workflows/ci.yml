@@ -152,10 +152,19 @@ jobs:
 
       - name: Shellcheck
         run: |
-          shellcheck scripts/*.sh
-          if ls deploy/*.sh >/dev/null 2>&1; then shellcheck deploy/*.sh; fi
-          if [ -f deploy/install.sh ]; then shellcheck -s sh deploy/install.sh; fi
+          shellcheck scripts/*.sh deploy/*.sh deploy/cafard.openrc
+          # POSIX sh: it runs on busybox in Alpine containers.
+          shellcheck -s sh deploy/install.sh
 
       - name: Check install.sh parses as POSIX sh
+        run: sh -n deploy/install.sh
+
+      # The binary is not installed here, so verify a copy pointing at one
+      # that exists; everything else is checked as shipped.
+      - name: Check the systemd unit and the container drop-in
         run: |
-          if [ -f deploy/install.sh ]; then sh -n deploy/install.sh; else echo "no deploy/install.sh yet"; fi
+          dir=$(mktemp -d)
+          sed 's|/usr/local/bin/cafard|/bin/true|' deploy/cafard.service > "$dir/cafard.service"
+          mkdir "$dir/cafard.service.d"
+          cp deploy/cafard-container.conf "$dir/cafard.service.d/container.conf"
+          systemd-analyze verify "$dir/cafard.service"

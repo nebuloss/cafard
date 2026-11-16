@@ -1,0 +1,119 @@
+# /etc/cafard.yaml
+#
+# Every key is optional: what is left out keeps the default shown here.
+# Check the file after editing it, before restarting:
+#
+#   cafard config -config /etc/cafard.yaml
+#
+# It prints the effective configuration (secrets redacted) and fails on any
+# error. Unknown keys are errors, so a typo is caught there rather than
+# silently ignored.
+#
+# Every scalar key is also a flag and an environment variable, which win over
+# this file in that order: http_listen is -http-listen and CAFARD_HTTP_LISTEN.
+# Lists (retention.streams, mcp.allowed_origins, ...) are file-only.
+#
+# The commented-out sections at the end belong to features that are not in
+# this version yet. Uncommenting one before its feature lands makes cafard
+# refuse to start, because the key is unknown.
+
+# Where the database and the photos live. The installer creates it mode 0700,
+# owned by the cafard user. The systemd unit only allows writes under
+# /var/lib/cafard: change ReadWritePaths in the unit if you move it.
+data_dir: /var/lib/cafard
+
+# The web UI, the HTTP ingest API and MCP (/mcp). On a routable address cafard
+# refuses to start unless an admin token exists; the installer creates one.
+# Bind 127.0.0.1:8790 when a reverse proxy on the same machine fronts it.
+http_listen: 0.0.0.0:8790
+
+# The address phones and agents reach this server at, used in pairing QR codes
+# and links. It cannot be worked out from a request behind a reverse proxy.
+# The installer sets it to this machine's first address on a new install.
+# public_url: http://10.0.50.2:8790
+
+# HTTPS-only session cookies. Turn on when cafard is reached over HTTPS, either
+# through tls_cert/tls_key below or through a reverse proxy.
+secure: false
+
+# Terminate TLS in cafard itself. Set both or neither. The files must be
+# readable by the cafard user.
+# tls_cert: /etc/cafard/tls.crt
+# tls_key: /etc/cafard/tls.key
+
+# cafard's own log: debug, info, warn or error. It never contains tokens,
+# session ids, message text or image contents.
+log_level: info
+
+retention:
+  # Log lines older than this are deleted (0 keeps them forever).
+  lines_max_age: 336h
+  # Total size of log lines kept; the oldest go first (0 means no limit).
+  lines_max_bytes: 2GB
+  # Messages between agents and humans.
+  messages_max_age: 2160h
+  # Photos and other attachments.
+  blobs_max_bytes: 5GB
+  # Per-stream line age overrides; the first matching pattern wins.
+  # streams:
+  #   - pattern: "serial:*"
+  #     lines_max_age: 720h
+
+mcp:
+  # Extra Origin values accepted on /mcp, for browser-based MCP clients.
+  # Requests without an Origin header (terminal agents) are not affected.
+  allowed_origins: []
+
+# --- syslog: available once syslog ingest lands (track B) --------------------
+# Anyone who can reach these ports can write lines; restrict with allow.
+# Port 514 needs CAP_NET_BIND_SERVICE (see the systemd unit).
+# syslog:
+#   udp: ":5514"
+#   tcp: ":5514"
+#   allow: ["10.0.50.0/24"]
+
+# --- netconsole: available once netconsole ingest lands (track B) ------------
+# netconsole:
+#   udp: ":6666"
+#   names: { "10.0.50.42": dut1 }
+
+# --- otlp: available once OTLP/HTTP logs ingest lands (track B) --------------
+# otlp:
+#   enabled: true
+#   max_body_mib: 8
+
+# --- messaging: available once messaging lands (track A) ---------------------
+# messaging:
+#   rate_per_minute: 30
+#   burst: 10
+#   channel_create_per_hour: 10
+#   archive_after: 336h             # runtime channels idle this long are archived
+
+# --- images: available once image uploads land (track A) ---------------------
+# images:
+#   max_file_mib: 20
+#   max_files: 10
+#   max_megapixels: 50
+
+# --- channels: available once messaging lands (track A) ----------------------
+# Reapplied at every start.
+# channels:
+#   - name: general                 # may set title and topic only
+#     topic: anything not about one device
+#   - name: dut1
+#     title: DUT 1 (x86 test board)
+#     streams: [serial:dut1, netconsole:dut1, "syslog:dut1*"]
+#     surface: markers
+
+# --- serial: available once serial ingest lands (track E) --------------------
+# The cafard user is in the dialout group, and the systemd unit allows
+# /dev/ttyUSB*, /dev/ttyACM* and /dev/ttyS*. In an LXC container the host must
+# pass the device through first (see deploy/README.md).
+# serial:
+#   - name: dut1
+#     device: /dev/serial/by-id/usb-FTDI_FT232R_A1B2C3-if00-port0
+#     baud: 115200
+#     data_bits: 8
+#     parity: none                  # none | even | odd | mark | space
+#     stop_bits: 1
+#     writable: false
