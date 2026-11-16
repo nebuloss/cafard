@@ -18,7 +18,7 @@ func (h *messagesAPI) blob(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	ok, err := h.d.Blobs.VisibleTo(r.Context(), sha, p)
+	ok, err := h.svc.Blobs().VisibleTo(r.Context(), sha, p)
 	if err != nil {
 		h.d.Log.Error("blob visibility failed", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -28,7 +28,7 @@ func (h *messagesAPI) blob(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	f, row, err := h.d.Blobs.Open(r.Context(), sha, variant)
+	f, row, err := h.svc.Blobs().Open(r.Context(), sha, variant)
 	if errors.Is(err, blob.ErrNotFound) {
 		http.NotFound(w, r)
 		return
