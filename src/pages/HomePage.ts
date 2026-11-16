@@ -39,7 +39,7 @@ export class HomePage implements Page {
 
     const list = Dom.find('[data-component="ChatList"]', doc);
     if (list !== null) {
-      bag.add(new ChatList(list, r.rows, shell.feed.events, services.api, () => services.clock.now(), (t) => toast(t, 'error'), Dom.find<HTMLInputElement>('[data-slot="search"]', doc)).mount());
+      bag.add(new ChatList(list, r.rows, shell.feed.events, services.api, services.clock, (t) => toast(t, 'error'), Dom.find<HTMLInputElement>('[data-slot="search"]', doc)).mount());
     }
     const muted = (chat: string): boolean => Dom.find(`a.chat-row[data-chat="${chat}"]`, doc)?.hasAttribute('data-muted') === true;
     const needs = Dom.find('[data-component="NeedsYou"]', doc);

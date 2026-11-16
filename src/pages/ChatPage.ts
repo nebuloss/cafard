@@ -77,7 +77,7 @@ export class ChatPage implements Page {
     const go = (path: string): void => win?.location.assign(path);
 
     const list = Dom.find('[data-component="ChatList"]', doc);
-    if (list !== null) bag.add(new ChatList(list, r.rows, shell.feed.events, services.api, () => services.clock.now(), (t) => toast(t, 'error'), null).mount());
+    if (list !== null) bag.add(new ChatList(list, r.rows, shell.feed.events, services.api, services.clock, (t) => toast(t, 'error'), null).mount());
 
     // Logs pane.
     const paneEl = Dom.find('[data-component="LogsPane"]', doc);
@@ -142,7 +142,7 @@ export class ChatPage implements Page {
     // Header and settings.
     let current: Chat | null = null;
     const dialogEl = Dom.find<HTMLDialogElement>('[data-component="ChannelDialog"]', doc);
-    const dialog = dialogEl === null ? null : new ChannelDialog(dialogEl, null, dialogEl.dataset['channel'] ?? '', services.api, go, (q) => win?.confirm(q) === true, (c) => onChat(c));
+    const dialog = dialogEl === null ? null : new ChannelDialog(dialogEl, dialogEl.dataset['channel'] ?? '', services.api, services.clock, go, (q) => win?.confirm(q) === true, (c) => onChat(c));
     if (dialog !== null) bag.add(dialog.mount());
     const openSettings = (): void => {
       if (dialog === null) return;

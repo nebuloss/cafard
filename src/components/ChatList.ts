@@ -1,3 +1,5 @@
+import type { Clock } from '@/core/Clock.ts';
+import type { Disposable } from '@/core/Disposable.ts';
 import { Dom, h } from '@/core/Dom.ts';
 import type { EventBus } from '@/core/EventBus.ts';
 import type { Chat, Counts, Entry, Stream } from '@/model/types.ts';
@@ -22,14 +24,14 @@ function sectionOf(chat: Chat): string {
  * right click (pin, mute, follow, mark read, settings).
  */
 export class ChatList extends Component {
-  private pressTimer: ReturnType<typeof setTimeout> | null = null;
+  private pressTimer: Disposable | null = null;
 
   constructor(
     root: HTMLElement,
     private readonly rows: ChatRowRenderer | null,
     private readonly events: EventBus<FeedEvents>,
     private readonly api: CafardApi,
-    private readonly now: () => number,
+    private readonly clock: Clock,
     private readonly toast: (text: string) => void,
     private readonly search: HTMLInputElement | null,
   ) {
@@ -50,22 +52,18 @@ export class ChatList extends Component {
     this.bag.listen(this.root, 'touchstart', (event) => {
       const row = (event.target as Element | null)?.closest<HTMLElement>('a.chat-row');
       if (row === null || row === undefined) return;
-      this.pressTimer = setTimeout(() => this.menu(row), 550);
+      this.pressTimer = this.clock.setTimeout(() => this.menu(row), 550);
     }, { passive: true });
-    for (const type of ['touchend', 'touchmove', 'touchcancel']) {
-      this.bag.listen(this.root, type, () => {
-        if (this.pressTimer !== null) clearTimeout(this.pressTimer);
-        this.pressTimer = null;
-      }, { passive: true });
-    }
+    const cancelPress = (): void => {
+      this.pressTimer?.dispose();
+      this.pressTimer = null;
+    };
+    for (const type of ['touchend', 'touchmove', 'touchcancel']) this.bag.listen(this.root, type, cancelPress, { passive: true });
+    this.bag.defer(cancelPress);
     if (this.search !== null) {
       const search = this.search;
       this.bag.listen(search, 'input', () => this.filter(search.value));
     }
-  }
-
-  rowOf(id: string): HTMLElement | null {
-    return Dom.findAll<HTMLElement>('a.chat-row', this.root).find((r) => r.dataset['chat'] === id) ?? null;
   }
 
   counts(c: Counts): void {
@@ -92,7 +90,7 @@ export class ChatList extends Component {
     if (e.kind !== 'message' || e.chat === undefined) return;
     for (const row of Dom.findAll<HTMLElement>('a.chat-row', this.root).filter((r) => r.dataset['chat'] === e.chat)) {
       Dom.setText(Dom.find('[data-slot="preview"]', row), previewText({ ...(e.sender === undefined ? {} : { sender: e.sender.name }), text: e.text.split('\n')[0] ?? '' }));
-      Dom.setText(Dom.find('[data-slot="time"]', row), messageTime(e.ts, this.now()));
+      Dom.setText(Dom.find('[data-slot="time"]', row), messageTime(e.ts, this.clock.now()));
       const section = row.parentElement;
       if (section === null || row.hasAttribute('data-pinned') || section.dataset['section'] === undefined) continue;
       const firstUnpinned = Array.from(section.children).find((c) => !c.hasAttribute('data-pinned'));

@@ -3,6 +3,10 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: trim pass
+
+- **The chat list's long-press menu and the channel dialog's pattern preview wait on the injected `Clock`,** not the global timer, and the chat list cancels a pending long press when it is unmounted (before, a press could open a menu on a page already gone, and tests could not drive either delay).
+
 ## 2026-11-16: track G polish (M5 Live and Sources, M6 search, stdio proxy, term)
 
 - **The FTS index holds ANSI-stripped text** (migration
