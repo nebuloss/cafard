@@ -1,0 +1,69 @@
+<section class="page-wide agents">
+  {{template "partials/token_dialog.html" .Data.Created}}
+
+  <h2>Principals</h2>
+  {{if .Data.Principals}}
+  <ul class="list principals">
+    {{range .Data.Principals}}
+    <li class="principal" data-principal="{{.Name}}">
+      <div class="grow">
+        <span class="title"><span class="mono">{{.Name}}</span> <span class="chip small">{{.Kind}}</span></span>
+        <span class="subtitle">{{.LastSeen}}</span>
+        {{if .Tokens}}
+        <table class="tokens dense">
+          <caption class="visually-hidden">Tokens of {{.Name}}</caption>
+          <thead><tr><th scope="col">Label</th><th scope="col">Scopes</th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col"><span class="visually-hidden">Revoke</span></th></tr></thead>
+          <tbody>
+          {{range .Tokens}}
+          <tr data-token="{{.ID}}">
+            <td>{{.Label}}</td>
+            <td>{{.Scopes}}</td>
+            <td>{{.Created}}</td>
+            <td>{{.LastUsed}}</td>
+            <td>
+              <form method="post" action="/tokens/{{.ID}}/revoke" data-confirm="Revoke this token? Clients using it stop working at once.">
+                <button class="btn text danger-text" type="submit">Revoke</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <span class="subtitle">No token.</span>
+        {{end}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+  {{end}}
+
+  <h2 id="new-token">New token</h2>
+  <form class="card outlined narrow stack" method="post" action="/tokens" data-component="TokenForm">
+    <label class="ofield">
+      <span>Principal</span>
+      <input name="principal" required list="principal-names" placeholder="claude-laptop" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9._\-]{0,39}">
+    </label>
+    <datalist id="principal-names">{{range .Data.Principals}}<option value="{{.Name}}"></option>{{end}}</datalist>
+    <label class="ofield">
+      <span>Kind (for a new principal)</span>
+      <select name="kind">
+        <option value="agent">agent</option>
+        <option value="human">human</option>
+        <option value="device">device</option>
+      </select>
+    </label>
+    <label class="ofield">
+      <span>Label</span>
+      <input name="label" placeholder="laptop MCP" maxlength="100">
+    </label>
+    <fieldset class="chips">
+      <legend class="label">Scopes</legend>
+      {{range .Data.Scopes}}
+      <label class="chip filter"><input type="checkbox" name="scopes" value="{{.Name}}"{{if .Checked}} checked{{end}}>{{.Name}}</label>
+      {{end}}
+    </fieldset>
+    <p class="help">Agents need read and message. Devices that only send logs need ingest.</p>
+    <button class="btn filled" type="submit"><svg aria-hidden="true"><use href="/static/icons.svg#key"></use></svg>Create token</button>
+  </form>
+</section>

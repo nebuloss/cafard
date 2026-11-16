@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>Sources - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="streams" class="shell">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="bar">
+    
+    <svg class="mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
+    
+    <h1>Sources</h1>
+    <span class="spacer"></span>
+    
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    <span class="avatar" title="admin (human)">A</span>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Main">
+  <a class="nav-item" href="/">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats" hidden>0</span></span>
+    <span class="nav-label">Chats</span>
+  </a>
+  <a class="nav-item" href="/live">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
+    <span class="nav-label">Live</span>
+  </a>
+  <a class="nav-item" href="/streams" aria-current="page">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Sources</span>
+  </a>
+  
+  <a class="nav-item rail-only" href="/agents">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
+    <span class="nav-label">Agents</span>
+  </a>
+  <a class="nav-item rail-only" href="/pair">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
+    <span class="nav-label">Pair</span>
+  </a>
+  
+  <details class="nav-more">
+    <summary class="nav-item">
+      <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></span>
+      <span class="nav-label">More</span>
+    </summary>
+    <div class="menu" role="menu">
+      
+      <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
+      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
+      
+      <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+        <input type="hidden" name="next" value="/streams">
+        <span class="menu-caption">Theme</span>
+        <span class="segmented">
+          <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
+          <button type="submit" name="theme" value="light" aria-pressed="false">Light</button>
+          <button type="submit" name="theme" value="dark" aria-pressed="false">Dark</button>
+        </span>
+      </form>
+      <form method="post" action="/signout">
+        <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out admin</button>
+      </form>
+    </div>
+  </details>
+</nav>
+
+
+<main id="main">
+
+
+<section class="page-wide">
+  
+  <div class="stream-table dense" role="table" aria-label="Sources" data-component="StreamList">
+    <div class="stream-head" role="row">
+      <span role="columnheader">Source</span>
+      <span role="columnheader">Status</span>
+      <span role="columnheader">Kind / transport</span>
+      <span role="columnheader">Lines/min</span>
+      <span role="columnheader">Last activity</span>
+      <span role="columnheader">Last line</span>
+      <span role="columnheader">Dropped</span>
+      <span role="columnheader">Claim</span>
+      <span role="columnheader">Lines</span>
+      <span role="columnheader"><span class="visually-hidden">Open</span></span>
+    </div>
+    <div class="stream-rows" role="rowgroup" data-slot="rows">
+    
+<div class="stream-card" role="row" data-stream="serial:dut1" data-status="connected">
+  <span class="sc-name" role="cell"><span class="stream-dot" aria-hidden="true"></span><span class="mono" data-slot="name">serial:dut1</span></span>
+  <span class="sc-status" role="cell" data-slot="status">connected</span>
+  <span class="sc-transport" role="cell" data-slot="transport">serial / rfc2217</span>
+  <span class="sc-rate" role="cell" data-slot="rate">0.6</span>
+  <span class="sc-last" role="cell" data-slot="last">09:40:00</span>
+  <span class="sc-preview mono" role="cell" data-slot="preview">codex-build: flashed linux-6.18-rc3</span>
+  <span class="sc-dropped" role="cell" data-slot="dropped">0</span>
+  <span class="sc-claim" role="cell" data-slot="claim"></span>
+  <span class="sc-lines" role="cell" data-slot="line-state"></span>
+  <a class="sc-open btn text" role="cell" data-slot="open" href="/live?streams=serial%3Adut1">Open in Live</a>
+</div>
+
+<div class="stream-card" role="row" data-stream="syslog:bench-pi" data-status="connected">
+  <span class="sc-name" role="cell"><span class="stream-dot" aria-hidden="true"></span><span class="mono" data-slot="name">syslog:bench-pi</span></span>
+  <span class="sc-status" role="cell" data-slot="status">connected</span>
+  <span class="sc-transport" role="cell" data-slot="transport">syslog / udp</span>
+  <span class="sc-rate" role="cell" data-slot="rate">0.2</span>
+  <span class="sc-last" role="cell" data-slot="last">09:40:00</span>
+  <span class="sc-preview mono" role="cell" data-slot="preview">systemd[1]: Started cafard push.</span>
+  <span class="sc-dropped" role="cell" data-slot="dropped">0</span>
+  <span class="sc-claim" role="cell" data-slot="claim"></span>
+  <span class="sc-lines" role="cell" data-slot="line-state"></span>
+  <a class="sc-open btn text" role="cell" data-slot="open" href="/live?streams=syslog%3Abench-pi">Open in Live</a>
+</div>
+
+    </div>
+  </div>
+  <p class="muted body-small">Times are UTC. Rates are lines per minute over the last 5 minutes.</p>
+  
+</section>
+
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-stream-dot">
+<span class="stream-dot" data-status="" title=""></span>
+</template>
+<template id="tpl-stream-card">
+<div class="stream-card" role="row" data-stream="" data-status="">
+  <span class="sc-name" role="cell"><span class="stream-dot" aria-hidden="true"></span><span class="mono" data-slot="name"></span></span>
+  <span class="sc-status" role="cell" data-slot="status"></span>
+  <span class="sc-transport" role="cell" data-slot="transport"></span>
+  <span class="sc-rate" role="cell" data-slot="rate"></span>
+  <span class="sc-last" role="cell" data-slot="last"></span>
+  <span class="sc-preview mono" role="cell" data-slot="preview"></span>
+  <span class="sc-dropped" role="cell" data-slot="dropped"></span>
+  <span class="sc-claim" role="cell" data-slot="claim"></span>
+  <span class="sc-lines" role="cell" data-slot="line-state"></span>
+  <a class="sc-open btn text" role="cell" data-slot="open" href="">Open in Live</a>
+</div>
+</template>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+
+</body>
+</html>

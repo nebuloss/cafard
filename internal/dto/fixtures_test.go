@@ -216,6 +216,10 @@ type fixture struct {
 	value any
 }
 
+// trackFixtures are added by other tracks' fixture files from init, so
+// each track adds its DTOs' examples without editing this file.
+var trackFixtures []fixture
+
 func fixtures() []fixture {
 	fs := []fixture{
 		{"me", Me{Name: "guillaume", Kind: KindHuman, Scopes: []Scope{ScopeRead, ScopeMessage, ScopeSerialWrite, ScopeAdmin}, SessionID: 12, Theme: ThemeSystem}},
@@ -331,7 +335,7 @@ func fixtures() []fixture {
 	for _, code := range Codes {
 		fs = append(fs, fixture{"error_" + code, Error{Error: errorExample(code)}})
 	}
-	return fs
+	return append(fs, trackFixtures...)
 }
 
 func errorExample(code string) ErrorBody {

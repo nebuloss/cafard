@@ -1,0 +1,52 @@
+{{/* Navigation: real links, so it works without the bundle. One element is
+     the bottom bar below 600 px and the rail above (PLAN 9.6.2). Agents and
+     Pair sit in the rail, and in "More" on the bar. The bundle updates the
+     data-badge counts from the SSE counts event. */}}
+<nav class="nav" aria-label="Main">
+  <a class="nav-item" href="/"{{if eq .Nav "chats"}} aria-current="page"{{end}}>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats"{{if not .Badges.Chats}} hidden{{end}}>{{.Badges.Chats}}</span></span>
+    <span class="nav-label">Chats</span>
+  </a>
+  <a class="nav-item" href="/live"{{if eq .Nav "live"}} aria-current="page"{{end}}>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
+    <span class="nav-label">Live</span>
+  </a>
+  <a class="nav-item" href="/streams"{{if eq .Nav "streams"}} aria-current="page"{{end}}>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down"{{if not .Badges.SourcesDown}} hidden{{end}}></span></span>
+    <span class="nav-label">Sources</span>
+  </a>
+  {{if .User.Admin}}
+  <a class="nav-item rail-only" href="/agents"{{if eq .Nav "agents"}} aria-current="page"{{end}}>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
+    <span class="nav-label">Agents</span>
+  </a>
+  <a class="nav-item rail-only" href="/pair"{{if eq .Nav "pair"}} aria-current="page"{{end}}>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
+    <span class="nav-label">Pair</span>
+  </a>
+  {{end}}
+  <details class="nav-more">
+    <summary class="nav-item">
+      <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></span>
+      <span class="nav-label">More</span>
+    </summary>
+    <div class="menu" role="menu">
+      {{if .User.Admin}}
+      <a class="menu-item bar-only" role="menuitem" href="/agents"{{if eq .Nav "agents"}} aria-current="page"{{end}}><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
+      <a class="menu-item bar-only" role="menuitem" href="/pair"{{if eq .Nav "pair"}} aria-current="page"{{end}}><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
+      {{end}}
+      <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+        <input type="hidden" name="next" value="{{.Path}}">
+        <span class="menu-caption">Theme</span>
+        <span class="segmented">
+          <button type="submit" name="theme" value="system"{{if or (eq .Theme "system") (eq .Theme "")}} aria-pressed="true"{{else}} aria-pressed="false"{{end}}>System</button>
+          <button type="submit" name="theme" value="light"{{if eq .Theme "light"}} aria-pressed="true"{{else}} aria-pressed="false"{{end}}>Light</button>
+          <button type="submit" name="theme" value="dark"{{if eq .Theme "dark"}} aria-pressed="true"{{else}} aria-pressed="false"{{end}}>Dark</button>
+        </span>
+      </form>
+      <form method="post" action="/signout">
+        <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out {{.User.Name}}</button>
+      </form>
+    </div>
+  </details>
+</nav>

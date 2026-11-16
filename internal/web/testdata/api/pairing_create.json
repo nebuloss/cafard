@@ -1,0 +1,8 @@
+{
+  "new_name": "guillaume-phone",
+  "scopes": [
+    "read",
+    "message",
+    "ingest"
+  ]
+}

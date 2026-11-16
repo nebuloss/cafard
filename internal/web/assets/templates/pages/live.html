@@ -1,0 +1,15 @@
+{{/* Live logs. Without the bundle: the range in the query, or the last 500
+     lines. With it, LivePage mounts LogView on the list and follows. */}}
+<section class="live">
+  {{template "partials/filter_bar.html" .Data.Filter}}
+  {{if .Data.Error}}<div class="banner error" role="alert">{{.Data.Error}}</div>{{end}}
+  <p class="banner notice no-script">Live updates need JavaScript; this is {{.Data.Showing}}. Reload to see newer lines.</p>
+  <div class="logview dense" data-component="LogView" data-next-seq="{{.Data.NextSeq}}" data-follow="{{if .Data.Follow}}true{{else}}false{{end}}" data-query="{{.Data.Query}}">
+    <div class="log-list mono" role="list" aria-label="Log lines" data-slot="list">
+    {{range .Data.Items}}{{if .Marker}}{{template "partials/marker.html" .Marker}}{{else}}{{template "partials/line.html" .Line}}{{end}}{{end}}
+    </div>
+    <button class="fab new-lines only-scripted" type="button" data-slot="new" hidden><svg aria-hidden="true"><use href="/static/icons.svg#arrow_downward"></use></svg><span data-slot="new-count">0 new</span></button>
+    <button class="icon-btn follow-toggle only-scripted" type="button" data-slot="follow" aria-pressed="true" aria-label="Pause following"><svg aria-hidden="true"><use href="/static/icons.svg#pause"></use></svg></button>
+  </div>
+  {{if not .Data.Items}}{{if .Data.Commands}}{{template "partials/empty_sources.html" .Data.Commands}}{{else}}<p class="muted">No line matches these filters.</p>{{end}}{{end}}
+</section>

@@ -31,11 +31,50 @@ var bundleBuilt = func() bool {
 // BundleBuilt reports whether this binary carries the TypeScript bundle.
 func BundleBuilt() bool { return bundleBuilt }
 
-// Layout is the data the shell template needs on every page.
+// Layout is the data the shell template needs on every page. Every field
+// but the first three may be left zero: the sign-in page has no user, no
+// navigation and no twins.
 type Layout struct {
 	Title    string
 	Page     string // <body data-page>, picks the TypeScript Page
 	Scripted bool   // emit the bundle's script tag
+
+	Theme  string // "system" | "light" | "dark", from the theme cookie
+	Nav    string // the active navigation item: chats, live, streams, agents, pair
+	User   *User  // nil when signed out
+	Badges Badges
+	// Twins is the rendered <template id="tpl-..."> elements the page lists
+	// (CONTRACTS.md 6.2), placed at the end of <body>.
+	Twins template.HTML
+	// Notice and Error are a snackbar and a banner the server shows once.
+	Notice, Error string
+	// Back is where the top bar's back arrow goes, or "".
+	Back string
+	// Path is the current path and query, where the theme switch returns.
+	Path string
+}
+
+// Toast is one snackbar (partials/toast.html).
+type Toast struct {
+	Tone string // "info" | "error"
+	Text string
+}
+
+// NoticeToast is the Notice as a toast.
+func (l Layout) NoticeToast() Toast { return Toast{Tone: "info", Text: l.Notice} }
+
+// User is the signed-in principal as the shell shows it.
+type User struct {
+	Name    string
+	Kind    string
+	Admin   bool
+	Initial string
+}
+
+// Badges are the counts on the navigation items.
+type Badges struct {
+	Chats       int  // open questions for you + unread direct messages
+	SourcesDown bool // error dot on Sources
 }
 
 // NewLayout fills in what does not depend on the page.
@@ -84,6 +123,9 @@ func Register(mux *http.ServeMux) error {
 		}
 		sum := sha256.Sum256(body)
 		ctype := mime.TypeByExtension(path.Ext(p))
+		if path.Ext(p) == ".webmanifest" {
+			ctype = "application/manifest+json"
+		}
 		if ctype == "" {
 			ctype = "application/octet-stream"
 		}
@@ -105,8 +147,18 @@ func Register(mux *http.ServeMux) error {
 	mux.HandleFunc("GET /app/main.js", func(w http.ResponseWriter, r *http.Request) {
 		serve(w, r, byPath, bundlePath)
 	})
+	// Served at the root: a manifest's scope and a service worker's scope
+	// are bounded by their URL. A file that is not there yet is a 404.
+	for _, name := range rootFiles {
+		mux.HandleFunc("GET /"+name, func(w http.ResponseWriter, r *http.Request) {
+			serve(w, r, byPath, "static/"+name)
+		})
+	}
 	return nil
 }
+
+// rootFiles are static files also served at "/<name>" (CONTRACTS.md 2.2).
+var rootFiles = []string{"manifest.webmanifest", "sw.js", "icons.svg"}
 
 func serve(w http.ResponseWriter, r *http.Request, byPath map[string]asset, p string) {
 	a, ok := byPath[p]

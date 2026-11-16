@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "cafard",
+  "short_name": "cafard",
+  "description": "Logs, photos and messages for AI agents and the people they work with.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fff9f1",
+  "theme_color": "#faebe0",
+  "icons": [
+    { "src": "/static/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/static/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "maskable" }
+  ]
+}

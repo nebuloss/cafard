@@ -1,0 +1,19 @@
+<section class="signin">
+  <div class="signin-brand">
+    <svg class="signin-mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
+    <p class="wordmark">cafard</p>
+    <p class="muted">Logs, photos and messages for agents and the people they work with.</p>
+  </div>
+  <h1>Sign in</h1>
+  {{if .Data.Error}}<div class="banner error" role="alert">{{.Data.Error}}</div>{{end}}
+  <form method="post" action="/signin" class="stack">
+    {{if .Data.Next}}<input type="hidden" name="next" value="{{.Data.Next}}">{{end}}
+    <label class="ofield">
+      <span>Token</span>
+      <input type="password" name="token" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="cfd_..." aria-describedby="token-help">
+    </label>
+    <p class="help" id="token-help">Paste the admin token printed on first start, or a token of a person. It opens a session in this browser; the token itself is not kept here.</p>
+    <button class="btn filled block" type="submit">Sign in</button>
+  </form>
+  <p class="muted body-small">On a phone, scan the code an admin shows on the Pair page instead.</p>
+</section>
