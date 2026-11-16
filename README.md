@@ -79,6 +79,100 @@ echo "hello" | curl -H "Authorization: Bearer cfd_..." --data-binary @- \
 `application/x-ndjson` with `{text, ts?, severity?, host?, app?, stream?}`
 per line. A stream name without a kind becomes `push:<name>`.
 
+## Serial consoles
+
+List the ports in `/etc/cafard.yaml` (the `serial:` list is file-only).
+Each one becomes the stream `serial:<name>`; lines end on `\n`, `\r\n` or
+a lone `\r`, and a prompt with no newline is sent after 500 ms.
+
+```yaml
+serial:
+  - name: dut1                        # lowercase letters, digits, . _ -
+    device: /dev/serial/by-id/usb-FTDI_FT232R_A1B2C3-if00-port0
+    baud: 115200                      # default 115200
+    data_bits: 8                      # default 8
+    parity: none                      # none | even | odd | mark | space
+    stop_bits: 1                      # 1 | 1.5 | 2
+    writable: false                   # agents may write and drive lines only if true
+  - name: dut2
+    rfc2217: 10.0.50.30:7001          # ser2net with telnet(rfc2217): line settings come from here
+    baud: 115200
+  - name: dut3
+    tcp: 10.0.50.30:7002              # raw TCP: line settings are fixed on the far end
+```
+
+Set exactly one of `device`, `rfc2217` and `tcp`. Raw `tcp` ports take no
+`baud`, `data_bits`, `parity` or `stop_bits`, since cafard cannot set them.
+
+- **Use `/dev/serial/by-id/...` paths**, not `/dev/ttyUSB0`: the numbers
+  change when adapters are replugged in another order, the by-id names do
+  not. `ls -l /dev/serial/by-id/` lists them. The user cafard runs as
+  needs the `dialout` group (and, in a container, the device passed in).
+- **Unplugging is fine.** cafard writes a marker (`serial: disconnected
+  from ...`), shows the stream as down, tries again every 1 s to 30 s, and
+  writes `serial: reconnected after 12s: ...` when the port is back.
+  Agents see the gap.
+- **RFC 2217** is the way to reach a port on another machine: cafard sets
+  the baud rate and framing, and can drive DTR, RTS and break (to reset a
+  board). If the server refuses the option, cafard reads it as plain Telnet
+  and the connect marker says why. Carrier detect changes reported by the
+  server become markers.
+
+A ser2net 4 configuration (`/etc/ser2net.yaml`) for the two network ports
+above:
+
+```yaml
+connection: &dut2
+  accepter: telnet(rfc2217),tcp,7001
+  connector: serialdev,/dev/serial/by-id/usb-FTDI_FT232R_A1B2C3-if00-port0,115200n81,local
+  options:
+    kickolduser: true
+
+connection: &dut3
+  accepter: tcp,7002
+  connector: serialdev,/dev/serial/by-id/usb-Prolific_PL2303-if00-port0,115200n81,local
+```
+
+`telnet(rfc2217)` is what lets cafard change the line settings (ser2net 3
+calls it `remctl`). Without it, use `tcp:` in cafard's config.
+
+### Pushing from a Windows PC
+
+A board on a laptop's COM port needs no server of its own: `cafard push`
+reads the port and sends the lines.
+
+```bat
+set CAFARD_SERVER=http://10.0.50.2:8790
+set CAFARD_TOKEN=cfd_...
+cafard.exe push --stream bench --serial COM5 --baud 115200 --echo
+```
+
+The port is read as 8N1. Windows lets one program open a COM port at a
+time, so close PuTTY first. The port must open at start; if it disappears
+later (adapter unplugged), push reopens it when it is back. Ctrl-C stops.
+
+If PuTTY must keep the port, let it write a session log (Session >
+Logging, "All session output", "Always overwrite") and follow the file:
+
+```bat
+cafard.exe push --stream bench --file C:\logs\putty.log --follow
+```
+
+`--follow` starts at the end of the file (`--from-start` also sends what it
+already holds) and carries on when the file is truncated (a new PuTTY
+session) or replaced by a new file (rotation). `--file` without `--follow`
+sends the file and exits. The same flags work on Linux:
+`cafard push --stream dut --serial /dev/ttyACM0`.
+
+While the server is unreachable, push keeps the lines in a spool file and
+sends them in order, each with the time it was read, when the server is
+back or on the next push to the same server and stream. The spool lives in
+the user cache directory (`~/.cache/cafard/spool` on Linux,
+`%LocalAppData%\cafard\spool` on Windows), holds 100 MiB at most (newer
+lines are dropped beyond that, and a line in the stream says how many),
+and is deleted once delivered. `--spool PATH` puts it elsewhere; `--spool
+off` keeps lines in memory only.
+
 ## Agents (MCP)
 
 cafard serves MCP over streamable HTTP at `/mcp`, with a bearer token:

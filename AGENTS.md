@@ -96,6 +96,16 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   "Done when" test pushes 100 000 lines through a real server.
 - **`scripts/check-sinks.sh` greps comments and strings too.** Do not name
   the forbidden sinks anywhere in `src/`, tests included.
+- **Serial (track E1):** `net.Pipe` is synchronous, so a fake Telnet peer
+  must answer from another goroutine, never from inside its read loop, or
+  both ends block. Telnet BINARY can be switched on in the middle of a
+  read, so the RFC 2217 parser rereads the mode after every option command.
+  A value-receiver method such as `serial.Port.Stream()` copies the whole
+  struct, which races with a field another goroutine writes under a lock;
+  `Handle` keeps immutable copies instead. A config list section must be a
+  struct with its own `UnmarshalYAML` (see `serial.Config`), or `Validate`
+  is never called. `cafard push` takes the spool location from the
+  injected `getenv`, so tests never touch the real `~/.cache`.
 
 ## Rules that are easy to break
 

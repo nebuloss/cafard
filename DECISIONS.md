@@ -3,6 +3,65 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: track E1 serial ingest and push
+
+- **The `serial:` section is `serial.Config`, a struct holding `Ports
+  []Port`, not a bare `[]serial.Port`.** The config walk only calls
+  `SetDefaults` and `Validate` on struct fields, so a bare list would never
+  be checked by `cafard config`. The struct reads and writes the plain YAML
+  list (`UnmarshalYAML`/`MarshalYAML`); since a custom unmarshaler loses
+  the decoder's unknown-key check, it checks the keys of each port itself.
+- **Port defaults are 115200 8N1** for `device` and `rfc2217`. Raw `tcp`
+  ports refuse `baud`, `data_bits`, `parity` and `stop_bits` rather than
+  ignore them, so nobody believes they were applied. Names match
+  `^[a-z0-9][a-z0-9._-]{0,62}$`.
+- **Markers:** `serial: connected: <how>` on the first open too (its text
+  says RFC 2217 with the framing, raw TCP, or plain Telnet and why), one
+  `cannot open` marker per streak of failed opens, `disconnected from
+  <addr>: <reason>` and `reconnected after <gap>: <how>`. Severity 4 for
+  failures and drops, 6 for connects; `meta` is `{"serial": "<event>"}`.
+  The backoff (1 s doubling to 30 s) resets only after a connection that
+  lasted longer than 30 s, so a flapping adapter does not write a marker
+  pair every second.
+- **RFC 2217 details:** no answer to COM-PORT-OPTION within 5 s counts as
+  a refusal (plain Telnet). Line settings are sent without waiting;
+  SET-CONTROL and SET-BAUDRATE wait up to 2 s for the server's answer and
+  a silent server is assumed to have obeyed; a different answer is an
+  error. The modem and line state masks are left at the server's default.
+  If the peer refuses BINARY, NVT rules apply (CR NUL). Carrier detect
+  markers come from NOTIFY-MODEMSTATE only: local ports read CTS and DCD
+  when a control request runs, they are not polled.
+- **Line control API for track E2** (`serial.Manager.Lookup(stream)` then
+  `Handle.Write` / `Handle.Control`): steps run in the order baud, dtr,
+  rts, break, pulse; a pulse flips the line from its current state (taken
+  as asserted when unknown, since ports open with DTR and RTS up) and puts
+  it back, even if the context ends; `break_ms` and `pulse.ms` are at most
+  10 s; a baud change is kept across reconnects until restart. The
+  package enforces the config gate (`writable`) itself; scope and claim
+  are E2's. An empty request only reads the line state. Errors wrap
+  `ErrUnknownStream`, `ErrNotWritable`, `ErrDisconnected`, `ErrBadRequest`
+  or `ErrUnsupported` (`*UnsupportedError` with the reason: raw TCP, or a
+  plain Telnet peer). `Register` adds no tools; E2 adds them in
+  `serial.Register`, where the Manager is built.
+- **`cafard push` spool:** one file per server and stream under the user
+  cache directory (`~/.cache/cafard/spool`, `%LocalAppData%\cafard\spool`,
+  `~/Library/Caches/cafard/spool`), NDJSON as sent, the delivered offset in
+  a `.pos` file beside it. It is created only when a line needs it and
+  deleted once drained, so a healthy push leaves nothing behind. Over the
+  100 MiB cap the newest lines are dropped and a line saying how many goes
+  into the stream. While the spool holds anything, new lines go behind it,
+  which keeps the order. A replayed batch is at most 1000 lines or 4 MiB.
+  `--spool PATH` and `--spool off`; with no cache directory push warns and
+  keeps lines in memory as before.
+- **`push --serial` must open the port at start** (a mistyped COM5 fails at
+  once) and reopens it with backoff after that. `--follow` starts at the
+  end of the file like `tail -f`; the new `--from-start` sends what it
+  already holds. Ctrl-C ends a serial or follow push with status 0.
+  Disconnects of a pushed port are logged on stderr only: `/api/log`
+  takes lines, not markers.
+- **New dependency `go.bug.st/serial` v1.8.0** (named in PLAN section 2),
+  pure Go; the five `CGO_ENABLED=0` cross-builds pass with it.
+
 ## 2026-11-16: M1 store, ingest and core MCP
 
 - **`Deps` carries root settings (`deps.Server`), not `*config.Config`,
