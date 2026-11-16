@@ -90,7 +90,7 @@ var pageTwins = map[string][]string{
 	"streams": {"tpl-stream-dot", "tpl-stream-card", "tpl-toast"},
 	"agents":  {"tpl-toast"},
 	"pair":    {"tpl-toast"},
-	"live":    {"tpl-line", "tpl-marker", "tpl-toast"},
+	"live":    {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
 	// Track D.
 	"home": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
 		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-toast"},

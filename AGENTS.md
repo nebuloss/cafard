@@ -202,6 +202,24 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   `Services` literal needs an `UploadQueue` (`src/testing/services.ts`
   has `fakeServices`).
 
+- **Track G: the FTS triggers call a Go function** (`cafard_fts_text`,
+  registered by `internal/store` in `init`). A `sqlite3` shell or any
+  program without it cannot insert into or delete from `entries`. Do not
+  run `INSERT INTO entries_fts(entries_fts) VALUES('rebuild')`: it would
+  index the raw text again; refill with `delete-all` and the function, as
+  migration 0050 does.
+- **Track G: `LogView.enqueue` paints on the next animation frame.**
+  Tests pass a `FakeFrames` (`src/testing/FakeFrames.ts`) and call
+  `run()`; a paused view keeps new entries out of the DOM until
+  `resume()`, so a test that pauses and then counts rows sees none of
+  them.
+- **Track G: `cafard mcp` must not forward `_meta` keys of the protocol**
+  (`io.modelcontextprotocol/...`): the remote refuses the client's
+  protocol version. `ownMeta` strips them; keep it when adding a
+  forwarded request.
+- **Track G: a nil `*io.PipeWriter` in an `io.Writer` is not nil.** The
+  term session converts it explicitly; copy that pattern.
+
 ## Rules that are easy to break
 
 - **No `innerHTML` and its relatives in `src/`.** Log lines and messages come

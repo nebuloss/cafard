@@ -1,6 +1,7 @@
 {{/* The logs filters (server-only, FilterBar attaches to it). A GET form,
      so filters live in the URL and work without the bundle. On compact
-     screens it folds into a sheet behind one button. Data: liveFilter. */}}
+     screens it folds into a sheet behind one button. The channel picker
+     and the Messages kind need messaging. Data: liveFilter. */}}
 <details class="filter-sheet" data-component="FilterBar"{{if .Open}} open{{end}}>
   <summary class="btn tonal filter-toggle"><svg aria-hidden="true"><use href="/static/icons.svg#filter_list"></use></svg>Filters{{if .Active}} ({{.Active}}){{end}}</summary>
   <form class="filter-bar" method="get" action="/live" role="search">
@@ -9,6 +10,13 @@
       <input name="streams" value="{{.Streams}}" placeholder="serial:dut1, syslog:*" list="known-streams" autocomplete="off" spellcheck="false">
     </label>
     <datalist id="known-streams">{{range .Known}}<option value="{{.}}"></option>{{end}}</datalist>
+    {{if .Channels}}<label class="ofield">
+      <span>Channel</span>
+      <select name="channel">
+        <option value=""{{if not .Channel}} selected{{end}}>None</option>
+        {{range .Channels}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>{{end}}
     <label class="ofield">
       <span>Severity</span>
       <select name="sev">
@@ -23,6 +31,7 @@
       <legend class="visually-hidden">Kinds</legend>
       <label class="chip filter"><input type="checkbox" name="kinds" value="line"{{if .Lines}} checked{{end}}>Lines</label>
       <label class="chip filter"><input type="checkbox" name="kinds" value="marker"{{if .Markers}} checked{{end}}>Markers</label>
+      {{if .Channels}}<label class="chip filter"><input type="checkbox" name="kinds" value="message"{{if .Messages}} checked{{end}}>Messages</label>{{end}}
     </fieldset>
     {{if .FromSeq}}<input type="hidden" name="from_seq" value="{{.FromSeq}}">{{end}}
     {{if .ToSeq}}<input type="hidden" name="to_seq" value="{{.ToSeq}}">{{end}}

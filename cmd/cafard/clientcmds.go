@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -176,23 +177,13 @@ func cmdPush(ctx context.Context, e env, args []string) error {
 	if _, err := push.New(opts); err != nil {
 		return err // the flags are wrong: say so before touching the spool
 	}
-	if *spoolPath != "off" {
-		path := *spoolPath
-		if path == "" {
-			p, err := push.DefaultSpoolPath(e.getenv, *server, *stream)
-			if err != nil {
-				log.Warn("running without a spool: lines wait in memory while the server is unreachable", "err", err)
-			}
-			path = p
-		}
-		if path != "" {
-			sp, err := push.OpenSpool(path, push.DefaultSpoolMax)
-			if err != nil {
-				return fmt.Errorf("spool: %w (pass --spool PATH or --spool off)", err)
-			}
-			defer sp.Close()
-			opts.Spool = sp
-		}
+	sp, err := openSpool(e, log, *spoolPath, *server, *stream)
+	if err != nil {
+		return err
+	}
+	if sp != nil {
+		defer sp.Close()
+		opts.Spool = sp
 	}
 	p, err := push.New(opts)
 	if err != nil {
@@ -226,4 +217,25 @@ func cmdPush(ctx context.Context, e env, args []string) error {
 		return nil
 	}
 	return err
+}
+
+// openSpool opens the spool of a push: path, "off" (nil), or "" for the
+// default place in the user cache directory.
+func openSpool(e env, log *slog.Logger, path, server, stream string) (*push.Spool, error) {
+	if path == "off" {
+		return nil, nil
+	}
+	if path == "" {
+		p, err := push.DefaultSpoolPath(e.getenv, server, stream)
+		if err != nil {
+			log.Warn("running without a spool: lines wait in memory while the server is unreachable", "err", err)
+			return nil, nil
+		}
+		path = p
+	}
+	sp, err := push.OpenSpool(path, push.DefaultSpoolMax)
+	if err != nil {
+		return nil, fmt.Errorf("spool: %w (pass --spool PATH or --spool off)", err)
+	}
+	return sp, nil
 }

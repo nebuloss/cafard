@@ -99,6 +99,7 @@ func registerLogTools(s *Server) {
 	AddTool(s, auth.ScopeRead, mcp.Tool{Name: "tail", Description: "The latest log lines, and the next_seq to continue from."}, s.tail)
 	AddTool(s, auth.ScopeRead, mcp.Tool{Name: "wait_for", Description: "Wait until a log line matches a pattern, e.g. \"login:|Kernel panic\". Returns the match with the lines before it, or timed_out. Use it instead of polling read."}, s.waitFor)
 	AddTool(s, auth.ScopeRead, mcp.Tool{Name: "context", Description: "The lines around one entry, in its stream."}, s.context)
+	registerSearch(s)
 	AddTool(s, auth.ScopeMessage, mcp.Tool{Name: "mark", Description: "Write a marker into a stream and get its seq: a cursor for \"everything since test X started\"."}, s.mark)
 }
 

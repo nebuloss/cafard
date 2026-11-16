@@ -41,10 +41,18 @@ func TestUnknownCommandFails(t *testing.T) {
 	}
 }
 
-func TestUnimplementedCommandsSaySo(t *testing.T) {
-	_, _, err := runArgs(t, nil, "term")
-	if err == nil || !strings.Contains(err.Error(), "M6") {
-		t.Fatalf("err = %v", err)
+func TestTermAndMCPCheckTheirArguments(t *testing.T) {
+	if _, _, err := runArgs(t, nil, "term"); err == nil || !strings.Contains(err.Error(), "serial port") {
+		t.Errorf("term without a port: err = %v", err)
+	}
+	if _, _, err := runArgs(t, nil, "term", "/dev/cafard-no-such-port", "--server", "ftp://x", "--token", "t"); err == nil || !strings.Contains(err.Error(), "http://") {
+		t.Errorf("term with a bad server: err = %v", err)
+	}
+	if _, _, err := runArgs(t, nil, "term", "/dev/cafard-no-such-port", "--spool", "off"); err == nil {
+		t.Error("term on a missing port: want an error")
+	}
+	if _, _, err := runArgs(t, nil, "mcp", "--token", "t"); err == nil || !strings.Contains(err.Error(), "--server") {
+		t.Errorf("mcp without a server: err = %v", err)
 	}
 }
 

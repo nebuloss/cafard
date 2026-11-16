@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/web/view"
 )
@@ -15,6 +16,7 @@ import (
 
 // LineView is partials/line.html.
 type LineView struct {
+	Kind      string // "" for a log line, "message" in Live with kinds=message
 	Seq       int64
 	Sev       int
 	Tone      int
@@ -60,6 +62,28 @@ func Line(e store.Entry) LineView {
 		ISO: e.TS.UTC().Format(time.RFC3339Nano), Time: LogTime(e.TS),
 		Stream: e.Stream, SevLetter: view.SeverityLetter(e.Severity), SevName: view.SeverityName(e.Severity),
 		Segments: view.ANSI(e.Text),
+	}
+}
+
+// MessageLine is a message as a row of the Live page: the chat in the
+// stream column (from the viewer's side), the sender before the text.
+func MessageLine(e store.Entry, viewer string) LineView {
+	chat := messaging.ChatID(viewer, e.Stream)
+	// Line by line, so a multi-line message keeps its lines, as in the
+	// bundle (white-space: pre-wrap).
+	lines := strings.Split(strings.ReplaceAll(strings.TrimRight(e.Text, "\r\n"), "\r\n", "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = view.StripText(l)
+	}
+	text := strings.Join(lines, "\n")
+	if e.Sender != "" {
+		text = e.Sender + ": " + text
+	}
+	return LineView{
+		Kind: string(store.KindMessage), Seq: e.Seq, Sev: e.Severity, Tone: view.Tone(chat),
+		ISO: e.TS.UTC().Format(time.RFC3339Nano), Time: LogTime(e.TS),
+		Stream: ChatLabel(chat), SevLetter: "»", SevName: "message",
+		Segments: []view.Segment{{Text: text}},
 	}
 }
 

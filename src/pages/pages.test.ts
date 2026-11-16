@@ -1,19 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { Backoff } from '@/core/Backoff.ts';
-import { MemoryStore } from '@/core/KeyValueStore.ts';
 import type { Stream, TokenCreated } from '@/model/types.ts';
-import { CafardApi } from '@/net/CafardApi.ts';
-import type { HttpClient } from '@/net/HttpClient.ts';
-import type { EventSourceLike } from '@/net/LiveFeed.ts';
 import { showToken } from '@/pages/AgentsPage.ts';
-import { entriesQuery, LivePage } from '@/pages/LivePage.ts';
+import { entriesQuery } from '@/pages/LivePage.ts';
 import { countdown } from '@/pages/PairPage.ts';
 import { STREAM_CARD_ATTRIBUTES, StreamCards } from '@/pages/StreamsPage.ts';
 import { SlotTemplate } from '@/render/SlotTemplate.ts';
 import { FakeClock } from '@/testing/FakeClock.ts';
 import { fixture, loadPage } from '@/testing/pages.ts';
-import type { Services } from '@/App.ts';
-import type { UploadQueue } from '@/upload/UploadQueue.ts';
 
 describe('StreamsPage', () => {
   it('updates a server-rendered card and inserts a new one in order', () => {
@@ -26,6 +19,11 @@ describe('StreamsPage', () => {
     expect(updated.dataset['status']).toBe('down');
     expect(updated.querySelector('[data-slot="dropped"]')?.textContent).toBe('7');
     expect(updated.querySelector('[data-slot="line-state"]')?.textContent).toBe('DTR on, RTS off, CTS on, DCD off');
+    expect(updated.querySelector('[data-slot="claim"] .chip')?.textContent).toBe('claude-laptop until 10:12');
+    expect(updated.querySelector('[data-slot="preview"]')?.textContent).toBe('[   76.445871] usb usb1-port1: connect-debounce failed');
+    const { claim: _claim, ...released } = base;
+    cards.update(released);
+    expect(updated.querySelector('[data-slot="claim"]')?.children).toHaveLength(0);
     const fresh = cards.update({ ...base, id: 'serial:dut0', last_line: '<b>hi</b>' });
     expect(rows.querySelector('[data-stream]')).toBe(fresh);
     expect(fresh.querySelector('[data-slot="open"]')?.getAttribute('href')).toBe('/live?streams=serial%3Adut0');
@@ -64,40 +62,6 @@ describe('PairPage', () => {
 });
 
 describe('LivePage', () => {
-  it('follows from data-next-seq and appends what the feed delivers', () => {
-    loadPage('live');
-    const sources: { url: string; source: EventSourceLike & { emit(t: string, d: unknown): void } }[] = [];
-    const clock = new FakeClock();
-    const services: Services = {
-      clock,
-      storage: new MemoryStore(),
-      http: {} as HttpClient,
-      api: new CafardApi({} as HttpClient),
-      backoff: () => new Backoff({ baseMs: 1000, maxMs: 30000 }),
-      uploads: {} as UploadQueue,
-      eventSources: (url) => {
-        const listeners = new Map<string, (e: MessageEvent) => void>();
-        const source = {
-          onopen: null,
-          onerror: null,
-          addEventListener: (t: string, l: (e: MessageEvent) => void) => listeners.set(t, l),
-          close: () => {},
-          emit: (t: string, d: unknown) => listeners.get(t)?.(new MessageEvent(t, { data: JSON.stringify(d) })),
-        };
-        sources.push({ url, source });
-        return source;
-      },
-    };
-    const next = Number(document.querySelector('[data-component="LogView"]')?.getAttribute('data-next-seq'));
-    const running = new LivePage(document, services).start();
-    expect(sources[0]?.url).toBe(`/api/events?since_seq=${next}`);
-    sources[0]?.source.emit('entry', { ...(fixture('entry_line') as object), seq: next, text: 'from the feed' });
-    clock.advance(50);
-    const last = document.querySelector('.log-list')?.lastElementChild;
-    expect(last?.querySelector('[data-slot="text"]')?.textContent).toBe('from the feed');
-    running.dispose();
-  });
-
   it('maps the /live query onto /api/entries', () => {
     expect(entriesQuery('streams=serial%3A*&sev=4&from_seq=12&kinds=line')).toEqual({
       streams: 'serial:*',

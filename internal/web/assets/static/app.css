@@ -1556,3 +1556,25 @@ dialog.image-viewer {
 
 /* The no-JS read beacon is never seen. */
 .seen-beacon { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+/* --- live and sources (track G) --- */
+
+/* Lines take taps (the line menu) and long presses (a range). */
+.live .line, .live .marker { cursor: pointer; -webkit-touch-callout: none; }
+.live .line-menu .menu-item[hidden], .logs-pane .line-menu .menu-item[hidden] { display: none; }
+
+/* Compact screens: the time column shows mm:ss (PLAN 9.6.4). The column
+   is monospace, so the hour and the milliseconds are clipped by width. */
+@media (max-width: 599px) {
+  .live .line-time { display: inline-block; width: 5ch; overflow: hidden; white-space: nowrap; text-indent: -3ch; }
+}
+
+/* A message in Live (kinds=message): the chat in the tag column, the
+   text in the reading font, set apart by a rule. */
+.line[data-kind="message"] { border-left: 3px solid var(--primary); padding-left: 9px; }
+.line[data-kind="message"] .line-sev { color: var(--primary); }
+.line[data-kind="message"] .line-text { font-family: var(--font-text); }
+
+/* Sources: the claim chip and an empty preview stay quiet. */
+.sc-claim .chip { min-height: 24px; padding: 0 8px; font-size: 12px; }
+.sc-preview:empty::before { content: "-"; color: var(--on-surface-variant); }

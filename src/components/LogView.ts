@@ -1,5 +1,6 @@
 import { Dom } from '@/core/Dom.ts';
 import { disposable, type Disposable } from '@/core/Disposable.ts';
+import { AnimationFrames, type FrameScheduler } from '@/core/FrameScheduler.ts';
 import { Observable } from '@/core/Observable.ts';
 import type { Entry } from '@/model/types.ts';
 import type { EntryRenderer } from '@/render/EntryRenderer.ts';
@@ -41,6 +42,12 @@ const sameFollow = (a: FollowState, b: FollowState): boolean =>
  * reader is at the bottom; scrolling up pauses it, and a "N new" button
  * resumes. Past cap rows the oldest are dropped, so a fast source cannot
  * freeze the tab.
+ *
+ * A live feed goes through enqueue(): entries are gathered and reach the
+ * DOM once per animation frame, in one fragment, and only the newest cap
+ * of a burst are rendered at all. While paused, new entries wait outside
+ * the DOM (at most cap of them), so the rows the reader is looking at do
+ * not move; resuming shows them.
  */
 export class LogView extends Component {
   static readonly cap = 5000;
@@ -48,6 +55,12 @@ export class LogView extends Component {
   private list!: HTMLElement;
   private lastSeq = 0;
   private scrolling = false;
+  private queued: Entry[] = [];
+  private held: Entry[] = [];
+  private frame: Disposable | null = null;
+  private skipped = 0; // queued entries dropped before a frame, still counted as new
+  /** DOM batches applied, for tests and the curious. */
+  flushes = 0;
 
   constructor(
     root: HTMLElement,
@@ -55,6 +68,7 @@ export class LogView extends Component {
     private readonly scroller: Scroller,
     private readonly doc: Document,
     private readonly cap = LogView.cap,
+    private readonly frames: FrameScheduler = new AnimationFrames(doc.defaultView),
   ) {
     super(root);
   }
@@ -66,6 +80,7 @@ export class LogView extends Component {
   }
 
   protected bind(): void {
+    this.bag.defer(() => this.frame?.dispose());
     this.bag.add(
       this.scroller.onScroll(() => {
         if (this.scrolling) {
@@ -113,31 +128,62 @@ export class LogView extends Component {
     return this.list.children.length;
   }
 
-  /** Adds entries at the end, in seq order; ones already shown are skipped. */
-  append(entries: readonly Entry[]): void {
-    let added = 0;
-    for (const entry of entries) {
-      if (entry.seq <= this.lastSeq) continue;
-      this.list.append(this.renderer.render(entry));
-      this.lastSeq = entry.seq;
-      added++;
-    }
-    if (added === 0) return;
-    while (this.list.children.length > this.cap) this.list.firstElementChild?.remove();
-    const f = this.follow.value;
-    if (f.mode === 'following') this.toEnd();
-    else this.follow.set({ mode: 'paused', newCount: f.newCount + added });
+  /** Entries waiting for the next frame or for the reader to resume. */
+  get waiting(): number {
+    return this.queued.length + this.held.length;
   }
 
-  /** Replaces everything, after a reset. */
+  /**
+   * Queues entries from a live feed; they reach the DOM on the next
+   * animation frame, together with everything else that arrived by then.
+   */
+  enqueue(entries: readonly Entry[]): void {
+    if (entries.length === 0) return;
+    const all = this.queued.concat(entries);
+    this.skipped += Math.max(0, all.length - this.cap);
+    this.queued = keepLast(all, this.cap);
+    this.frame ??= this.frames.request(() => {
+      this.frame = null;
+      const batch = this.queued;
+      const skipped = this.skipped;
+      this.queued = [];
+      this.skipped = 0;
+      this.append(batch, skipped);
+    });
+  }
+
+  /**
+   * Adds entries at the end, in seq order; ones already shown are skipped.
+   * uncounted is how many newer entries were dropped before they got
+   * here, which a paused view still counts as new.
+   */
+  append(entries: readonly Entry[], uncounted = 0): void {
+    const fresh = entries.filter((e) => e.seq > Math.max(this.lastSeq, this.held[this.held.length - 1]?.seq ?? 0));
+    if (fresh.length === 0) return;
+    const f = this.follow.value;
+    if (f.mode === 'paused') {
+      this.held = keepLast(this.held.concat(fresh), this.cap);
+      this.follow.set({ mode: 'paused', newCount: f.newCount + fresh.length + uncounted });
+      return;
+    }
+    this.render(fresh);
+    this.toEnd();
+  }
+
+  /** Replaces everything (a reset, a context view), whatever the mode. */
   replace(entries: readonly Entry[]): void {
     this.list.replaceChildren();
     this.lastSeq = 0;
-    this.append(entries);
+    this.held = this.held.filter((e) => e.seq > (entries[entries.length - 1]?.seq ?? 0));
+    this.render(entries);
+    if (this.follow.value.mode === 'following') this.toEnd();
   }
 
   resume(): void {
+    const held = this.held;
+    this.held = [];
     this.follow.set({ mode: 'following' });
+    this.render(held);
     this.toEnd();
   }
 
@@ -146,9 +192,26 @@ export class LogView extends Component {
     else this.resume();
   }
 
+  /** Renders a run in one fragment and trims the oldest rows past cap. */
+  private render(entries: readonly Entry[]): void {
+    const fresh = keepLast(entries.filter((e) => e.seq > this.lastSeq), this.cap);
+    if (fresh.length === 0) return;
+    if (fresh.length >= this.cap) this.list.replaceChildren();
+    const fragment = this.doc.createDocumentFragment();
+    for (const entry of fresh) fragment.append(this.renderer.render(entry));
+    this.list.append(fragment);
+    this.lastSeq = fresh[fresh.length - 1]?.seq ?? this.lastSeq;
+    for (let excess = this.list.children.length - this.cap; excess > 0; excess--) this.list.firstElementChild?.remove();
+    this.flushes++;
+  }
+
   private toEnd(): void {
     if (this.scroller.atEnd()) return;
     this.scrolling = true;
     this.scroller.toEnd();
   }
+}
+
+function keepLast<T>(items: T[], n: number): T[] {
+  return items.length > n ? items.slice(items.length - n) : items;
 }

@@ -74,6 +74,9 @@ func TokenSnippets(base, principal, secret string, scopes auth.ScopeSet) []dto.S
 				Text: fmt.Sprintf("# export CAFARD_TOKEN=%s in the shell that runs codex\n[mcp_servers.cafard]\nurl = %q\nbearer_token_env_var = \"CAFARD_TOKEN\"", secret, mcpURL)},
 			dto.Snippet{Label: "Other MCP clients (JSON)", Language: dto.LangJSON,
 				Text: fmt.Sprintf("{\n  \"mcpServers\": {\n    \"cafard\": {\n      \"type\": \"http\",\n      \"url\": %q,\n      \"headers\": { \"Authorization\": \"Bearer %s\" }\n    }\n  }\n}", mcpURL, secret)},
+			// Track G: for clients that only start local commands.
+			dto.Snippet{Label: "Clients that speak stdio only (cafard mcp)", Language: dto.LangJSON,
+				Text: fmt.Sprintf("{\n  \"mcpServers\": {\n    \"cafard\": {\n      \"command\": \"cafard\",\n      \"args\": [\"mcp\", \"--server\", %q],\n      \"env\": { \"CAFARD_TOKEN\": \"%s\" }\n    }\n  }\n}", base, secret)},
 		)
 	}
 	if scopes.Has(auth.ScopeIngest) {

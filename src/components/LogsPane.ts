@@ -6,7 +6,8 @@ import { ApiError } from '@/net/ApiError.ts';
 import type { EntryRenderer } from '@/render/EntryRenderer.ts';
 import { Component } from '@/components/Component.ts';
 import { ElementScroller } from '@/components/ElementScroller.ts';
-import { LogView } from '@/components/LogView.ts';
+import { LogView, type Scroller } from '@/components/LogView.ts';
+import type { FrameScheduler } from '@/core/FrameScheduler.ts';
 import { logLabel, type PendingLog } from '@/components/AttachmentTray.ts';
 
 /** The logs pane's width, remembered across pages (PLAN 9.6.3). */
@@ -52,6 +53,16 @@ export function rangeRequest(from: number, to: number, streams: readonly string[
   };
 }
 
+/** How long a touch must rest on a line to start a range (PLAN 9.6.4). */
+export const LONG_PRESS_MS = 500;
+
+/** Where a pane scrolls and paints; the chat's own pane by default. */
+export interface LogsPaneOptions {
+  /** The window on /live; the pane's list on a chat page. */
+  readonly scroller?: Scroller;
+  readonly frames?: FrameScheduler;
+}
+
 export interface LogsPaneHooks {
   attach(log: PendingLog): void;
   copy(text: string): void;
@@ -79,6 +90,7 @@ export class LogsPane extends Component {
     private readonly layout: HTMLElement | null,
     private readonly doc: Document,
     private readonly hooks: LogsPaneHooks,
+    private readonly options: LogsPaneOptions = {},
   ) {
     super(root);
     this.filters = filtersOf(Dom.find('[data-component="LogView"]', root)?.dataset['query'] ?? '');
@@ -87,7 +99,7 @@ export class LogsPane extends Component {
   protected override build(): void {
     const mount = Dom.find('[data-component="LogView"]', this.root) ?? this.root;
     this.list = Dom.find('[data-slot="list"]', mount) ?? mount;
-    this.log = new LogView(mount, this.renderer, new ElementScroller(this.list), this.doc);
+    this.log = new LogView(mount, this.renderer, this.options.scroller ?? new ElementScroller(this.list), this.doc, LogView.cap, this.options.frames);
   }
 
   protected bind(): void {
@@ -99,8 +111,11 @@ export class LogsPane extends Component {
       const row = (event.target as Element | null)?.closest<HTMLElement>('[data-seq]');
       if (row === null || row === undefined) return;
       event.preventDefault();
+      // A phone fires contextmenu on a long press, which starts a range.
+      if (this.touching) return;
       this.openMenu(row);
     });
+    this.bindLongPress();
     const menu = Dom.find('[data-slot="line-menu"]', this.root);
     if (menu !== null) this.bag.listen(menu, 'click', (event) => this.menuAction(event, menu));
     const bar = Dom.find('[data-component="RangeBar"]', this.root);
@@ -112,6 +127,11 @@ export class LogsPane extends Component {
   /** Lines and markers of the bound streams, from the feed. */
   append(entries: readonly Entry[]): void {
     this.log.append(entries);
+  }
+
+  /** Entries from a live feed, painted on the next animation frame. */
+  enqueue(entries: readonly Entry[]): void {
+    this.log.enqueue(entries);
   }
 
   /** Shows an event row's entry with 20 lines of context around it. */
@@ -150,7 +170,48 @@ export class LogsPane extends Component {
     }
   }
 
+  private touching = false;
+  private pressed = false; // a long press just started a range: its click is not a tap
+
+  /** A long press on a line starts a range, as "Select a range" does. */
+  private bindLongPress(): void {
+    const win = this.doc.defaultView;
+    if (win === null) return;
+    let timer: number | undefined;
+    let x = 0;
+    let y = 0;
+    const cancel = (): void => {
+      if (timer !== undefined) win.clearTimeout(timer);
+      timer = undefined;
+    };
+    this.bag.defer(cancel);
+    this.bag.listen(this.list, 'pointerdown', (event) => {
+      const e = event as PointerEvent;
+      this.touching = e.pointerType === 'touch';
+      if (!this.touching) return;
+      const row = (e.target as Element | null)?.closest<HTMLElement>('[data-seq]');
+      if (row === null || row === undefined || row.dataset['kind'] === 'message') return;
+      x = e.clientX;
+      y = e.clientY;
+      cancel();
+      timer = win.setTimeout(() => {
+        timer = undefined;
+        this.pressed = true;
+        this.select({ mode: 'picking', from: Number(row.dataset['seq']) });
+      }, LONG_PRESS_MS);
+    });
+    this.bag.listen(this.list, 'pointermove', (event) => {
+      const e = event as PointerEvent;
+      if (timer !== undefined && Math.hypot(e.clientX - x, e.clientY - y) > 10) cancel();
+    });
+    for (const type of ['pointerup', 'pointercancel', 'pointerleave']) this.bag.listen(this.list, type, cancel);
+  }
+
   private lineClick(event: MouseEvent): void {
+    if (this.pressed) {
+      this.pressed = false;
+      return;
+    }
     const row = (event.target as Element | null)?.closest<HTMLElement>('[data-seq]');
     if (row === null || row === undefined) return;
     const seq = Number(row.dataset['seq']);
@@ -170,6 +231,9 @@ export class LogsPane extends Component {
     const menu = Dom.find('[data-slot="line-menu"]', this.root);
     if (menu === null) return;
     this.menuSeq = Number(row.dataset['seq']);
+    // A message in Live can be copied, not attached or marked.
+    const message = row.dataset['kind'] === 'message';
+    for (const item of Dom.findAll<HTMLElement>('[data-log-only]', menu)) item.hidden = message;
     row.after(menu);
     menu.hidden = false;
     menu.querySelector('button')?.focus();
@@ -181,7 +245,13 @@ export class LogsPane extends Component {
 
   private streamOf(seq: number): string {
     const row = this.lineOf(seq);
-    return Dom.find('[data-slot="stream"]', row ?? this.doc.createElement('div'))?.textContent ?? '';
+    if (row === null) return '';
+    const tag = Dom.find('[data-slot="stream"]', row);
+    if (tag !== null) return tag.textContent ?? '';
+    // A marker reads "<stream>: <text>"; stream ids have no spaces.
+    const text = Dom.find('[data-slot="text"]', row)?.textContent ?? '';
+    const i = text.indexOf(': ');
+    return i > 0 ? text.slice(0, i) : '';
   }
 
   private menuAction(event: Event, menu: HTMLElement): void {
@@ -243,7 +313,7 @@ export class LogsPane extends Component {
   }
 
   private selected(): HTMLElement[] {
-    return Dom.findAll('.line[data-selected]', this.list);
+    return Dom.findAll('.line[data-selected]:not([data-kind="message"])', this.list);
   }
 
   private barAction(event: Event): void {
@@ -257,6 +327,10 @@ export class LogsPane extends Component {
     if (action === 'copy') this.hooks.copy(lines.map((l) => l.textContent ?? '').join('\n'));
     if (action === 'attach') {
       const streams = lines.map((l) => Dom.find('[data-slot="stream"]', l)?.textContent ?? '');
+      if (new Set(streams).size > 1 && this.filters.channel === undefined) {
+        // An attachment is one stream or one channel's streams.
+        this.hooks.toast(`The range spans several streams; only the lines of ${streams[0] ?? ''} are attached. Pick a channel to attach them all.`);
+      }
       this.attach(rangeRequest(s.from, s.to, streams, this.filters), lines.length);
       this.select({ mode: 'none' });
     }

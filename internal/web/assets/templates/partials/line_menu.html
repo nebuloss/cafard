@@ -1,0 +1,12 @@
+{{/* The line actions of a logs view (LogsPane, on chat pages and Live):
+     a menu the bundle moves under the line it opens on. Bundle only. A
+     message row in Live offers the copy actions only. */}}
+<div class="line-menu menu only-scripted" data-slot="line-menu" role="menu" hidden>
+  <button class="menu-item" type="button" role="menuitem" data-action="copy-line">Copy line</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="copy-seq">Copy seq</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="context" data-log-only>Show context</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="mark" data-log-only>Add marker here</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="attach-line" data-log-only>Attach this line</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="attach-from" data-log-only>Attach from here on</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="select" data-log-only>Select a range</button>
+</div>

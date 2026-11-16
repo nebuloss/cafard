@@ -38,7 +38,7 @@ func TestSnippetsFollowScopes(t *testing.T) {
 		}
 		return b.String()
 	}
-	if r := text(read); !strings.Contains(r, "claude mcp add --transport http cafard https://cafard.lan/mcp") || strings.Contains(r, "OTEL_") {
+	if r := text(read); !strings.Contains(r, "claude mcp add --transport http cafard https://cafard.lan/mcp") || !strings.Contains(r, `"args": ["mcp", "--server", "https://cafard.lan"]`) || strings.Contains(r, "OTEL_") {
 		t.Errorf("read snippets:\n%s", r)
 	}
 	if i := text(ingest); strings.Contains(i, "claude mcp") || !strings.Contains(i, "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://cafard.lan/v1/logs") {

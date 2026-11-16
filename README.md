@@ -7,10 +7,12 @@ from devices and people, serves them to AI agents over MCP, and passes messages
 between agents and the humans they work with. See `PLAN.md` for the whole
 design.
 
-**Status: milestone M1.** Logs arrive over HTTP (`POST /api/log`, or
-`cafard push`), and agents read them over MCP: `read`, `tail`, `wait_for`,
-`context`, `mark`, `list_streams`, `whoami`. Messaging, the web UI and the
-other sources come in the next milestones.
+**Status: milestones M0 to M6.** Logs arrive over HTTP, syslog,
+netconsole, OTLP, serial ports and `cafard push`; agents read, search and
+wait on them over MCP (HTTP, or stdio through `cafard mcp`), message each
+other and the humans, and drive serial consoles; people use the web UI
+from a phone or a desktop. M7 (Web Push) and M8 (OAuth) are optional and
+not started.
 
 ## Build
 
@@ -479,6 +481,94 @@ beside the list shows what needs you and the latest activity.
 Without JavaScript the chats still work: answering, sending text and
 photos, older pages, filters and the logs view are links and plain
 forms, and a page you open counts as read.
+
+## Live, Sources, search and the stdio and serial clients (track G, M5 and M6)
+
+### The Live page (`/live`)
+
+Every log line as it arrives, from all sources or the ones you pick.
+The filters live in the URL, so a view can be bookmarked or pasted into
+a chat: `streams` (ids or globs such as `serial:*`), `channel` (its
+bound streams), `sev` (minimum severity), `re` (RE2 regexp), `kinds`
+(`line`, `marker`, `message`), and a range with `from_seq` and `to_seq`.
+On a phone the filters sit behind the Filters button.
+
+- Lines show the time (UTC, `mm:ss` on a phone), a coloured stream tag,
+  the severity letter and the text with its ANSI colours. Markers are
+  divider rows. With `kinds=message` the messages you may see (a
+  channel's, or with `channel=` only that channel's) appear as lines
+  too; a direct message never shows to anyone but its two parties.
+- The view follows the end. Scroll up (or press `f`) to pause: new lines
+  wait off screen and a "N new" button brings them in. It keeps the last
+  5000 rows and paints once per animation frame, so 1000 lines per second
+  do not freeze the tab.
+- Tap a line (right-click on a desktop) for: copy line, copy seq, show
+  context (20 lines either side in its stream), add a marker here, attach
+  this line, attach from here on, select a range. A range is also click
+  then shift-click, or a long press then a tap on a phone. Attaching opens
+  the quick drop sheet with the log chip and a chat picker; the regexp and
+  severity on screen go with the attachment.
+
+Without JavaScript the page shows the range in the URL, or the last 500
+lines.
+
+### Sources (`/streams`)
+
+Cards on a phone, a table from 600 px: status dot (connected, idle,
+down), kind and transport, lines per minute, last activity, the last
+line, drops, who holds a claim, DTR and RTS for serial ports that report
+them, and "Open in Live". It updates live: the rate, last line and claim
+of an active source refresh about every 2 seconds.
+
+### Full-text search for agents (`search`)
+
+```text
+search {query: "dwc3 timeout", from: "-2h"}
+search {query: "\"usb 1-1\" OR reset*", channel: "dut1", limit: 50}
+```
+
+`query` is SQLite FTS5: all words must appear, `"a phrase"`, `prefix*`,
+`OR`, `NOT`, `NEAR(a b, 5)`. Words with punctuation (`usb-1.2`, `error:`,
+`/dev/ttyUSB0`) are quoted for you; a query that is still invalid (an
+unclosed quote) gets a sentence saying so. `from` and `to` take RFC 3339
+or a time before now (`-30m`, `-2h`, `-1d`, `-1h30m`) and filter on when
+cafard received the line. Matches come in seq order with the usual
+output rules; pass `next_seq` back as `since_seq` for more. Without
+`channel` it searches log streams only; with `channel=` it also searches
+that channel's messages you may see. The index ignores ANSI escapes, so
+`error` finds a red `error`.
+
+### `cafard mcp`: for MCP clients that speak stdio only
+
+```json
+{"mcpServers": {"cafard": {"command": "cafard",
+  "args": ["mcp", "--server", "http://10.0.50.2:8790"],
+  "env": {"CAFARD_TOKEN": "cfd_..."}}}}
+```
+
+It forwards everything to the server over streamable HTTP: the tools
+your token may call, resources, subscriptions (`cafard://inbox`,
+`cafard://stream/{id}`), progress and cancellation. It opens no database
+and needs no configuration file; if the server restarts it reconnects
+(the call in flight at that moment may fail once). The token's snippets
+on the Agents page include this block.
+
+### `cafard term`: a serial terminal that also pushes
+
+```sh
+cafard term /dev/ttyUSB0 --baud 115200 --server http://10.0.50.2:8790 --token cfd_... --stream dut1
+cafard.exe term COM5 --baud 115200 --server http://10.0.50.2:8790 --stream bench
+```
+
+Windows lets only one program open a COM port, so this replaces PuTTY:
+you see the board and type into it (raw console: Ctrl-C goes to the
+board), and everything it prints is pushed to `push:<stream>` (default
+the port's name, `push:com5`), with the spool of `cafard push` when the
+server is away. A port that goes away is reopened. **Ctrl-] quits.**
+Without `--server` it is a plain terminal. If the Windows console gives
+you trouble, `cafard push --serial COM5` with com0com and hub4com
+(a virtual port pair, so PuTTY and cafard can share the board) remains the
+workaround.
 
 ## Retention
 

@@ -3,6 +3,121 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-16: track G polish (M5 Live and Sources, M6 search, stdio proxy, term)
+
+- **The FTS index holds ANSI-stripped text** (migration
+  `0050_g_fts_stripped.sql`). With raw text, `\x1b[31merror` tokenised as
+  `31merror`, so a coloured line was not found by its words. The triggers
+  now index `cafard_fts_text(text)`, a deterministic Go function the store
+  registers on the SQLite driver in `init` (`store/search.go`), so every
+  connection of every process has it (serve, `token`, tests). The
+  migration drops the old triggers, empties the index (`delete-all`) and
+  refills it from `entries`; deletes pass the same function so the
+  external-content index stays consistent; an `UPDATE OF text` trigger
+  was added for completeness (nothing updates text today). Inserts and
+  deletes still happen only in the writer's transactions, so "only the
+  writer writes entries and entries_fts" holds. Cost: a database written
+  by this version cannot take inserts from a binary or a `sqlite3` shell
+  without the function. To let the store import the stripper without a
+  cycle (`textclean` imports `store`), `StripANSI` moved to a new leaf
+  package `internal/ansi`; `textclean.StripANSI` wraps it.
+- **`search`:** FTS5 over the log streams (never `chan:*`/`dm:*`
+  without `channel=`); with `channel=`, also `chan:<name>`, each message
+  checked with `Messaging.Visible` (a DM lives in `dm:*` and is never
+  read). Results ascend by seq, `limit` 100 by default and 400 at most,
+  formatted with `textclean.Format`; a new optional `since_seq` continues
+  a search (the footer of `Format` already says "continue with
+  since_seq"). `from`/`to` filter the receive time `ts` (what seq order
+  follows), and take RFC 3339 (also without zone, read as UTC, or a bare
+  date), `now`, or `-<n><unit>` with ms, s, m, h, d, w and combinations
+  (`-1h30m`). **Sanitising:** `AND`, `OR`, `NOT`, `NEAR(...)`, `+`,
+  parentheses, `"phrases"`, `prefix*` and `^initial` pass; any other word
+  with characters FTS5 does not take in a bare word is quoted (a phrase
+  of its tokens); a comma outside `NEAR(...)` separates words. What
+  SQLite still refuses (an unclosed quote, unbalanced parentheses)
+  becomes `bad_request` with its reason and how to fix the query.
+- **`cafard mcp`** (`internal/mcpproxy`): one local SDK server mirroring
+  the remote's tools, resources, templates, instructions and server info,
+  each handler forwarding to one streamable HTTP client session with the
+  bearer token. Progress notifications are mapped back by token (kept 2 s
+  after the result, since the SDK may handle a notification just after
+  the response); cancellation follows the context; subscriptions are
+  forwarded and replayed after a reconnect. The protocol's own `_meta`
+  keys (`io.modelcontextprotocol/...`, protocol version and client info)
+  are not forwarded: each side negotiates its own version, and the remote
+  refused a version it had not agreed to. **Reconnects:** a call refused
+  with "session not found" is retried once on a new session (it never
+  ran); a call that failed with "connection closed" is not retried (it
+  may have run, `send` must not post twice), and a session that ends on
+  its own is replaced in the background. The tool list is read once at
+  start: a token whose scopes change needs the proxy restarted.
+- **`cafard term`** (`internal/term`): the console is raw through
+  `golang.org/x/term` (new dependency, v0.46.0, an extension of the x/
+  family already used; it makes `golang.org/x/sys` direct, which the
+  Windows code also uses to turn on `ENABLE_VIRTUAL_TERMINAL_PROCESSING`
+  so a board's colours render in the classic console). Both cross-build
+  with `CGO_ENABLED=0`. It is shipped for Linux and Windows; the Windows
+  console is a manual check, and README keeps com0com + hub4com with
+  `push --serial` as the fallback. The port opens first (a mistyped COM5
+  fails before the console turns raw); a lost port is reopened with
+  backoff (1 s to 30 s) with a note on screen, and keys typed meanwhile
+  are dropped with one note. Everything read goes through a pipe to
+  `push.Pusher.Reader`, with the spool of `cafard push`; on quit the
+  pusher has 5 s to deliver, then what is left stays in the spool.
+  `--stream` defaults to the port's lowercased name. Without `--server`
+  it only relays. Logs go to stderr with `\r\n`, since raw mode turns
+  off the terminal's newline translation.
+- **Live renders messages** with `kinds=message`, on the server too: the
+  message streams visible to the viewer (the channel's only with
+  `channel=`, also in SSE now; `view.MessagePatterns`), each entry
+  checked with `Visible`, merged by seq with the log lines and capped at
+  500. A message is a `tpl-line` row with `data-kind="message"` (new
+  settable attribute, CONTRACTS 6.2): the chat from the viewer's side in
+  the stream column, `»` as its severity letter, "sender: text". Line
+  actions on a message row are the copy ones only, and a range never
+  includes messages. `kinds=message` alone skips the log read.
+- **LogView paints once per animation frame** (`enqueue`, through an
+  injected `FrameScheduler`; `append` stays synchronous): a frame renders
+  only the newest 5000 entries of what arrived, in one fragment, then
+  trims. **While paused, new entries stay out of the DOM** (at most 5000,
+  counted in "N new") so the rows being read do not move; resuming shows
+  them. This also applies to the chat's logs pane.
+- **Live reuses `LogsPane`** (track D) with the window as its scroller:
+  `LogsPane` gained options (scroller, frames), `enqueue`, a long press
+  (500 ms, touch only; the phone's `contextmenu` on long press is
+  ignored), copy-only menus for message rows, the stream of a marker read
+  from its text, and a toast when a multi-stream range without a channel
+  can only attach its first stream. The line menu became the partial
+  `partials/line_menu.html` (server-only), shared by both. `/live`
+  carries the quick drop sheet when the session has `message`; attaching
+  puts the chip in it and opens it. The filter form gained a channel
+  picker and the Messages kind when messaging runs.
+- **Sources are live:** `status.Seen` now notifies on every entry
+  (still throttled to one per 2 s per stream) instead of only on a change
+  of state, and SSE fills `stream_status` with what status does not know:
+  `last_line` (stripped), `last_seq`, `labels` from the store
+  (`Store.StreamRow`) and `claim` (absent: nobody holds it) through an
+  `ActiveClaims` assertion on messaging. Compact screens clip the time to
+  `mm:ss` in CSS (monospace width and a negative indent), so server and
+  bundle keep one markup.
+- **Agents page:** the token snippets gained a stdio JSON block for
+  `cafard mcp`.
+- **Shared files touched:** `cmd/cafard/main.go` (the `term` and `mcp`
+  entries that said "not yet" now point at the commands; `notYet` is
+  gone), `clientcmds.go` (`openSpool` factored out for `term`),
+  `main_test.go` (the "not implemented" test became an argument test),
+  `internal/mcpserver/logtools.go` (one line), `internal/status`,
+  `internal/web/sse/sse.go`, `view/filter.go`, `view/dto.go`,
+  `pages/live.go`, `pages/views.go`, templates `live.html`, `line.html`,
+  `filter_bar.html`, `logs_pane.html`, `web_test.go` (live twins),
+  `app.css` (a section at the end), `src/components/LogView.ts`,
+  `LogsPane.ts`, `src/pages/LivePage.ts`, `StreamsPage.ts`,
+  `src/render/format.ts`, `LineRenderer.ts`, and `pages/chat.go`: the
+  share target now joins title, text and url in that order whatever the
+  order of the form's fields (track D's share test built its form from a
+  map and failed at random). No config key, no DTO. Migration number
+  used: 0050.
+
 ## 2026-11-16: track D chat UI
 
 - **No migration.** Pins, mutes, follows and acks already have their

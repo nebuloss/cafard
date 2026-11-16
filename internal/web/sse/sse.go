@@ -20,6 +20,7 @@ import (
 	"github.com/nebuloss/cafard/internal/hub"
 	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/store"
+	"github.com/nebuloss/cafard/internal/textclean"
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
@@ -82,7 +83,7 @@ func (h *Handler) selection(ctx context.Context, r *http.Request, p auth.Princip
 			// cafard's sources make such ids.
 			filter.Streams = []string{"*"}
 		}
-		filter.Streams = append(filter.Streams, "chan:*", "dm:*")
+		filter.Streams = append(filter.Streams, view.MessagePatterns(f)...)
 		filter.Kinds = append(filter.Kinds, store.KindMessage)
 	}
 	if filter.Streams != nil && len(filter.Streams) == 0 {
@@ -353,7 +354,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			dirty = true
-			err = s.event("stream_status", "", st)
+			err = s.event("stream_status", "", h.enrich(ctx, st))
 		case <-countsEntries:
 			dirty = true
 		case <-countsLagged:
@@ -424,4 +425,29 @@ func (h *Handler) replay(ctx context.Context, s *stream, f *hub.Filter, p auth.P
 		}
 	}
 	return last, false, nil
+}
+
+// claimSource is what messaging offers for the claim holder of a stream.
+type claimSource interface {
+	ActiveClaims(ctx context.Context) (map[string]dto.Claim, error)
+}
+
+// enrich adds to a status change what the status registry does not know
+// (track G): the last line, last seq and labels from the store, and the
+// claim holder, so the Sources page shows them live. A missing claim
+// means none.
+func (h *Handler) enrich(ctx context.Context, st dto.Stream) dto.Stream {
+	if row, err := h.d.Store.StreamRow(ctx, st.ID); err == nil {
+		st.LastSeq, st.Labels = row.LastSeq, row.Labels
+		st.LastLine = textclean.StripANSI(row.LastLine)
+	}
+	st.Claim = nil
+	if cs, ok := h.d.Messaging.(claimSource); ok && h.d.Messaging != nil {
+		if claims, err := cs.ActiveClaims(ctx); err == nil {
+			if c, ok := claims[st.ID]; ok {
+				st.Claim = &c
+			}
+		}
+	}
+	return st
 }

@@ -130,7 +130,10 @@ func (m *Memory) Seen(stream string, _ time.Time) {
 		s.slots[i], s.counts[i] = slot, 0
 	}
 	s.counts[i]++
-	m.changed(s, false)
+	// Every entry is a change (rate, last activity, last line), so watchers
+	// hear about an active source at the throttle's pace, not only when
+	// its state flips: the Sources page stays live (track G).
+	m.changed(s, true)
 }
 
 // SetConnected records a serial port or TCP peer coming up or going down.
@@ -198,8 +201,8 @@ func (m *Memory) view(s *source, now time.Time) dto.Stream {
 	return v
 }
 
-// changed notifies watchers. Seen only notifies on a change of state, the
-// other setters always do; all are throttled per stream.
+// changed notifies watchers, throttled per stream. always=false only
+// notifies on a change of state.
 func (m *Memory) changed(s *source, always bool) {
 	now := m.clock.Now()
 	st := m.state(s, now)

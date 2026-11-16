@@ -87,7 +87,7 @@
 <main id="main">
 
 
-<section class="live">
+<section class="live" data-component="LivePane">
   
 <details class="filter-sheet" data-component="FilterBar">
   <summary class="btn tonal filter-toggle"><svg aria-hidden="true"><use href="/static/icons.svg#filter_list"></use></svg>Filters</summary>
@@ -97,6 +97,13 @@
       <input name="streams" value="" placeholder="serial:dut1, syslog:*" list="known-streams" autocomplete="off" spellcheck="false">
     </label>
     <datalist id="known-streams"><option value="serial:dut1"></option><option value="syslog:bench-pi"></option></datalist>
+    <label class="ofield">
+      <span>Channel</span>
+      <select name="channel">
+        <option value="" selected>None</option>
+        <option value="dut1">#dut1</option><option value="general">#general</option>
+      </select>
+    </label>
     <label class="ofield">
       <span>Severity</span>
       <select name="sev">
@@ -111,6 +118,7 @@
       <legend class="visually-hidden">Kinds</legend>
       <label class="chip filter"><input type="checkbox" name="kinds" value="line" checked>Lines</label>
       <label class="chip filter"><input type="checkbox" name="kinds" value="marker" checked>Markers</label>
+      <label class="chip filter"><input type="checkbox" name="kinds" value="message">Messages</label>
     </fieldset>
     
     
@@ -121,6 +129,14 @@
 
   
   <p class="banner notice no-script">Live updates need JavaScript; this is the last 500 lines. Reload to see newer lines.</p>
+  
+<div class="range-bar only-scripted" data-component="RangeBar" role="toolbar" aria-label="Selected lines" hidden>
+  <span class="range-count" data-slot="count"></span>
+  <button class="btn filled" type="button" data-action="attach"><svg aria-hidden="true"><use href="/static/icons.svg#description"></use></svg>Attach</button>
+  <button class="btn text" type="button" data-action="copy">Copy</button>
+  <button class="btn text" type="button" data-action="cancel">Cancel</button>
+</div>
+
   <div class="logview dense" data-component="LogView" data-next-seq="9" data-follow="true" data-query="">
     <div class="log-list mono" role="list" aria-label="Log lines" data-slot="list">
     
@@ -137,7 +153,42 @@
     <button class="icon-btn follow-toggle only-scripted" type="button" data-slot="follow" aria-pressed="true" aria-label="Pause following"><svg aria-hidden="true"><use href="/static/icons.svg#pause"></use></svg></button>
   </div>
   
+  
+<div class="line-menu menu only-scripted" data-slot="line-menu" role="menu" hidden>
+  <button class="menu-item" type="button" role="menuitem" data-action="copy-line">Copy line</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="copy-seq">Copy seq</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="context" data-log-only>Show context</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="mark" data-log-only>Add marker here</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="attach-line" data-log-only>Attach this line</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="attach-from" data-log-only>Attach from here on</button>
+  <button class="menu-item" type="button" role="menuitem" data-action="select" data-log-only>Select a range</button>
+</div>
+
 </section>
+
+
+<dialog class="sheet quick-drop" data-component="QuickDropSheet" aria-labelledby="quick-drop-title">
+  <div class="sheet-handle" aria-hidden="true"></div>
+  <div class="sheet-head"><h2 id="quick-drop-title">Quick drop</h2><button class="icon-btn" type="button" data-action="close" aria-label="Close"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></div>
+  
+<form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="10">
+  <input type="hidden" name="back" value="/live">
+  
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><option value="chan:dut1">#dut1</option><option value="chan:general">#general</option><option value="dm:codex-build">@codex-build</option></select></label>
+  
+  <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
+  <div class="upload-list" data-slot="uploads" aria-live="polite"></div>
+  <label class="ofield"><span>Message</span><textarea name="text" rows="3" maxlength="32768" placeholder="What is this?"></textarea></label>
+  <div class="drop-pickers">
+    <label class="btn tonal file-btn"><input type="file" name="files[]" accept="image/*" capture="environment" data-field="camera"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg>Camera</label>
+    <label class="btn tonal file-btn"><input type="file" name="files[]" accept="image/*" multiple data-field="photos"><svg aria-hidden="true"><use href="/static/icons.svg#image"></use></svg>Photos</label>
+  </div>
+  <label class="keep-original only-scripted"><input type="checkbox" data-field="keep-original"> Keep original photos</label>
+  <button class="btn filled block" type="submit"><svg aria-hidden="true"><use href="/static/icons.svg#send"></use></svg>Send</button>
+</form>
+
+</dialog>
+
 
 </main>
 <div class="toast-region" data-component="Toast" aria-live="polite">
@@ -149,6 +200,10 @@
 </template>
 <template id="tpl-marker">
 <div class="marker" role="listitem" data-seq="0"><time class="marker-time" data-slot="time" datetime=""></time><span class="marker-text" data-slot="text"></span></div>
+</template>
+<template id="tpl-attachment-chip"><span class="chip attachment-chip" data-kind="" data-index="0"><span class="chip-label" data-slot="label"></span><button class="chip-remove" type="button" data-slot="remove" aria-label="Remove"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></span>
+</template>
+<template id="tpl-upload-status"><div class="upload-status" data-state="" role="status"><span class="upload-label" data-slot="label"></span><progress class="upload-progress" data-slot="progress" max="100" value="0"></progress><button class="btn text upload-retry" type="button" data-slot="retry">Retry</button></div>
 </template>
 <template id="tpl-toast">
 <div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
