@@ -24,7 +24,7 @@ describe('Observable', () => {
     const listener = vi.fn();
     state.subscribe(listener);
     state.set({ n: 1 });
-    state.update((v) => ({ n: v.n + 1 }));
+    state.set({ n: 2 });
     expect(listener).toHaveBeenCalledTimes(1);
   });
 

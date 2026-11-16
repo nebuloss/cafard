@@ -1,4 +1,4 @@
-import { parseEntry, parseError } from '@/model/parse.ts';
+import { parseEntry } from '@/model/parse.ts';
 import type { Entry } from '@/model/types.ts';
 import { ApiError } from '@/net/ApiError.ts';
 import type { JobData } from '@/upload/UploadJob.ts';
@@ -51,7 +51,7 @@ export class XhrUploadClient implements UploadClient {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
       };
-      xhr.onerror = () => reject(new ApiError('offline', 'The server cannot be reached.', 0));
+      xhr.onerror = () => reject(ApiError.offline());
       xhr.ontimeout = xhr.onerror;
       xhr.onload = () => {
         let raw: unknown = null;
@@ -68,12 +68,7 @@ export class XhrUploadClient implements UploadClient {
           }
           return;
         }
-        try {
-          const e = parseError(raw);
-          reject(new ApiError(e.code, e.message, xhr.status, e.retry_after_s));
-        } catch {
-          reject(new ApiError('http_error', `The server answered ${xhr.status}.`, xhr.status));
-        }
+        reject(ApiError.fromResponse(raw, xhr.status));
       };
       xhr.send(formOf(job));
     });

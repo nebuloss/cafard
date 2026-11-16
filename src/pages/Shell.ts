@@ -2,7 +2,7 @@ import { Dom } from '@/core/Dom.ts';
 import type { DisposableBag } from '@/core/Disposable.ts';
 import { ConnectionBadge } from '@/components/ConnectionBadge.ts';
 import { NavBadges } from '@/components/NavBadges.ts';
-import { Toast } from '@/components/Toast.ts';
+import { Toast, type ToastTone } from '@/components/Toast.ts';
 import { Shortcuts } from '@/components/Shortcuts.ts';
 import { LiveFeed } from '@/net/LiveFeed.ts';
 import type { Services } from '@/App.ts';
@@ -10,6 +10,8 @@ import type { Services } from '@/App.ts';
 /** What every page of the shell has: the toast region and one live feed. */
 export interface Shell {
   readonly toast: Toast | null;
+  /** Shows a toast when the page has the region, else nothing. */
+  readonly notify: (text: string, tone?: ToastTone) => void;
   readonly feed: LiveFeed;
 }
 
@@ -37,7 +39,7 @@ export function mountShell(doc: Document, services: Services, bag: DisposableBag
   // The service worker keeps the shell offline and steers the share target
   // (track D). Browsers only allow it on HTTPS or localhost.
   void doc.defaultView?.navigator.serviceWorker?.register('/sw.js').catch(() => {});
-  return { toast, feed };
+  return { toast, notify: (text, tone = 'info') => void toast?.show(text, tone), feed };
 }
 
 /** Forms with data-confirm ask before they post. */

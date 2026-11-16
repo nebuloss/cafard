@@ -2,18 +2,17 @@ import { DisposableBag, type Disposable } from '@/core/Disposable.ts';
 import { Dom } from '@/core/Dom.ts';
 import { ApiError } from '@/net/ApiError.ts';
 import { chatHref, chatLabel } from '@/render/format.ts';
-import { AttachmentTray } from '@/components/AttachmentTray.ts';
+import type { SlotTemplate } from '@/render/SlotTemplate.ts';
 import { ChatList } from '@/components/ChatList.ts';
 import { closeDialog, ImageViewer, openDialog } from '@/components/ImageViewer.ts';
 import { NeedsYou } from '@/components/NeedsYou.ts';
 import { Overview } from '@/components/Overview.ts';
 import { QuestionCard } from '@/components/QuestionCard.ts';
-import { DropForm, QuickDropSheet } from '@/components/QuickDropSheet.ts';
-import { UploadStatus } from '@/components/UploadStatus.ts';
+import { QuickDropSheet } from '@/components/QuickDropSheet.ts';
 import type { Services } from '@/App.ts';
 import type { Page } from '@/pages/Page.ts';
-import { mountShell } from '@/pages/Shell.ts';
-import { chatRenderers, viewerOf } from '@/pages/chatParts.ts';
+import { mountShell, type Shell } from '@/pages/Shell.ts';
+import { chatRenderers, mountDropForm, viewerOf } from '@/pages/chatParts.ts';
 
 /**
  * Home (PLAN 9.6.3): the chat list with "Needs you" on top, the overview
@@ -34,12 +33,12 @@ export class HomePage implements Page {
     const layout = Dom.find('.home-layout', doc);
     const viewer = viewerOf(layout);
     const r = chatRenderers(doc, viewer, services.clock, { back: '/', next: '/' });
-    const toast = (text: string, tone: 'info' | 'error' = 'info'): void => void shell.toast?.show(text, tone);
+    const toast = shell.notify;
     const queue = services.uploads;
 
     const list = Dom.find('[data-component="ChatList"]', doc);
     if (list !== null) {
-      bag.add(new ChatList(list, r.rows, shell.feed.events, services.api, () => services.clock.now(), (t) => toast(t, 'error'), Dom.find<HTMLInputElement>('[data-slot="search"]', doc)).mount());
+      bag.add(new ChatList(list, r.rows, shell.feed.events, services.api, services.clock, (t) => toast(t, 'error'), Dom.find<HTMLInputElement>('[data-slot="search"]', doc)).mount());
     }
     const muted = (chat: string): boolean => Dom.find(`a.chat-row[data-chat="${chat}"]`, doc)?.hasAttribute('data-muted') === true;
     const needs = Dom.find('[data-component="NeedsYou"]', doc);
@@ -73,19 +72,14 @@ export class HomePage implements Page {
     return bag;
   }
 
-  private quickDrop(bag: DisposableBag, chip: ReturnType<typeof chatRenderers>['chip'], upload: ReturnType<typeof chatRenderers>['upload'], toast: (t: string, tone?: 'info' | 'error') => void): void {
+  private quickDrop(bag: DisposableBag, chip: SlotTemplate | null, upload: SlotTemplate | null, toast: Shell['notify']): void {
     const { doc, services } = this;
     const sheetEl = Dom.find<HTMLDialogElement>('[data-component="QuickDropSheet"]', doc);
     const form = sheetEl === null ? null : Dom.find<HTMLFormElement>('form.drop-form', sheetEl);
     if (sheetEl === null || form === null) return;
     const sheet = new QuickDropSheet(sheetEl);
     bag.add(sheet.mount());
-    const trayEl = Dom.find('[data-slot="tray"]', form);
-    const tray = new AttachmentTray(trayEl ?? doc.createElement('div'), chip, Number(form.dataset['maxFiles'] ?? '10'));
-    bag.add(tray.mount());
-    const uploads = Dom.find('[data-slot="uploads"]', form);
-    if (uploads !== null) bag.add(new UploadStatus(uploads, upload, services.uploads).mount());
-    bag.add(new DropForm(form, tray, services.uploads, services.storage, services.clock, () => sheet.close()).mount());
+    mountDropForm(form, doc, services, bag, { chip, upload }, () => sheet.close());
     bag.add(services.uploads.events.on('sent', ({ entry }) => toast(`Sent to ${chatLabel(entry.chat ?? '')}.`)));
     const fab = Dom.find('[data-action="quick-drop"]', doc);
     if (fab !== null) {

@@ -1,15 +1,9 @@
 import type { Clock } from '@/core/Clock.ts';
-import { h } from '@/core/Dom.ts';
 import type { Disposable } from '@/core/Disposable.ts';
 import { SlotTemplate } from '@/render/SlotTemplate.ts';
 import { Component } from '@/components/Component.ts';
 
 export type ToastTone = 'info' | 'error';
-
-export interface ToastAction {
-  readonly label: string;
-  readonly run: () => void;
-}
 
 /** Snackbars in the toast region, from tpl-toast. At most three at once. */
 export class Toast extends Component {
@@ -39,17 +33,9 @@ export class Toast extends Component {
   }
 
   /** Shows text as given: the server owns the wording of errors. */
-  show(text: string, tone: ToastTone = 'info', action?: ToastAction): HTMLElement | null {
+  show(text: string, tone: ToastTone = 'info'): HTMLElement | null {
     if (this.template === null || this.bag.isDisposed) return null;
     const t = this.template.clone().attr({ 'data-tone': tone }).text('text', text);
-    if (action !== undefined) {
-      const button = h('button', { type: 'button' }, action.label);
-      button.addEventListener('click', () => {
-        action.run();
-        this.remove(t.root);
-      });
-      t.children('action', button);
-    }
     this.root.append(t.root);
     while (this.root.children.length > Toast.max) {
       const first = this.root.firstElementChild;

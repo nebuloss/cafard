@@ -1,4 +1,5 @@
 import type { Clock } from '@/core/Clock.ts';
+import type { DisposableBag } from '@/core/Disposable.ts';
 import { Dom } from '@/core/Dom.ts';
 import type { Entry } from '@/model/types.ts';
 import { RendererRegistry } from '@/render/RendererRegistry.ts';
@@ -13,6 +14,10 @@ import { IMAGE_ATTRIBUTES, ImageRenderer } from '@/render/renderers/ImageRendere
 import { LOG_ATTACHMENT_ATTRIBUTES, LogAttachmentRenderer } from '@/render/renderers/LogAttachmentRenderer.ts';
 import { MESSAGE_ATTRIBUTES, MessageRenderer } from '@/render/renderers/MessageRenderer.ts';
 import { CHOICE_ATTRIBUTES, QUESTION_ATTRIBUTES, QuestionRenderer } from '@/render/renderers/QuestionRenderer.ts';
+import { AttachmentTray } from '@/components/AttachmentTray.ts';
+import { DropForm } from '@/components/QuickDropSheet.ts';
+import { UploadStatus } from '@/components/UploadStatus.ts';
+import type { Services } from '@/App.ts';
 
 /** Who the page is for, from the layout's data attributes. */
 export interface Viewer {
@@ -90,4 +95,24 @@ export function copier(win: Window | null): (text: string) => void {
   return (text) => {
     void win?.navigator.clipboard?.writeText(text).catch(() => {});
   };
+}
+
+/**
+ * A drop form's tray, upload rows and sending, on /drop and in the quick
+ * drop sheet. done runs once the form has queued its message.
+ */
+export function mountDropForm(
+  form: HTMLFormElement,
+  doc: Document,
+  services: Services,
+  bag: DisposableBag,
+  templates: { chip: SlotTemplate | null; upload: SlotTemplate | null },
+  done: () => void,
+): AttachmentTray {
+  const tray = new AttachmentTray(Dom.find('[data-slot="tray"]', form) ?? doc.createElement('div'), templates.chip, Number(form.dataset['maxFiles'] ?? '10'));
+  bag.add(tray.mount());
+  const uploads = Dom.find('[data-slot="uploads"]', form);
+  if (uploads !== null) bag.add(new UploadStatus(uploads, templates.upload, services.uploads).mount());
+  bag.add(new DropForm(form, tray, services.uploads, services.storage, services.clock, done).mount());
+  return tray;
 }

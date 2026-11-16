@@ -32,8 +32,7 @@ export class QuestionRenderer implements EntryRenderer {
     const t = this.template.clone();
     t.attr({ id: `m${entry.seq}`, 'data-seq': entry.seq, 'data-open': q.open });
     t.text('sender', entry.sender?.name ?? '');
-    t.text('time', messageTime(entry.ts, this.options.now()));
-    t.slot('time').setAttribute('datetime', entry.ts);
+    t.time('time', messageTime(entry.ts, this.options.now()), entry.ts);
     t.children('body', ...textSegments(entry.segments, entry.text));
     t.children('choices', ...q.choices.map((c) => this.choice.clone().attr({ 'data-choice': c, value: c, disabled: !q.open }).text('label', c).root));
     t.text('answer', answerText(q.answer));

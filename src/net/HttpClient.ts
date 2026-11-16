@@ -1,4 +1,3 @@
-import { parseError } from '@/model/parse.ts';
 import { ApiError } from '@/net/ApiError.ts';
 
 export { ApiError };
@@ -40,7 +39,7 @@ export class FetchHttpClient implements HttpClient {
     try {
       response = await this.fetchFn(url, init);
     } catch {
-      throw new ApiError('offline', 'The server cannot be reached.', 0);
+      throw ApiError.offline();
     }
     if (response.status === 204) return undefined as T;
     let raw: unknown = null;
@@ -49,15 +48,7 @@ export class FetchHttpClient implements HttpClient {
     } catch {
       raw = null;
     }
-    if (!response.ok) {
-      try {
-        const e = parseError(raw);
-        throw new ApiError(e.code, e.message, response.status, e.retry_after_s);
-      } catch (error) {
-        if (error instanceof ApiError && error.code !== 'bad_response') throw error;
-        throw new ApiError('http_error', `The server answered ${response.status}.`, response.status);
-      }
-    }
+    if (!response.ok) throw ApiError.fromResponse(raw, response.status);
     if (options.parse === undefined) return raw as T;
     return options.parse(raw);
   }

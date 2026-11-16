@@ -1,35 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { disposable, type Disposable } from '@/core/Disposable.ts';
 import { Component } from '@/components/Component.ts';
-import { LogView, type Scroller } from '@/components/LogView.ts';
+import { LogView } from '@/components/LogView.ts';
 import { Toast } from '@/components/Toast.ts';
 import type { Entry } from '@/model/types.ts';
 import { LINE_ATTRIBUTES, LineRenderer } from '@/render/renderers/LineRenderer.ts';
 import { SlotTemplate } from '@/render/SlotTemplate.ts';
 import { FakeClock } from '@/testing/FakeClock.ts';
+import { FakeScroller } from '@/testing/FakeScroller.ts';
 import { fixture, loadPage } from '@/testing/pages.ts';
-
-class FakeScroller implements Scroller {
-  end = true;
-  toEndCalls = 0;
-  private listener: (() => void) | null = null;
-  atEnd(): boolean {
-    return this.end;
-  }
-  toEnd(): void {
-    this.toEndCalls++;
-    this.end = true;
-    this.listener?.();
-  }
-  onScroll(listener: () => void): Disposable {
-    this.listener = listener;
-    return disposable(() => (this.listener = null));
-  }
-  userScrolls(end: boolean): void {
-    this.end = end;
-    this.listener?.();
-  }
-}
 
 const line = (seq: number): Entry => ({ ...(fixture('entry_line') as Entry), seq });
 
@@ -63,7 +41,7 @@ describe('LogView', () => {
     loadPage('live');
     root = document.querySelector<HTMLElement>('[data-component="LogView"]') as HTMLElement;
     scroller = new FakeScroller();
-    view = new LogView(root, new LineRenderer(SlotTemplate.require(document, 'tpl-line', LINE_ATTRIBUTES)), scroller, document, 10);
+    view = new LogView(root, new LineRenderer(SlotTemplate.find(document, 'tpl-line', LINE_ATTRIBUTES)!), scroller, document, 10);
     view.mount();
   });
 
@@ -115,13 +93,9 @@ describe('Toast', () => {
     const region = document.querySelector<HTMLElement>('[data-component="Toast"]') as HTMLElement;
     const toast = new Toast(region, clock, document);
     toast.mount();
-    const run = vi.fn();
-    const el = toast.show('<b>not bold</b>', 'error', { label: 'Retry', run });
+    const el = toast.show('<b>not bold</b>', 'error');
     expect(el?.querySelector('[data-slot="text"]')?.textContent).toBe('<b>not bold</b>');
     expect(el?.dataset['tone']).toBe('error');
-    el?.querySelector('button')?.click();
-    expect(run).toHaveBeenCalled();
-    expect(region.children).toHaveLength(0);
     for (let i = 0; i < 5; i++) toast.show(`n${i}`);
     expect(region.children).toHaveLength(3);
     clock.advance(Toast.showFor);

@@ -1,3 +1,5 @@
+import type { Clock } from '@/core/Clock.ts';
+import type { Disposable } from '@/core/Disposable.ts';
 import { Dom, h } from '@/core/Dom.ts';
 import type { Chat, ChannelUpdate, Surface } from '@/model/types.ts';
 import type { CafardApi } from '@/net/CafardApi.ts';
@@ -31,13 +33,14 @@ export function channelUpdate(
 export class ChannelDialog extends Component<HTMLDialogElement> {
   private added: string[] = [];
   private removed: string[] = [];
-  private previewTimer: ReturnType<typeof setTimeout> | null = null;
+  private chat: Chat | null = null;
+  private previewTimer: Disposable | null = null;
 
   constructor(
     root: HTMLDialogElement,
-    private chat: Chat | null,
     private readonly name: string,
     private readonly api: CafardApi,
+    private readonly clock: Clock,
     private readonly go: (path: string) => void,
     private readonly confirm: (question: string) => boolean,
     private readonly changed: (chat: Chat) => void,
@@ -69,13 +72,11 @@ export class ChannelDialog extends Component<HTMLDialogElement> {
     const pattern = this.input('pattern');
     if (pattern !== null) {
       this.bag.listen(pattern, 'input', () => {
-        if (this.previewTimer !== null) clearTimeout(this.previewTimer);
-        this.previewTimer = setTimeout(() => void this.preview(pattern.value), 250);
+        this.previewTimer?.dispose();
+        this.previewTimer = this.clock.setTimeout(() => void this.preview(pattern.value), 250);
       });
     }
-    this.bag.defer(() => {
-      if (this.previewTimer !== null) clearTimeout(this.previewTimer);
-    });
+    this.bag.defer(() => this.previewTimer?.dispose());
   }
 
   open(chat?: Chat): void {

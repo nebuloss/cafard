@@ -1,7 +1,7 @@
 import { Dom } from '@/core/Dom.ts';
 import { isNumber, StorageKey, type KeyValueStore } from '@/core/KeyValueStore.ts';
 import type { Entry, LogRequest } from '@/model/types.ts';
-import type { CafardApi } from '@/net/CafardApi.ts';
+import { entriesQuery, type CafardApi } from '@/net/CafardApi.ts';
 import { ApiError } from '@/net/ApiError.ts';
 import type { EntryRenderer } from '@/render/EntryRenderer.ts';
 import { Component } from '@/components/Component.ts';
@@ -124,11 +124,6 @@ export class LogsPane extends Component {
     if (handle !== null) this.bindResize(handle);
   }
 
-  /** Lines and markers of the bound streams, from the feed. */
-  append(entries: readonly Entry[]): void {
-    this.log.append(entries);
-  }
-
   /** Entries from a live feed, painted on the next animation frame. */
   enqueue(entries: readonly Entry[]): void {
     this.log.enqueue(entries);
@@ -149,17 +144,8 @@ export class LogsPane extends Component {
 
   /** Shows a log attachment's range ("Open"), from its /live link. */
   async showRange(href: string): Promise<void> {
-    const q = new URLSearchParams(href.split('?')[1] ?? '');
-    const num = (k: string): number | undefined => (q.get(k) === null ? undefined : Number(q.get(k)));
     try {
-      const page = await this.api.entries({
-        streams: q.get('streams') ?? undefined,
-        from_seq: num('from_seq'),
-        to_seq: num('to_seq'),
-        sev: q.get('sev') ?? undefined,
-        re: q.get('re') ?? undefined,
-        limit: 1000,
-      });
+      const page = await this.api.entries({ ...entriesQuery(href.split('?')[1] ?? ''), limit: 1000 });
       if (this.log.follow.value.mode === 'following') this.log.toggle();
       this.log.replace(page.items);
       const first = page.items[0];

@@ -66,10 +66,6 @@ export class UploadJob {
     this.current = { ...this.current, files, processed: true };
   }
 
-  get finished(): boolean {
-    return this.state.value.state === 'done';
-  }
-
   private move(next: JobState): void {
     const from = this.state.value.state;
     if (!NEXT[from].includes(next.state)) throw new Error(`upload ${this.id}: ${from} -> ${next.state}`);

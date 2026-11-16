@@ -38,16 +38,10 @@ const sameFollow = (a: FollowState, b: FollowState): boolean =>
   a.mode === b.mode && (a.mode === 'following' || (b.mode === 'paused' && a.newCount === b.newCount));
 
 /**
- * A bounded list of log rows (PLAN 9.6.4). It follows the end while the
- * reader is at the bottom; scrolling up pauses it, and a "N new" button
- * resumes. Past cap rows the oldest are dropped, so a fast source cannot
- * freeze the tab.
- *
- * A live feed goes through enqueue(): entries are gathered and reach the
- * DOM once per animation frame, in one fragment, and only the newest cap
- * of a burst are rendered at all. While paused, new entries wait outside
- * the DOM (at most cap of them), so the rows the reader is looking at do
- * not move; resuming shows them.
+ * A bounded list of log rows (PLAN 9.6.4) that follows the end until the
+ * reader scrolls up. At most cap rows, so a fast source cannot freeze the
+ * tab; while paused, new entries wait outside the DOM so the rows read do
+ * not move.
  */
 export class LogView extends Component {
   static readonly cap = 5000;

@@ -13,8 +13,7 @@ export class MarkerRenderer implements EntryRenderer {
   render(entry: Entry): HTMLElement {
     const row = this.template.clone();
     row.attr({ 'data-seq': entry.seq });
-    row.text('time', logTime(entry.ts));
-    row.slot('time').setAttribute('datetime', entry.ts);
+    row.time('time', logTime(entry.ts), entry.ts);
     const plain = parseAnsi(entry.text)
       .map((s) => s.text)
       .join('');

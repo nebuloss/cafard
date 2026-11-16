@@ -1,10 +1,11 @@
-import { Dom, h } from '@/core/Dom.ts';
+import { Dom } from '@/core/Dom.ts';
 import { Observable } from '@/core/Observable.ts';
 import type { Entry, Page, Seen } from '@/model/types.ts';
 import type { EntryRenderer } from '@/render/EntryRenderer.ts';
 import { imagesOf } from '@/render/renderers/MessageRenderer.ts';
 import { seenText } from '@/render/format.ts';
 import { Component } from '@/components/Component.ts';
+import { popupMenu } from '@/components/PopupMenu.ts';
 import type { ElementScroller } from '@/components/ElementScroller.ts';
 import type { ReadTracker } from '@/components/ReadTracker.ts';
 import type { ViewerImage } from '@/components/ImageViewer.ts';
@@ -215,23 +216,10 @@ export class ConversationView extends Component {
 
   /** The message menu: copy text, copy seq, open in Live. */
   private menu(anchor: HTMLElement, seq: number, text: string): void {
-    Dom.find('.msg-popup', this.root)?.remove();
-    const item = (label: string, run: () => void): HTMLButtonElement => {
-      const b = h('button', { class: 'menu-item', type: 'button', role: 'menuitem' }, label);
-      b.addEventListener('click', () => {
-        run();
-        popup.remove();
-      });
-      return b;
-    };
-    const popup = h(
-      'div',
-      { class: 'menu msg-popup', role: 'menu' },
-      item('Copy text', () => this.hooks.copy(text)),
-      item('Copy seq', () => this.hooks.copy(String(seq))),
-      h('a', { class: 'menu-item', role: 'menuitem', href: `/live?to_seq=${seq}` }, 'Open in Live'),
-    );
-    anchor.after(popup);
-    popup.querySelector('button')?.focus();
+    popupMenu(this.root, anchor, 'msg-popup', [
+      { label: 'Copy text', run: () => this.hooks.copy(text) },
+      { label: 'Copy seq', run: () => this.hooks.copy(String(seq)) },
+      { label: 'Open in Live', href: `/live?to_seq=${seq}` },
+    ]);
   }
 }

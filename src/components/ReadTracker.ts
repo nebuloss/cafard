@@ -10,8 +10,6 @@ export interface ObserverLike {
 
 export type ObserverFactory = (callback: (entries: readonly { target: Element; isIntersecting: boolean }[]) => void) => ObserverLike;
 
-export const browserObserver: ObserverFactory = (callback) => new IntersectionObserver((entries) => callback(entries), { threshold: 0.6 });
-
 /**
  * Acks a message once it has been visible for a second (PLAN 9.6.3, read
  * state). Seqs are gathered for a moment and acked in one request.

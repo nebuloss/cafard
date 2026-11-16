@@ -12,8 +12,7 @@ export class EventRowRenderer implements EntryRenderer {
   render(entry: Entry): HTMLElement {
     const t = this.template.clone();
     t.attr({ 'data-seq': entry.seq, 'data-severity': entry.severity, 'data-kind': entry.kind });
-    t.text('time', logTime(entry.ts));
-    t.slot('time').setAttribute('datetime', entry.ts);
+    t.time('time', logTime(entry.ts), entry.ts);
     t.text('stream', entry.stream);
     t.text('text', stripControls(entry.text));
     const href = eventLink(entry.stream, entry.seq);

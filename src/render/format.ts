@@ -26,15 +26,18 @@ export function logTime(iso: string): string {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 
+/** The UTC time today (up to minutes or seconds), else "Nov 2 15:04"; null when iso is no date. */
+function todayOrDate(iso: string, nowMs: number, today: 'minutes' | 'seconds'): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const s = d.toISOString();
+  if (s.slice(0, 10) === new Date(nowMs).toISOString().slice(0, 10)) return s.slice(11, today === 'seconds' ? 19 : 16);
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} ${s.slice(11, 16)}`;
+}
+
 /** A last-activity time, like pages.Activity: the time today, else the date. */
 export function activity(iso: string | undefined, nowMs: number): string {
-  if (iso === undefined) return 'never';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'never';
-  const now = new Date(nowMs);
-  const s = d.toISOString();
-  if (s.slice(0, 10) === now.toISOString().slice(0, 10)) return s.slice(11, 19);
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} ${s.slice(11, 16)}`;
+  return (iso === undefined ? null : todayOrDate(iso, nowMs, 'seconds')) ?? 'never';
 }
 
 /** A claim chip, like pages.StreamCard: "codex until 10:45" (UTC). */
@@ -53,11 +56,7 @@ export function rate(perMin: number): string {
 
 /** A message time, like pages.MessageTime: "15:04" today (UTC), else the date. */
 export function messageTime(iso: string, nowMs: number): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const s = d.toISOString();
-  if (s.slice(0, 10) === new Date(nowMs).toISOString().slice(0, 10)) return s.slice(11, 16);
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} ${s.slice(11, 16)}`;
+  return todayOrDate(iso, nowMs, 'minutes') ?? '';
 }
 
 /** A chat row's preview, like pages.PreviewText. */

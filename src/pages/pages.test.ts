@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Stream, TokenCreated } from '@/model/types.ts';
 import { showToken } from '@/pages/AgentsPage.ts';
-import { entriesQuery } from '@/pages/LivePage.ts';
+import { entriesQuery } from '@/net/CafardApi.ts';
 import { countdown } from '@/pages/PairPage.ts';
 import { STREAM_CARD_ATTRIBUTES, StreamCards } from '@/pages/StreamsPage.ts';
 import { SlotTemplate } from '@/render/SlotTemplate.ts';
@@ -12,7 +12,7 @@ describe('StreamsPage', () => {
   it('updates a server-rendered card and inserts a new one in order', () => {
     loadPage('streams');
     const rows = document.querySelector<HTMLElement>('[data-slot="rows"]') as HTMLElement;
-    const cards = new StreamCards(rows, SlotTemplate.require(document, 'tpl-stream-card', STREAM_CARD_ATTRIBUTES), () => Date.parse('2026-11-16T12:00:00Z'));
+    const cards = new StreamCards(rows, SlotTemplate.find(document, 'tpl-stream-card', STREAM_CARD_ATTRIBUTES)!, () => Date.parse('2026-11-16T12:00:00Z'));
     const base = fixture('stream') as Stream;
     const updated = cards.update({ ...base, status: 'down', dropped: 7 });
     expect(updated.dataset['stream']).toBe('serial:dut1');

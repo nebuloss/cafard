@@ -82,8 +82,4 @@ export class Dom {
   static setText(element: Element | null, text: string): void {
     if (element !== null && element.textContent !== text) element.textContent = text;
   }
-
-  static clear(element: Element): void {
-    element.replaceChildren();
-  }
 }

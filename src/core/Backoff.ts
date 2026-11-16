@@ -3,7 +3,6 @@ export interface BackoffOptions {
   readonly baseMs: number;
   /** No delay exceeds this. */
   readonly maxMs: number;
-  readonly factor?: number;
   /** Returns [0, 1). Injected for tests. */
   readonly random?: () => number;
 }
@@ -15,14 +14,12 @@ export interface BackoffOptions {
  */
 export class Backoff {
   private attempt = 0;
-  private readonly factor: number;
   private readonly random: () => number;
 
   constructor(private readonly options: BackoffOptions) {
     if (options.baseMs <= 0 || options.maxMs < options.baseMs) {
       throw new RangeError('Backoff needs 0 < baseMs <= maxMs');
     }
-    this.factor = options.factor ?? 2;
     this.random = options.random ?? Math.random;
   }
 
@@ -32,7 +29,7 @@ export class Backoff {
 
   /** The delay before the next try, in ms. */
   next(): number {
-    const step = Math.min(this.options.maxMs, this.options.baseMs * this.factor ** this.attempt);
+    const step = Math.min(this.options.maxMs, this.options.baseMs * 2 ** this.attempt);
     this.attempt++;
     return Math.round(step / 2 + this.random() * (step / 2));
   }
