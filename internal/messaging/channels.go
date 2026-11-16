@@ -363,6 +363,7 @@ func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.C
 			return Channel{}, err
 		}
 	}
+	s.emitChat("chan:"+name, "")
 	return s.Channel(ctx, name)
 }
 
@@ -493,6 +494,10 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 			return Channel{}, err
 		}
 	}
+	if final != ch.Name {
+		s.emit(ChatEvent{Kind: EventChat, Stream: ch.Stream(), Gone: true})
+	}
+	s.emitChat("chan:"+final, "")
 	return s.Channel(ctx, final)
 }
 
@@ -552,6 +557,7 @@ func (s *Service) DeleteChannel(ctx context.Context, p auth.Principal, name stri
 		return err
 	}
 	stream := ch.Stream()
+	defer s.emit(ChatEvent{Kind: EventChat, Stream: stream, Gone: true})
 	return s.exec.Exec(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		for _, q := range []struct {
 			q   string
@@ -606,6 +612,7 @@ func (s *Service) ArchiveIdle(ctx context.Context) (int, error) {
 		if _, err := s.db.ExecContext(ctx, `UPDATE channels SET archived_at = ? WHERE name = ? AND archived_at IS NULL`, now.UnixNano(), ch.Name); err != nil {
 			return n, err
 		}
+		s.emitChat(ch.Stream(), "")
 		n++
 	}
 	return n, nil

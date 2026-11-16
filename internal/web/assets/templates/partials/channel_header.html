@@ -1,0 +1,22 @@
+{{/* The chat header (ChannelHeader): title and topic, bound stream chips
+     (each opens Live on it), the claim holder, the Chat/Logs toggle (plain
+     links) and the settings button. Data: HeaderView. */}}
+<header class="channel-header" data-component="ChannelHeader" data-chat="{{.ID}}">
+  <div class="ch-title">
+    <h2>{{.Name}}{{if .Title}} <span class="ch-subtitle">{{.Title}}</span>{{end}}{{if .PeerKind}} <span class="chip small">{{.PeerKind}}</span>{{end}}</h2>
+    {{if .Topic}}<p class="ch-topic muted">{{.Topic}}</p>{{end}}
+  </div>
+  {{if .Bound}}
+  <nav class="segmented ch-toggle" aria-label="View">
+    <a class="seg" href="{{.ChatHref}}"{{if not .Logs}} aria-current="page"{{end}} data-view="chat">Chat</a>
+    <a class="seg" href="{{.LogsHref}}"{{if .Logs}} aria-current="page"{{end}} data-view="logs">Logs<span class="new-error-dot" data-slot="error-dot" hidden></span></a>
+  </nav>
+  {{end}}
+  {{if .Manage}}<button class="icon-btn only-scripted" type="button" data-action="settings" aria-label="Channel settings" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#settings"></use></svg></button>{{end}}
+  {{if .Streams}}
+  <div class="ch-streams" data-slot="streams">
+    {{range .Streams}}<a class="chip stream-chip mono" href="{{.Href}}" data-stream="{{.ID}}" data-status="{{.Status}}"><span class="stream-dot" aria-hidden="true"></span>{{.ID}}</a>{{end}}
+  </div>
+  {{end}}
+  {{range .Claims}}<p class="ch-claim body-small"><svg aria-hidden="true"><use href="/static/icons.svg#key"></use></svg>{{.}}</p>{{end}}
+</header>

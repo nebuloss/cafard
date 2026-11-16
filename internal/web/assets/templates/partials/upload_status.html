@@ -1,0 +1,3 @@
+{{- /* One message on its way (tpl-upload-status): queued, processing,
+     sending with progress, failed with retry. Data: UploadStatusView. */ -}}
+<div class="upload-status" data-state="{{.State}}" role="status"><span class="upload-label" data-slot="label">{{.Label}}</span><progress class="upload-progress" data-slot="progress" max="100" value="{{.Progress}}"></progress><button class="btn text upload-retry" type="button" data-slot="retry">Retry</button></div>

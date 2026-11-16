@@ -47,6 +47,7 @@ func (s *Service) SetFollow(ctx context.Context, p auth.Principal, channel strin
 	if err := s.setFollow(ctx, p.Name, ch.Stream(), on); err != nil {
 		return FollowState{}, err
 	}
+	s.emitChat(ch.Stream(), p.Name)
 	return s.Follow(ctx, p, ch.Stream())
 }
 
@@ -75,6 +76,9 @@ func (s *Service) SetPrefs(ctx context.Context, p auth.Principal, chat string, p
 	_, err = s.db.ExecContext(ctx, `INSERT INTO follows(principal, chat, followed, pinned, muted) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(principal, chat) DO UPDATE SET pinned = excluded.pinned, muted = excluded.muted`,
 		p.Name, chat, b2i(cur.Followed), b2i(cur.Pinned), b2i(cur.Muted))
+	if err == nil {
+		s.emitChat(chat, p.Name)
+	}
 	return err
 }
 

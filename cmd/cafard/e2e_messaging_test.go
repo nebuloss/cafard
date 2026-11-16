@@ -510,8 +510,9 @@ func TestAskHumanIsAnsweredThroughTheAPI(t *testing.T) {
 		t.Fatal("the question did not reach the human")
 	}
 	resp := s.post(s.admin, "/api/messages", "application/x-www-form-urlencoded", fmt.Sprintf("reply_to=%d&choice=done&chat=chan%%3Ageneral", seq))
-	// The 303 leads to the chat page, which track D serves.
-	if resp.Request.URL.Path != "/c/general" {
+	// The 303 leads to the chat page, which takes a session: a bearer
+	// client lands on the sign-in page that returns there.
+	if u := resp.Request.URL; u.Path != "/c/general" && u.Query().Get("next") != "/c/general" {
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("answer = %d %s", resp.StatusCode, b)
 	}

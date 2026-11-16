@@ -1,0 +1,15 @@
+{{/* The overview pane of home on wide screens (Overview): what needs you,
+     recent activity across followed chats, and the quick start while
+     nothing exists. Data: OverviewView. */}}
+<section class="overview" data-component="Overview" aria-labelledby="overview-title">
+  <h2 id="overview-title" class="visually-hidden">Overview</h2>
+  {{if .NeedsYou.Questions}}
+  <h3>Needs you</h3>
+  <div class="overview-questions" data-slot="questions">{{range .NeedsYou.Questions}}{{template "partials/needs_you_question" .}}{{end}}</div>
+  {{end}}
+  <h3>Recent activity</h3>
+  <div class="overview-recent timeline" data-slot="recent" aria-live="polite">
+    {{range .Recent}}{{if .Message}}{{template "partials/message.html" .Message}}{{else if .Question}}{{template "partials/question.html" .Question}}{{else if .Event}}{{template "partials/event_row.html" .Event}}{{end}}{{end}}
+  </div>
+  {{if not .Recent}}{{template "partials/empty_chats.html" .}}{{end}}
+</section>

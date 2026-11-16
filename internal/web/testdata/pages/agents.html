@@ -36,7 +36,7 @@
 
 <nav class="nav" aria-label="Main">
   <a class="nav-item" href="/">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats" hidden>0</span></span>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats">2</span></span>
     <span class="nav-label">Chats</span>
   </a>
   <a class="nav-item" href="/live">
@@ -134,6 +134,26 @@
       </div>
     </li>
     
+    <li class="principal" data-principal="claude-laptop">
+      <div class="grow">
+        <span class="title"><span class="mono">claude-laptop</span> <span class="chip small">agent</span></span>
+        <span class="subtitle">never seen</span>
+        
+        <span class="subtitle">No token.</span>
+        
+      </div>
+    </li>
+    
+    <li class="principal" data-principal="codex-build">
+      <div class="grow">
+        <span class="title"><span class="mono">codex-build</span> <span class="chip small">agent</span></span>
+        <span class="subtitle">never seen</span>
+        
+        <span class="subtitle">No token.</span>
+        
+      </div>
+    </li>
+    
   </ul>
   
 
@@ -143,7 +163,7 @@
       <span>Principal</span>
       <input name="principal" required list="principal-names" placeholder="claude-laptop" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9._\-]{0,39}">
     </label>
-    <datalist id="principal-names"><option value="admin"></option></datalist>
+    <datalist id="principal-names"><option value="admin"></option><option value="claude-laptop"></option><option value="codex-build"></option></datalist>
     <label class="ofield">
       <span>Kind (for a new principal)</span>
       <select name="kind">

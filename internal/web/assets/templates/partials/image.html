@@ -1,0 +1,4 @@
+{{- /* One image tile (tpl-image): a plain link to the original, which the
+     bundle opens in the viewer instead. HEIC has no preview in browsers.
+     Data: ImageView. */ -}}
+<a class="image" href="{{.Href}}" data-sha="{{.SHA}}">{{if .NoPreview}}<span class="image-file" data-slot="img">{{.Alt}}</span>{{else}}<img data-slot="img" src="{{.Src}}" alt="{{.Alt}}"{{if .Width}} width="{{.Width}}" height="{{.Height}}"{{end}} loading="lazy" decoding="async">{{end}}<span class="image-more" data-slot="more">{{.More}}</span></a>

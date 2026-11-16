@@ -35,6 +35,8 @@ type Site struct {
 
 	pages map[string]*template.Template // by file, "pages/streams.html"
 	twins map[string]twin               // by id, "tpl-line"
+
+	chats *chatSite // track D's pages; nil without messaging
 }
 
 // twin is a partial rendered with zero values inside <template id=...>.

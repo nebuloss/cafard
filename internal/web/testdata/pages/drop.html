@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>Quick drop - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="drop" class="shell">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="bar">
+    
+    <a class="icon-btn" href="/" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
+    
+    <h1>Quick drop</h1>
+    <span class="spacer"></span>
+    
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    <span class="avatar" title="admin (human)">A</span>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Main">
+  <a class="nav-item" href="/" aria-current="page">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats">2</span></span>
+    <span class="nav-label">Chats</span>
+  </a>
+  <a class="nav-item" href="/live">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
+    <span class="nav-label">Live</span>
+  </a>
+  <a class="nav-item" href="/streams">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Sources</span>
+  </a>
+  
+  <a class="nav-item rail-only" href="/agents">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
+    <span class="nav-label">Agents</span>
+  </a>
+  <a class="nav-item rail-only" href="/pair">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
+    <span class="nav-label">Pair</span>
+  </a>
+  
+  <details class="nav-more">
+    <summary class="nav-item">
+      <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></span>
+      <span class="nav-label">More</span>
+    </summary>
+    <div class="menu" role="menu">
+      
+      <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
+      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
+      
+      <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+        <input type="hidden" name="next" value="/drop">
+        <span class="menu-caption">Theme</span>
+        <span class="segmented">
+          <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
+          <button type="submit" name="theme" value="light" aria-pressed="false">Light</button>
+          <button type="submit" name="theme" value="dark" aria-pressed="false">Dark</button>
+        </span>
+      </form>
+      <form method="post" action="/signout">
+        <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out admin</button>
+      </form>
+    </div>
+  </details>
+</nav>
+
+
+<main id="main">
+
+
+<section class="narrow drop-page">
+  
+  
+<form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="10">
+  <input type="hidden" name="back" value="/drop">
+  
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><option value="chan:dut1">#dut1</option><option value="chan:general">#general</option><option value="dm:codex-build">@codex-build</option></select></label>
+  
+  <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
+  <div class="upload-list" data-slot="uploads" aria-live="polite"></div>
+  <label class="ofield"><span>Message</span><textarea name="text" rows="3" maxlength="32768" placeholder="What is this?"></textarea></label>
+  <div class="drop-pickers">
+    <label class="btn tonal file-btn"><input type="file" name="files[]" accept="image/*" capture="environment" data-field="camera"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg>Camera</label>
+    <label class="btn tonal file-btn"><input type="file" name="files[]" accept="image/*" multiple data-field="photos"><svg aria-hidden="true"><use href="/static/icons.svg#image"></use></svg>Photos</label>
+  </div>
+  <label class="keep-original only-scripted"><input type="checkbox" data-field="keep-original"> Keep original photos</label>
+  <button class="btn filled block" type="submit"><svg aria-hidden="true"><use href="/static/icons.svg#send"></use></svg>Send</button>
+</form>
+
+</section>
+
+<dialog class="dialog shortcuts" data-component="ShortcutsDialog" aria-labelledby="shortcuts-title">
+  <div class="panel">
+    <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+    <dl class="keys">
+      <dt><kbd>/</kbd></dt><dd>Focus the filter or the composer</dd>
+      <dt><kbd>g</kbd> <kbd>c</kbd></dt><dd>Go to Chats</dd>
+      <dt><kbd>g</kbd> <kbd>l</kbd></dt><dd>Go to Live</dd>
+      <dt><kbd>g</kbd> <kbd>s</kbd></dt><dd>Go to Sources</dd>
+      <dt><kbd>f</kbd></dt><dd>Follow or pause the logs</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close the sheet, dialog or viewer</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Send from the composer</dd>
+      <dt><kbd>?</kbd></dt><dd>This list</dd>
+    </dl>
+    <p class="help">Shortcuts wait while you type in a field, except Esc and Ctrl+Enter.</p>
+    <div class="dialog-actions"><button class="btn text" type="button" data-action="close">Close</button></div>
+  </div>
+</dialog>
+
+
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-image"><a class="image" href="" data-sha=""><img data-slot="img" src="" alt="" loading="lazy" decoding="async"><span class="image-more" data-slot="more"></span></a>
+</template>
+<template id="tpl-attachment-chip"><span class="chip attachment-chip" data-kind="" data-index="0"><span class="chip-label" data-slot="label"></span><button class="chip-remove" type="button" data-slot="remove" aria-label="Remove"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></span>
+</template>
+<template id="tpl-upload-status"><div class="upload-status" data-state="" role="status"><span class="upload-label" data-slot="label"></span><progress class="upload-progress" data-slot="progress" max="100" value="0"></progress><button class="btn text upload-retry" type="button" data-slot="retry">Retry</button></div>
+</template>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+
+</body>
+</html>

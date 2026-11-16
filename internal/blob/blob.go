@@ -61,7 +61,14 @@ type Store struct {
 
 	pool    chan struct{} // decoding slots
 	visible VisibleFunc
+	grant   GrantFunc
 }
+
+// GrantFunc lets p see a blob no message references yet (a staged share).
+type GrantFunc func(ctx context.Context, sha string, p auth.Principal) bool
+
+// SetGrant installs an extra visibility rule; call it before serving.
+func (b *Store) SetGrant(g GrantFunc) { b.grant = g }
 
 var _ deps.BlobStore = (*Store)(nil)
 
@@ -326,6 +333,9 @@ func (b *Store) originals(ctx context.Context, sha string) ([]string, error) {
 func (b *Store) VisibleTo(ctx context.Context, sha string, p auth.Principal) (bool, error) {
 	if !ValidSHA(sha) || b.visible == nil {
 		return false, nil
+	}
+	if b.grant != nil && b.grant(ctx, sha, p) {
+		return true, nil
 	}
 	origs, err := b.originals(ctx, sha)
 	if err != nil {

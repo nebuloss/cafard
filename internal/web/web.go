@@ -9,6 +9,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/mcpserver"
+	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/web/api"
 	"github.com/nebuloss/cafard/internal/web/pages"
@@ -28,8 +29,17 @@ func Register(mux *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(contex
 	if err != nil {
 		return nil, err
 	}
+	a := api.New(d, sessions, pairings, kinds)
+	// Track D: the chat pages and API need the messaging service itself.
+	if svc, ok := d.Messaging.(*messaging.Service); ok {
+		shares := view.NewShares(d.Clock)
+		svc.SetStagedLookup(shares.Lookup)
+		svc.Blobs().SetGrant(shares.Visible)
+		site.SetChats(svc, shares)
+		a.MountChats(mux, svc, shares)
+	}
 	site.Mount(mux)
-	api.New(d, sessions, pairings, kinds).Mount(mux)
+	a.Mount(mux)
 	sse.Register(mux, sse.New(d, kinds))
 	if d.Janitor != nil {
 		d.Janitor.Add(store.Task{Name: "sessions", Run: sessions.Expire})

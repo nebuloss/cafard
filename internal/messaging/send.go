@@ -225,6 +225,7 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 	if err != nil {
 		return store.Entry{}, err
 	}
+	s.noteReply(ctx, committed)
 	return committed, nil
 }
 
