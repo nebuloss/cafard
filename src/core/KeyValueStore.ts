@@ -13,7 +13,6 @@ export const isNumber = (raw: unknown): number | null => (typeof raw === 'number
 export interface KeyValueStore {
   get<T>(key: StorageKey<T>): T | null;
   set<T>(key: StorageKey<T>, value: T): void;
-  remove(key: StorageKey<unknown>): void;
 }
 
 /**
@@ -48,14 +47,6 @@ export class LocalStorageStore implements KeyValueStore {
       // Storage full or refused: the setting is a convenience, not data.
     }
   }
-
-  remove(key: StorageKey<unknown>): void {
-    try {
-      this.storage?.removeItem(key.name);
-    } catch {
-      // As above.
-    }
-  }
 }
 
 /** In memory, for tests and for browsers with no storage at all. */
@@ -69,9 +60,5 @@ export class MemoryStore implements KeyValueStore {
 
   set<T>(key: StorageKey<T>, value: T): void {
     this.values.set(key.name, JSON.stringify(value));
-  }
-
-  remove(key: StorageKey<unknown>): void {
-    this.values.delete(key.name);
   }
 }

@@ -16,8 +16,4 @@ export class PageRegistry {
     if (name === undefined || name === '') return null;
     return this.factories.get(name)?.(root) ?? null;
   }
-
-  has(name: string): boolean {
-    return this.factories.has(name);
-  }
 }

@@ -217,7 +217,6 @@ export interface PairingCreate {
 }
 
 // Track D: chats (internal/dto/dto.go Chat, Overview, Share; web_d.go).
-export type ChatKind = 'channel' | 'direct';
 export type Surface = 'none' | 'markers' | 'errors';
 
 export interface StreamRef {
@@ -234,7 +233,7 @@ export interface ChatPreview {
 
 export interface Chat {
   readonly id: string;
-  readonly kind: ChatKind;
+  readonly kind: 'channel' | 'direct';
   readonly name: string;
   readonly title?: string;
   readonly topic?: string;

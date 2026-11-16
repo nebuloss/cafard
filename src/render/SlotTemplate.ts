@@ -23,13 +23,6 @@ export class SlotTemplate {
     return new SlotTemplate(t as HTMLTemplateElement, new Set(attributes));
   }
 
-  /** Like find, but a missing template is an error. */
-  static require(root: Document, id: string, attributes: readonly string[]): SlotTemplate {
-    const t = SlotTemplate.find(root, id, attributes);
-    if (t === null) throw new Error(`the page has no <template id="${id}">`);
-    return t;
-  }
-
   clone(): Filled {
     const fragment = this.template.content.cloneNode(true) as DocumentFragment;
     const root = fragment.firstElementChild;
@@ -65,6 +58,13 @@ export class Filled {
     return this;
   }
 
+  /** A <time> slot: its text, and the instant in datetime. */
+  time(name: string, text: string, iso: string): this {
+    const el = this.text(name, text).slot(name);
+    el.setAttribute('datetime', iso);
+    return this;
+  }
+
   /** Container slots take elements (built with h() or other templates). */
   children(name: string, ...children: Child[]): this {
     const el = this.slot(name);
@@ -75,19 +75,19 @@ export class Filled {
 
   /** Sets attributes on the root, from the template's allowlist. */
   attr(attrs: Readonly<Record<string, AttrValue>>): this {
-    for (const name of Object.keys(attrs)) {
-      if (!this.attributes.has(name)) throw new Error(`attribute ${name} is not settable on this template`);
-    }
-    setAttributes(this.root, attrs);
-    return this;
+    return this.set(this.root, attrs);
   }
 
   /** Sets an allowlisted attribute on a slot element (href on open). */
   slotAttr(name: string, attrs: Readonly<Record<string, AttrValue>>): this {
-    for (const key of Object.keys(attrs)) {
-      if (!this.attributes.has(key)) throw new Error(`attribute ${key} is not settable on this template`);
+    return this.set(this.slot(name), attrs);
+  }
+
+  private set(el: HTMLElement, attrs: Readonly<Record<string, AttrValue>>): this {
+    for (const name of Object.keys(attrs)) {
+      if (!this.attributes.has(name)) throw new Error(`attribute ${name} is not settable on this template`);
     }
-    setAttributes(this.slot(name), attrs);
+    setAttributes(el, attrs);
     return this;
   }
 }

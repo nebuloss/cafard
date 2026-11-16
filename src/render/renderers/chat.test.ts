@@ -121,7 +121,7 @@ describe('home renderers', () => {
 describe('image grid', () => {
   it('shows four tiles and +N', () => {
     loadPage('chat');
-    const images = new ImageRenderer(SlotTemplate.require(document, 'tpl-image', IMAGE_ATTRIBUTES));
+    const images = new ImageRenderer(SlotTemplate.find(document, 'tpl-image', IMAGE_ATTRIBUTES)!);
     const img = (fixture('attachment_image') as ImageAttachment);
     const grid = images.grid([img, img, img, img, img, img]);
     expect(grid?.dataset['count']).toBe('4');

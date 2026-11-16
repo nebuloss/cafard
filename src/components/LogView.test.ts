@@ -1,31 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { disposable, type Disposable } from '@/core/Disposable.ts';
-import { LogView, type Scroller } from '@/components/LogView.ts';
+import { LogView } from '@/components/LogView.ts';
 import type { Entry } from '@/model/types.ts';
 import type { EntryRenderer } from '@/render/EntryRenderer.ts';
 import { LINE_ATTRIBUTES, LineRenderer } from '@/render/renderers/LineRenderer.ts';
 import { SlotTemplate } from '@/render/SlotTemplate.ts';
 import { FakeFrames } from '@/testing/FakeFrames.ts';
+import { FakeScroller } from '@/testing/FakeScroller.ts';
 import { fixture, loadPage } from '@/testing/pages.ts';
-
-class EndScroller implements Scroller {
-  end = true;
-  private listener: (() => void) | null = null;
-  atEnd(): boolean {
-    return this.end;
-  }
-  toEnd(): void {
-    this.end = true;
-  }
-  onScroll(listener: () => void): Disposable {
-    this.listener = listener;
-    return disposable(() => (this.listener = null));
-  }
-  userScrolls(end: boolean): void {
-    this.end = end;
-    this.listener?.();
-  }
-}
 
 /** Counts what reaches the renderer: the cost of a frame. */
 class Counting implements EntryRenderer {
@@ -45,7 +26,7 @@ describe('LogView under a fast feed (1000 lines/s)', () => {
   let list: HTMLElement;
   let frames: FakeFrames;
   let renderer: Counting;
-  let scroller: EndScroller;
+  let scroller: FakeScroller;
   let view: LogView;
 
   beforeEach(() => {
@@ -54,8 +35,8 @@ describe('LogView under a fast feed (1000 lines/s)', () => {
     list = root.querySelector<HTMLElement>('[data-slot="list"]') as HTMLElement;
     list.replaceChildren();
     frames = new FakeFrames();
-    renderer = new Counting(new LineRenderer(SlotTemplate.require(document, 'tpl-line', LINE_ATTRIBUTES)));
-    scroller = new EndScroller();
+    renderer = new Counting(new LineRenderer(SlotTemplate.find(document, 'tpl-line', LINE_ATTRIBUTES)!));
+    scroller = new FakeScroller();
     view = new LogView(root, renderer, scroller, document, LogView.cap, frames);
     view.mount();
   });

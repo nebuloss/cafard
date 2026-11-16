@@ -32,10 +32,6 @@ export class Observable<T> {
     }
   }
 
-  update(change: (value: T) => T): void {
-    this.set(change(this.current));
-  }
-
   /** With immediate, the listener also runs now with the current value. */
   subscribe(listener: Listener<T>, options: { immediate?: boolean } = {}): Disposable {
     this.listeners.add(listener);

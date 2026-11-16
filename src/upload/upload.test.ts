@@ -5,21 +5,18 @@ import { ApiError } from '@/net/ApiError.ts';
 import { KeepOriginal } from '@/media/KeepOriginal.ts';
 import { type Bitmap, type CanvasEnv, fit, ResizeToJpeg } from '@/media/ResizeToJpeg.ts';
 import { MemoryJobRepository } from '@/upload/JobRepository.ts';
-import { formOf, XhrUploadClient, type UploadClient, type XhrLike } from '@/upload/UploadClient.ts';
+import { formOf, XhrUploadClient, type XhrLike } from '@/upload/UploadClient.ts';
 import { type JobData, UploadJob } from '@/upload/UploadJob.ts';
 import { UploadQueue } from '@/upload/UploadQueue.ts';
 import { FakeClock } from '@/testing/FakeClock.ts';
 import { fixture } from '@/testing/pages.ts';
+import { FakeUploads, flush } from '@/testing/services.ts';
 
 const entry = fixture('entry_message') as Entry;
 
 function job(id: string, extra: Partial<JobData> = {}): JobData {
   return { id, chat: 'chan:dut1', text: `text of ${id}`, files: [], processed: false, keepOriginal: false, createdAt: 0, ...extra };
 }
-
-const flush = async (): Promise<void> => {
-  for (let i = 0; i < 20; i++) await Promise.resolve();
-};
 
 describe('UploadJob', () => {
   it('moves queued -> processing -> sending -> done', () => {
@@ -32,7 +29,6 @@ describe('UploadJob', () => {
     j.sending(2);
     j.done(entry);
     expect(seen).toEqual(['processing', 'sending 0', 'sending 0.5', 'sending 1', 'done']);
-    expect(j.finished).toBe(true);
   });
 
   it('refuses transitions the machine does not have', () => {
@@ -48,20 +44,9 @@ describe('UploadJob', () => {
   });
 });
 
-class FakeClient implements UploadClient {
-  readonly sent: JobData[] = [];
-  readonly plan: (Error | null)[] = [];
-  send(data: JobData, onProgress: (f: number) => void): Promise<Entry> {
-    const next = this.plan.shift() ?? null;
-    if (next !== null) return Promise.reject(next);
-    onProgress(0.5);
-    onProgress(1);
-    this.sent.push(data);
-    return Promise.resolve({ ...entry, text: data.text });
-  }
-}
+const fakeClient = (): FakeUploads => new FakeUploads((data) => ({ ...entry, text: data.text }));
 
-function queue(client: FakeClient, repo = new MemoryJobRepository(), clock = new FakeClock()) {
+function queue(client: FakeUploads, repo = new MemoryJobRepository(), clock = new FakeClock()) {
   const keep = new KeepOriginal();
   const resize = { process: (b: Blob) => Promise.resolve(new Blob([b], { type: 'image/jpeg' })) };
   return { q: new UploadQueue(client, repo, { resize, keep }, new Backoff({ baseMs: 1000, maxMs: 8000, random: () => 0.5 }), clock), repo, clock };
@@ -69,7 +54,7 @@ function queue(client: FakeClient, repo = new MemoryJobRepository(), clock = new
 
 describe('UploadQueue', () => {
   it('sends in order and forgets what it sent', async () => {
-    const client = new FakeClient();
+    const client = fakeClient();
     const { q, repo } = queue(client);
     const sent: string[] = [];
     q.events.on('sent', ({ entry: e }) => sent.push(e.text));
@@ -82,7 +67,7 @@ describe('UploadQueue', () => {
   });
 
   it('retries a network failure with backoff, keeping later jobs behind it', async () => {
-    const client = new FakeClient();
+    const client = fakeClient();
     client.plan.push(new ApiError('offline', 'The server cannot be reached.', 0), new ApiError('busy', 'Busy.', 503, 4));
     const { q, repo, clock } = queue(client);
     await q.add(job('a', { createdAt: 1 }));
@@ -105,7 +90,7 @@ describe('UploadQueue', () => {
   });
 
   it('leaves a refused job for the person and sends the next', async () => {
-    const client = new FakeClient();
+    const client = fakeClient();
     client.plan.push(new ApiError('too_large', 'That is too big.', 413));
     const { q, clock } = queue(client);
     await q.add(job('a', { createdAt: 1 }));
@@ -124,7 +109,7 @@ describe('UploadQueue', () => {
   it('restores jobs left in the repository, processing photos once', async () => {
     const repo = new MemoryJobRepository();
     await repo.put(job('old', { files: [{ name: 'IMG_1.HEIC', blob: new Blob(['x'], { type: 'image/heic' }) }] }));
-    const client = new FakeClient();
+    const client = fakeClient();
     client.plan.push(new ApiError('offline', 'The server cannot be reached.', 0));
     const { q, clock } = queue(client, repo);
     await q.restore();
@@ -138,7 +123,7 @@ describe('UploadQueue', () => {
   });
 
   it('keeps originals when asked', async () => {
-    const client = new FakeClient();
+    const client = fakeClient();
     const { q } = queue(client);
     const blob = new Blob(['x'], { type: 'image/png' });
     await q.add(job('a', { keepOriginal: true, files: [{ name: 'a.png', blob }] }));

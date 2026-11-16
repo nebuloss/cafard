@@ -47,11 +47,8 @@ const parsers: { readonly [K in keyof FeedEvents]: (raw: unknown) => FeedEvents[
 };
 
 /**
- * Adapter over EventSource for one page's /api/events connection
- * (CONTRACTS.md 4). The browser's own retry is replaced by ours: on an
- * error the source is closed and reopened after a backoff, with
- * since_seq set to one past the last entry seen, which is what
- * Last-Event-ID would carry (EventSource cannot set headers).
+ * One page's /api/events connection (CONTRACTS.md 4). It reconnects with
+ * its own backoff and since_seq, since EventSource cannot set Last-Event-ID.
  */
 export class LiveFeed implements Disposable {
   readonly state = new Observable<FeedState>({ state: 'closed' }, (a, b) => JSON.stringify(a) === JSON.stringify(b));

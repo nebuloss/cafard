@@ -39,12 +39,9 @@ import type {
   TokenCreated,
 } from '@/model/types.ts';
 
-/**
- * Runtime validation of server JSON (PLAN 9.4 rule 7): a value that does not
- * have the shape the bundle expects becomes an ApiError here, never an
- * undefined deep in the UI. Unknown fields are ignored, so the server can add
- * fields without breaking older bundles.
- */
+// Server JSON of the wrong shape becomes an ApiError here, not an undefined
+// deep in the UI (PLAN 9.4 rule 7). Unknown fields are ignored so the server
+// can add some.
 
 type Obj = Readonly<Record<string, unknown>>;
 

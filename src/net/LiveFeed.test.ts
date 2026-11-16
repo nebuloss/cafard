@@ -1,32 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Backoff } from '@/core/Backoff.ts';
-import { LiveFeed, type EventSourceLike } from '@/net/LiveFeed.ts';
+import { LiveFeed } from '@/net/LiveFeed.ts';
 import type { Entry } from '@/model/types.ts';
 import { FakeClock } from '@/testing/FakeClock.ts';
+import { FakeSource } from '@/testing/FakeSource.ts';
 import { fixture } from '@/testing/pages.ts';
-
-class FakeSource implements EventSourceLike {
-  onopen: ((event: Event) => void) | null = null;
-  onerror: ((event: Event) => void) | null = null;
-  closed = false;
-  private readonly listeners = new Map<string, ((event: MessageEvent) => void)[]>();
-  constructor(readonly url: string) {}
-  addEventListener(type: string, listener: (event: MessageEvent) => void): void {
-    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
-  }
-  close(): void {
-    this.closed = true;
-  }
-  open(): void {
-    this.onopen?.(new Event('open'));
-  }
-  fail(): void {
-    this.onerror?.(new Event('error'));
-  }
-  emit(type: string, data: unknown): void {
-    for (const l of this.listeners.get(type) ?? []) l(new MessageEvent(type, { data: JSON.stringify(data) }));
-  }
-}
 
 function setup(): { feed: LiveFeed; sources: FakeSource[]; clock: FakeClock } {
   const sources: FakeSource[] = [];

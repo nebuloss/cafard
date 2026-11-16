@@ -1,43 +1,6 @@
 import type { HttpClient } from '@/net/HttpClient.ts';
-import {
-  parseAcked,
-  parseChat,
-  parseEntry,
-  parseOverview,
-  parseShare,
-  parseEntryPage,
-  parseList,
-  parseMarkCreated,
-  parseMe,
-  parsePairing,
-  parsePrincipal,
-  parseSession,
-  parseStream,
-  parseToken,
-  parseTokenCreated,
-} from '@/model/parse.ts';
-import type {
-  Acked,
-  ChannelCreate,
-  ChannelUpdate,
-  Chat,
-  ChatPrefs,
-  Overview,
-  Share,
-  Entry,
-  MarkCreated,
-  Me,
-  Page,
-  Pairing,
-  PairingCreate,
-  Principal,
-  PrincipalKind,
-  Session,
-  Stream,
-  Token,
-  TokenCreate,
-  TokenCreated,
-} from '@/model/types.ts';
+import { parseAcked, parseChat, parseEntryPage, parseList, parseMarkCreated, parseStream, parseTokenCreated } from '@/model/parse.ts';
+import type { Acked, ChannelCreate, ChannelUpdate, Chat, ChatPrefs, Entry, MarkCreated, Page, Stream, TokenCreate, TokenCreated } from '@/model/types.ts';
 
 /** The logs query of /live and /api/entries (PLAN 9.6.4). */
 export interface EntriesQuery {
@@ -51,6 +14,25 @@ export interface EntriesQuery {
   readonly re?: string;
   readonly kinds?: string;
   readonly limit?: number;
+}
+
+/** The /live query as an /api/entries query. */
+export function entriesQuery(query: string): EntriesQuery {
+  const p = new URLSearchParams(query);
+  const get = (k: string): string | undefined => p.get(k) ?? undefined;
+  const num = (k: string): number | undefined => {
+    const v = p.get(k);
+    return v === null || v === '' || Number.isNaN(Number(v)) ? undefined : Number(v);
+  };
+  return {
+    streams: get('streams'),
+    channel: get('channel'),
+    sev: get('sev'),
+    re: get('re'),
+    kinds: get('kinds'),
+    from_seq: num('from_seq'),
+    to_seq: num('to_seq'),
+  };
 }
 
 /** A page of a chat's timeline (CONTRACTS.md 2.3). */
@@ -68,18 +50,6 @@ export interface TimelineQuery {
 export class CafardApi {
   constructor(private readonly http: HttpClient) {}
 
-  me(): Promise<Me> {
-    return this.http.request('GET', '/api/me', { parse: parseMe });
-  }
-
-  principals(kind?: PrincipalKind): Promise<Principal[]> {
-    return this.http.request('GET', '/api/principals', { query: { kind }, parse: parseList('principals', parsePrincipal) });
-  }
-
-  streams(channel?: string): Promise<Stream[]> {
-    return this.http.request('GET', '/api/streams', { query: { channel }, parse: parseList('streams', parseStream) });
-  }
-
   matchStreams(pattern: string): Promise<Stream[]> {
     return this.http.request('GET', '/api/streams/match', { query: { pattern }, parse: parseList('streams', parseStream) });
   }
@@ -96,28 +66,8 @@ export class CafardApi {
     return this.http.request('POST', '/api/marks', { body: { stream, label }, parse: parseMarkCreated });
   }
 
-  tokens(): Promise<Token[]> {
-    return this.http.request('GET', '/api/tokens', { parse: parseList('tokens', parseToken) });
-  }
-
   createToken(request: TokenCreate): Promise<TokenCreated> {
     return this.http.request('POST', '/api/tokens', { body: request, parse: parseTokenCreated });
-  }
-
-  revokeToken(id: number): Promise<void> {
-    return this.http.request('DELETE', `/api/tokens/${id}`);
-  }
-
-  sessions(): Promise<Session[]> {
-    return this.http.request('GET', '/api/sessions', { parse: parseList('sessions', parseSession) });
-  }
-
-  revokeSession(id: number): Promise<void> {
-    return this.http.request('DELETE', `/api/sessions/${id}`);
-  }
-
-  createPairing(request: PairingCreate): Promise<Pairing> {
-    return this.http.request('POST', '/api/pairings', { body: request, parse: parsePairing });
   }
 
   // Track D: chats. Sending a message goes through the upload queue.
@@ -125,10 +75,6 @@ export class CafardApi {
   chats(options: { all?: boolean; archived?: boolean } = {}): Promise<Chat[]> {
     const query = { all: options.all === true ? 1 : undefined, archived: options.archived === true ? 1 : undefined };
     return this.http.request('GET', '/api/chats', { query, parse: parseList('chats', parseChat) });
-  }
-
-  overview(): Promise<Overview> {
-    return this.http.request('GET', '/api/overview', { parse: parseOverview });
   }
 
   timeline(chat: string, query: TimelineQuery = {}): Promise<Page<Entry>> {
@@ -147,10 +93,6 @@ export class CafardApi {
     return this.http.request('POST', '/api/acks', { body: { seqs }, parse: parseAcked });
   }
 
-  message(seq: number): Promise<Entry> {
-    return this.http.request('GET', `/api/messages/${seq}`, { parse: (raw) => parseEntry(raw) });
-  }
-
   createChannel(request: ChannelCreate): Promise<Chat> {
     return this.http.request('POST', '/api/channels', { body: request, parse: (raw) => parseChat(raw) });
   }
@@ -161,9 +103,5 @@ export class CafardApi {
 
   deleteChannel(name: string): Promise<void> {
     return this.http.request('DELETE', `/api/channels/${encodeURIComponent(name)}`, { query: { confirm: name } });
-  }
-
-  share(id: string): Promise<Share> {
-    return this.http.request('GET', `/api/shares/${encodeURIComponent(id)}`, { parse: parseShare });
   }
 }

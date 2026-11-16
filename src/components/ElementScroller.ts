@@ -1,19 +1,19 @@
 import { disposable, type Disposable } from '@/core/Disposable.ts';
 import type { Scroller } from '@/components/LogView.ts';
 
+/** How near the end, in pixels, still counts as at the end. */
+const SLACK = 48;
+
 /** A Scroller over a pane that scrolls on its own (the chat's panes). */
 export class ElementScroller implements Scroller {
-  constructor(
-    private readonly el: HTMLElement,
-    private readonly slack = 48,
-  ) {}
+  constructor(private readonly el: HTMLElement) {}
 
   atEnd(): boolean {
-    return this.el.scrollTop + this.el.clientHeight >= this.el.scrollHeight - this.slack;
+    return this.el.scrollTop + this.el.clientHeight >= this.el.scrollHeight - SLACK;
   }
 
   atStart(): boolean {
-    return this.el.scrollTop <= this.slack * 4;
+    return this.el.scrollTop <= SLACK * 4;
   }
 
   toEnd(): void {

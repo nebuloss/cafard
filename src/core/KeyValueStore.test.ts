@@ -8,12 +8,11 @@ describe.each([
   ['MemoryStore', () => new MemoryStore()],
   ['LocalStorageStore', () => new LocalStorageStore(globalThis.localStorage)],
 ])('%s', (_name, make) => {
-  it('round-trips a value and removes it', () => {
+  it('round-trips a value', () => {
     const store = make();
+    expect(store.get(lastChat)).toBeNull();
     store.set(lastChat, 'chan:dut1');
     expect(store.get(lastChat)).toBe('chan:dut1');
-    store.remove(lastChat);
-    expect(store.get(lastChat)).toBeNull();
   });
 
   it('returns null for a value of the wrong type', () => {

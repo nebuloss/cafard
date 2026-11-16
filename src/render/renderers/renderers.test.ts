@@ -11,8 +11,8 @@ describe('renderers on the page the Go template test wrote', () => {
   let markers: MarkerRenderer;
   beforeEach(() => {
     loadPage('live');
-    lines = new LineRenderer(SlotTemplate.require(document, 'tpl-line', LINE_ATTRIBUTES));
-    markers = new MarkerRenderer(SlotTemplate.require(document, 'tpl-marker', MARKER_ATTRIBUTES));
+    lines = new LineRenderer(SlotTemplate.find(document, 'tpl-line', LINE_ATTRIBUTES)!);
+    markers = new MarkerRenderer(SlotTemplate.find(document, 'tpl-marker', MARKER_ATTRIBUTES)!);
   });
 
   it('builds a line the way the server renders one', () => {
@@ -47,7 +47,7 @@ describe('renderers on the page the Go template test wrote', () => {
   });
 
   it('refuses attributes outside the contract list', () => {
-    const t = SlotTemplate.require(document, 'tpl-line', LINE_ATTRIBUTES).clone();
+    const t = SlotTemplate.find(document, 'tpl-line', LINE_ATTRIBUTES)!.clone();
     expect(() => t.attr({ href: '/x' })).toThrow();
     expect(() => t.attr({ 'data-selected': true })).not.toThrow();
   });
