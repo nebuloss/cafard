@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -47,30 +48,21 @@ func freePort(t *testing.T, network string) string {
 	return ln.Addr().String()
 }
 
-// waitBound waits until the server has bound addr: listeners start after
-// the HTTP server reports ready.
-func waitBound(t *testing.T, network, addr string) {
-	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		var err error
-		if network == "udp" {
-			var pc net.PacketConn
-			if pc, err = net.ListenPacket("udp", addr); err == nil {
-				pc.Close()
-			}
-		} else {
-			var ln net.Listener
-			if ln, err = net.Listen("tcp", addr); err == nil {
-				ln.Close()
-			}
+// listening waits until the server logs that component listens on
+// transport, and returns the bound address. Tests configure port 0, so no
+// other process can take the port between choosing it and binding it, and
+// nothing probes the port while the server binds it.
+func (s *server) listening(component, transport string) string {
+	s.t.Helper()
+	re := regexp.MustCompile(`msg=listening component=` + component + ` transport=` + transport + ` addr=(\S+)`)
+	var addr string
+	testutil.Eventually(s.t, component+" "+transport+" listening", 10*time.Second, func() bool {
+		if m := re.FindStringSubmatch(s.logs.String()); m != nil {
+			addr = m[1]
 		}
-		if err != nil {
-			return // in use: the server has it
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatalf("%s %s never bound", network, addr)
+		return addr != ""
+	})
+	return addr
 }
 
 // waitEntries polls the store until stream has at least n entries.
@@ -107,10 +99,8 @@ func checkEntry(t *testing.T, e store.Entry, text string, sev int, src time.Time
 }
 
 func TestSyslogOverUDPAndTCPLands(t *testing.T) {
-	udpAddr, tcpAddr := freePort(t, "udp"), freePort(t, "tcp")
-	s := startServer(t, func(c *config.Config) { c.Syslog.UDP, c.Syslog.TCP = udpAddr, tcpAddr })
-	waitBound(t, "udp", udpAddr)
-	waitBound(t, "tcp", tcpAddr)
+	s := startServer(t, func(c *config.Config) { c.Syslog.UDP, c.Syslog.TCP = "127.0.0.1:0", "127.0.0.1:0" })
+	udpAddr, tcpAddr := s.listening("syslog", "udp"), s.listening("syslog", "tcp")
 
 	uc, err := net.Dial("udp", udpAddr)
 	if err != nil {
@@ -153,12 +143,11 @@ func TestSyslogOverUDPAndTCPLands(t *testing.T) {
 }
 
 func TestNetconsoleLandsUnderItsConfiguredName(t *testing.T) {
-	addr := freePort(t, "udp")
 	s := startServer(t, func(c *config.Config) {
-		c.Netconsole.UDP = addr
+		c.Netconsole.UDP = "127.0.0.1:0"
 		c.Netconsole.Names = map[string]string{"127.0.0.1": "vm1"}
 	})
-	waitBound(t, "udp", addr)
+	addr := s.listening("netconsole", "udp")
 	c, err := net.Dial("udp", addr)
 	if err != nil {
 		t.Fatal(err)

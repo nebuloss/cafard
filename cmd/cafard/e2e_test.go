@@ -33,6 +33,7 @@ type server struct {
 	admin  string
 	dir    string
 	cancel context.CancelFunc
+	logs   *syncBuffer
 
 	dbOnce sync.Once
 	st     *store.Store
@@ -52,8 +53,9 @@ func startServer(t *testing.T, opts ...func(*config.Config)) *server {
 	addrs := make(chan net.Addr, 1)
 	done := make(chan error, 1)
 	var out syncBuffer
+	logs := new(syncBuffer)
 	go func() {
-		done <- serve(ctx, &cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), &out, func(a net.Addr) { addrs <- a })
+		done <- serve(ctx, &cfg, slog.New(slog.NewTextHandler(logs, nil)), &out, func(a net.Addr) { addrs <- a })
 	}()
 	var addr net.Addr
 	select {
@@ -67,7 +69,7 @@ func startServer(t *testing.T, opts ...func(*config.Config)) *server {
 	if m == nil {
 		t.Fatalf("no admin token printed on first start:\n%s", out.String())
 	}
-	s := &server{t: t, base: "http://" + addr.String(), admin: m[1], dir: cfg.DataDir, cancel: cancel}
+	s := &server{t: t, base: "http://" + addr.String(), admin: m[1], dir: cfg.DataDir, cancel: cancel, logs: logs}
 	t.Cleanup(func() {
 		cancel()
 		select {
