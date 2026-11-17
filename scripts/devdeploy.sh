@@ -9,7 +9,9 @@
 # what "does this fix work on the box" needs. It replaces ONE binary and
 # restarts the service. It never copies the database or cafard.yaml, and it
 # does not touch the unit or the configuration: that is install.sh's job, and
-# the box must have been installed with it first.
+# the box must have been installed with it first. Like install.sh, it sets a
+# random admin password when none is set and shows it here once, so the
+# restarted server never generates one into its log.
 #
 # The binary goes the long way round (dev-build, here, then the appliance)
 # because only this workstation can reach both.
@@ -75,6 +77,13 @@ ssh "$BUILD_HOST" "rm -f /tmp/cafard-devdeploy"
 # shellcheck disable=SC2016
 post='set -e
 mv -f /usr/local/bin/cafard.new /usr/local/bin/cafard
+password=$(od -An -N18 -tx1 /dev/urandom | tr -d " \n")
+out=$(printf "%s\n" "$password" | /usr/local/bin/cafard passwd -config /etc/cafard.yaml --if-unset)
+case "$out" in "Admin password set"*) printf "\nadmin password, shown once: %s\n\n" "$password" ;; esac
+unset password
+data_dir=$(/usr/local/bin/cafard config -config /etc/cafard.yaml 2>/dev/null | sed -n "s/^data_dir: *//p")
+owner=$(stat -c %U "${data_dir:-/var/lib/cafard}")
+chown -R "$owner:$owner" "${data_dir:-/var/lib/cafard}"
 rc-service cafard restart >/dev/null 2>&1 || systemctl restart cafard
 sleep 2
 /usr/local/bin/cafard version
