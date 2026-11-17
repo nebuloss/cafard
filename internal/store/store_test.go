@@ -95,6 +95,65 @@ func TestMigrationsAreRecordedAndReopenIsANoop(t *testing.T) {
 	}
 }
 
+// Migration 0060 takes the admin scope off every stored credential: from
+// then on only the admin password gives it.
+func TestTheAdminScopeMigrationStripsStoredCredentials(t *testing.T) {
+	p := filepath.Join(t.TempDir(), store.FileName)
+	st, err := store.Open(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO principals(name, kind, created_at) VALUES ('admin', 'human', 0)`,
+		`INSERT INTO tokens(hash, principal, scopes, created_at) VALUES ('a', 'admin', 'ingest read message admin', 0)`,
+		`INSERT INTO tokens(hash, principal, scopes, created_at) VALUES ('b', 'admin', 'admin', 0)`,
+		`INSERT INTO tokens(hash, principal, scopes, created_at) VALUES ('c', 'admin', 'read', 0)`,
+		`INSERT INTO sessions(hash, principal, scopes, created_at, expires_at) VALUES ('d', 'admin', 'read admin', 0, 1)`,
+		`INSERT INTO pairings(code_hash, principal, scopes, created_at, expires_at) VALUES ('e', 'admin', 'message admin', 0, 1)`,
+		// Run it again over these rows, as on an install that had them.
+		`DELETE FROM schema_migrations WHERE name = '0060_auth_admin.sql'`,
+	} {
+		if _, err := st.DB().Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	st.Close()
+	st = openAt(t, p)
+	got := map[string]string{}
+	rows, err := st.DB().Query(`SELECT hash, scopes FROM tokens UNION ALL SELECT hash, scopes FROM sessions
+		UNION ALL SELECT code_hash, scopes FROM pairings`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			t.Fatal(err)
+		}
+		got[k] = v
+	}
+	want := map[string]string{"a": "ingest read message", "c": "read", "d": "read", "e": "message"}
+	if len(got) != len(want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s: scopes %q, want %q", k, got[k], v)
+		}
+	}
+}
+
+func openAt(t *testing.T, path string) *store.Store {
+	t.Helper()
+	st, err := store.Open(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	return st
+}
+
 func TestForeignKeysCascade(t *testing.T) {
 	st := open(t)
 	ctx := context.Background()

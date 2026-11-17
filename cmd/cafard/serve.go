@@ -60,7 +60,8 @@ func newLogger(e env, level string) *slog.Logger {
 }
 
 func serverSettings(cfg *config.Config) deps.Server {
-	return deps.Server{PublicURL: cfg.PublicURL, HTTPListen: cfg.HTTPListen, Secure: cfg.Secure, TLS: cfg.TLS(), DataDir: cfg.DataDir}
+	return deps.Server{PublicURL: cfg.PublicURL, HTTPListen: cfg.HTTPListen, AdminListen: cfg.AdminListen, Secure: cfg.Secure,
+		TLS: cfg.TLS(), DataDir: cfg.DataDir}
 }
 
 // openStore creates the data directory and opens the database in it.
@@ -73,18 +74,24 @@ func openStore(ctx context.Context, cfg *config.Config) (*store.Store, error) {
 
 // app is everything serve runs.
 type app struct {
-	deps    deps.Deps
-	handler http.Handler
-	writer  *writer.W
-	status  *status.Memory
-	janitor *store.Janitor
-	starts  []func(context.Context) error
+	deps deps.Deps
+	// public serves what anyone signed in, any agent and any device may
+	// reach; admin serves that and the admin routes, and is the only
+	// handler that honours the admin cookie.
+	public, admin http.Handler
+	writer        *writer.W
+	status        *status.Memory
+	janitor       *store.Janitor
+	starts        []func(context.Context) error
 }
 
-// build wires every part, building the mux once.
+// build wires every part, building each mux once: the public one, and
+// the admin one, which holds the admin-only routes and hands everything
+// else to the public one.
 func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) {
 	clk := clock.System{}
 	tokens := auth.NewTokens(st.DB(), clk)
+	admin := auth.NewAdmin(st.DB(), clk)
 	h := hub.New(nil)
 	stat := status.New(clk)
 	w := writer.New(st, h, stat, clk, log.With("component", "writer"), writer.Options{})
@@ -95,8 +102,9 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 		Writer:  w,
 		Hub:     h,
 		Status:  stat,
-		Auth:    &auth.TokenAuthenticator{Tokens: tokens, Sessions: auth.NewSessions(st.DB(), clk).Lookup},
+		Auth:    &auth.TokenAuthenticator{Tokens: tokens, Sessions: auth.NewSessions(st.DB(), clk).Lookup, Admin: admin},
 		Tokens:  tokens,
+		Admin:   admin,
 		Janitor: jan,
 		Clock:   clk,
 		Log:     log,
@@ -104,6 +112,7 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 	}
 
 	mux := http.NewServeMux()
+	adminMux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
@@ -131,7 +140,7 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 		func() (func(context.Context) error, error) { return otlp.Register(mux, mcp, d, &cfg.OTLP) },
 		func() (func(context.Context) error, error) { return serial.Register(mux, mcp, d, &cfg.Serial) },
 		func() (func(context.Context) error, error) { return api.RegisterMessages(mux, mcp, d, msg) },
-		func() (func(context.Context) error, error) { return web.Register(mux, mcp, d) },
+		func() (func(context.Context) error, error) { return web.Register(mux, adminMux, mcp, d) },
 	} {
 		start, err := register()
 		if err != nil {
@@ -143,14 +152,35 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 	}
 	// Last: tools registered above must exist before /mcp serves.
 	mcpserver.Register(mux, mcp)
-	a.handler = mux
+	adminMux.Handle("/", mux)
+	a.public = mux
+	a.admin = auth.AdminInterface(adminMux)
 	return a, nil
+}
+
+// listener is one address serve binds and what it serves there.
+type listener struct {
+	name, address string
+	handler       http.Handler
+}
+
+// listeners is one address serving everything, or, with admin_listen
+// set, the public routes on http_listen and all of them on admin_listen.
+func (a *app) listeners(cfg *config.Config) []listener {
+	if cfg.AdminListen == "" {
+		return []listener{{name: "http", address: cfg.HTTPListen, handler: a.admin}}
+	}
+	return []listener{
+		{name: "http", address: cfg.HTTPListen, handler: a.public},
+		{name: "admin", address: cfg.AdminListen, handler: a.admin},
+	}
 }
 
 // serve runs the server until ctx is cancelled, then shuts it down: HTTP
 // first, so no handler is left waiting on the writer, then the writer,
-// which commits what is queued. ready, when set, gets the bound address.
-func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, stdout io.Writer, ready func(net.Addr)) error {
+// which commits what is queued. ready, when set, gets the bound addresses;
+// admin is nil when one address serves everything.
+func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, stdout io.Writer, ready func(public, admin net.Addr)) error {
 	st, err := openStore(ctx, cfg)
 	if err != nil {
 		return err
@@ -161,36 +191,49 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, stdout io.
 	if err != nil {
 		return err
 	}
-	secret, err := a.deps.Tokens.Bootstrap(ctx)
+	password, err := a.deps.Admin.EnsurePassword(ctx)
 	if err != nil {
 		return fmt.Errorf("first start: %w", err)
 	}
-	if secret != "" {
+	if password != "" {
 		// Printed, never logged: stdout is the operator's terminal or the
 		// installer, the log may be shipped elsewhere.
-		fmt.Fprintf(stdout, "\nFirst start: created the human principal %q and an admin token.\n", auth.AdminName)
-		fmt.Fprintf(stdout, "It is shown once and only its hash is stored:\n\n  %s\n\n", secret)
-		fmt.Fprintf(stdout, "Sign in with it at %s/signin, or give agents their own tokens:\n", a.deps.Server.BaseURL())
+		fmt.Fprintf(stdout, "\nNo admin password was set, so cafard made one.\n")
+		fmt.Fprintf(stdout, "It is shown once and only its hash is stored:\n\n  %s\n\n", password)
+		fmt.Fprintf(stdout, "Sign in with it at %s/signin, and change it there or with cafard passwd.\n", a.deps.Server.AdminURL())
+		fmt.Fprintf(stdout, "Give agents their own tokens:\n")
 		fmt.Fprintf(stdout, "  cafard token create --name claude-laptop --kind agent --scopes read,message\n\n")
 	}
-	if err := auth.ExposureGuard(ctx, cfg.HTTPListen, a.deps.Tokens.CountAdminTokens,
-		auth.NewSessions(a.deps.Store.DB(), a.deps.Clock).CountAdmin); err != nil {
+	if err := auth.ExposureGuard(ctx, a.deps.Admin.HasPassword, cfg.HTTPListen, cfg.AdminListen); err != nil {
 		return err
 	}
 
-	srv := &http.Server{
-		Handler: a.handler,
-		// No ReadTimeout or WriteTimeout: SSE streams and wait_for calls stay
-		// open for minutes, and phone uploads are slow. Handlers that need a
-		// deadline set one through http.ResponseController.
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       2 * time.Minute,
-		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
-		BaseContext:       func(net.Listener) context.Context { return ctx },
+	// Every address is bound before anything serves, so a taken port stops
+	// the start instead of leaving half the server up.
+	specs := a.listeners(cfg)
+	lns := make([]net.Listener, 0, len(specs))
+	for _, l := range specs {
+		ln, err := net.Listen("tcp", l.address)
+		if err != nil {
+			for _, open := range lns {
+				open.Close()
+			}
+			return fmt.Errorf("%s listener: %w", l.name, err)
+		}
+		lns = append(lns, ln)
 	}
-	ln, err := net.Listen("tcp", cfg.HTTPListen)
-	if err != nil {
-		return err
+	servers := make([]*http.Server, len(specs))
+	for i, l := range specs {
+		servers[i] = &http.Server{
+			Handler: l.handler,
+			// No ReadTimeout or WriteTimeout: SSE streams and wait_for calls
+			// stay open for minutes, and phone uploads are slow. Handlers that
+			// need a deadline set one through http.ResponseController.
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       2 * time.Minute,
+			ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+			BaseContext:       func(net.Listener) context.Context { return ctx },
+		}
 	}
 
 	writerCtx, stopWriter := context.WithCancel(context.Background())
@@ -204,30 +247,44 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger, stdout io.
 	for _, start := range a.starts {
 		g.Go(func() error { return start(gctx) })
 	}
-	g.Go(func() error {
-		var err error
-		if cfg.TLS() {
-			err = srv.ServeTLS(ln, cfg.TLSCert, cfg.TLSKey)
-		} else {
-			err = srv.Serve(ln)
-		}
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
-	})
+	for i, srv := range servers {
+		g.Go(func() error {
+			var err error
+			if cfg.TLS() {
+				err = srv.ServeTLS(lns[i], cfg.TLSCert, cfg.TLSKey)
+			} else {
+				err = srv.Serve(lns[i])
+			}
+			if errors.Is(err, http.ErrServerClosed) {
+				return nil
+			}
+			return err
+		})
+	}
 	g.Go(func() error {
 		<-gctx.Done()
 		log.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdownCtx)
+		var first error
+		for _, srv := range servers {
+			if err := srv.Shutdown(shutdownCtx); err != nil && first == nil {
+				first = err
+			}
+		}
+		return first
 	})
 
-	log.Info("listening", "addr", ln.Addr().String(), "version", version, "tls", cfg.TLS(), "bundle", assets.BundleBuilt(),
-		"data_dir", cfg.DataDir)
+	for i, l := range specs {
+		log.Info("listening", "interface", l.name, "addr", lns[i].Addr().String(), "version", version, "tls", cfg.TLS(),
+			"bundle", assets.BundleBuilt(), "data_dir", cfg.DataDir)
+	}
 	if ready != nil {
-		ready(ln.Addr())
+		var admin net.Addr
+		if len(lns) > 1 {
+			admin = lns[1].Addr()
+		}
+		ready(lns[0].Addr(), admin)
 	}
 
 	err = g.Wait()

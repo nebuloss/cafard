@@ -102,23 +102,12 @@ func TestTokenLifecycle(t *testing.T) {
 	}
 }
 
-func TestBootstrapOnlyOnAnEmptyDatabase(t *testing.T) {
+func TestTokensCannotCarryAdmin(t *testing.T) {
 	tokens, _ := newTokens(t)
 	ctx := context.Background()
-	secret, err := tokens.Bootstrap(ctx)
-	if err != nil || secret == "" {
-		t.Fatalf("first bootstrap = %q, %v", secret, err)
-	}
-	p, err := tokens.Lookup(ctx, secret)
-	if err != nil || p.Name != AdminName || p.Kind != KindHuman || !p.Has(ScopeAdmin) {
-		t.Errorf("admin = %+v, %v", p, err)
-	}
-	if n, _ := tokens.CountAdminTokens(ctx); n != 1 {
-		t.Errorf("admin tokens = %d", n)
-	}
-	again, err := tokens.Bootstrap(ctx)
-	if err != nil || again != "" {
-		t.Errorf("second bootstrap = %q, %v", again, err)
+	tokens.EnsurePrincipal(ctx, "guillaume", KindHuman)
+	if _, _, err := tokens.CreateToken(ctx, "guillaume", "", NewScopeSet(ScopeRead, ScopeAdmin)); !errors.Is(err, ErrAdminScope) {
+		t.Errorf("admin token: %v", err)
 	}
 }
 
@@ -212,16 +201,16 @@ func TestIsRoutableFailsClosed(t *testing.T) {
 }
 
 func TestExposureGuard(t *testing.T) {
-	zero := func(context.Context) (int, error) { return 0, nil }
-	one := func(context.Context) (int, error) { return 1, nil }
+	unset := func(context.Context) (bool, error) { return false, nil }
+	set := func(context.Context) (bool, error) { return true, nil }
 	ctx := context.Background()
-	if err := ExposureGuard(ctx, "127.0.0.1:1", zero); err != nil {
+	if err := ExposureGuard(ctx, unset, "127.0.0.1:1", ""); err != nil {
 		t.Errorf("loopback: %v", err)
 	}
-	if err := ExposureGuard(ctx, "0.0.0.0:1", zero, zero); err == nil {
-		t.Error("routable with no admin: want an error")
+	if err := ExposureGuard(ctx, unset, "127.0.0.1:1", "0.0.0.0:2"); err == nil || !strings.Contains(err.Error(), "0.0.0.0:2") {
+		t.Errorf("routable admin interface with no password: %v", err)
 	}
-	if err := ExposureGuard(ctx, "0.0.0.0:1", zero, one); err != nil {
-		t.Errorf("routable with an admin: %v", err)
+	if err := ExposureGuard(ctx, set, "0.0.0.0:1"); err != nil {
+		t.Errorf("routable with a password: %v", err)
 	}
 }

@@ -157,18 +157,12 @@ func SecurityHeaders(h http.Header) {
 		"connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 }
 
-// Session is the principal of the request's session cookie. Pages take
-// sessions only: a bearer token is for programs.
+// Session is the principal of the request's cookies: an admin session on
+// the admin interface, else a browser session. Pages take cookies only: a
+// bearer token is for programs.
 func (s *Site) Session(r *http.Request) (auth.Principal, bool) {
-	c, err := r.Cookie(auth.SessionCookie)
-	if err != nil || c.Value == "" {
-		return auth.Principal{}, false
-	}
-	p, err := s.sessions.Lookup(r.Context(), c.Value)
-	if err != nil {
-		return auth.Principal{}, false
-	}
-	return p, true
+	p, err := auth.CookiePrincipal(r, s.d.Admin, s.sessions.Lookup)
+	return p, err == nil
 }
 
 // Handler is a page handler with its principal.
@@ -227,12 +221,13 @@ func SafeNext(next string) string {
 	return next
 }
 
-// Mount registers the pages.
-func (s *Site) Mount(mux *http.ServeMux) {
-	s.mountAccount(mux)
-	s.mountStreams(mux)
-	s.mountAgents(mux)
-	s.mountPair(mux)
-	s.mountLive(mux)
-	s.mountHome(mux)
+// Mount registers the pages: on public those of every signed-in person,
+// on admin those only the admin interface serves.
+func (s *Site) Mount(public, admin *http.ServeMux) {
+	s.mountAccount(public, admin)
+	s.mountStreams(public)
+	s.mountAgents(admin)
+	s.mountPair(admin)
+	s.mountLive(public)
+	s.mountHome(public)
 }

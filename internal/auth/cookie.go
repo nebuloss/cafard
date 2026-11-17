@@ -37,3 +37,31 @@ func ClearSessionCookie(w http.ResponseWriter, secure bool) {
 		SameSite: http.SameSiteLaxMode,
 	})
 }
+
+// SetAdminCookie gives the browser its admin session. Strict: no link from
+// another site may arrive signed in as the admin. Its lifetime is the
+// session's, which is not renewed.
+func SetAdminCookie(w http.ResponseWriter, secret string, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AdminCookie,
+		Value:    secret,
+		Path:     "/",
+		MaxAge:   int(AdminSessionTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// ClearAdminCookie removes it.
+func ClearAdminCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AdminCookie,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}

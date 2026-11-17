@@ -26,7 +26,10 @@ func TestSessionLifecycle(t *testing.T) {
 	if _, err := tokens.EnsurePrincipal(ctx, "guillaume", KindHuman); err != nil {
 		t.Fatal(err)
 	}
-	row, secret, err := sessions.Create(ctx, "guillaume", NewScopeSet(ScopeRead, ScopeAdmin), "Firefox on Linux", "Mozilla/5.0")
+	if _, _, err := sessions.Create(ctx, "guillaume", NewScopeSet(ScopeRead, ScopeAdmin), "", ""); !errors.Is(err, ErrAdminScope) {
+		t.Errorf("a session with the admin scope: %v", err)
+	}
+	row, secret, err := sessions.Create(ctx, "guillaume", NewScopeSet(ScopeRead, ScopeIngest), "Firefox on Linux", "Mozilla/5.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,11 +47,8 @@ func TestSessionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Name != "guillaume" || p.Kind != KindHuman || p.SessionID != row.ID || p.TokenID != 0 || !p.Has(ScopeAdmin) || p.Has(ScopeMessage) {
+	if p.Name != "guillaume" || p.Kind != KindHuman || p.SessionID != row.ID || p.TokenID != 0 || !p.Has(ScopeIngest) || p.Has(ScopeMessage) {
 		t.Errorf("principal = %+v", p)
-	}
-	if n, _ := sessions.CountAdmin(ctx); n != 1 {
-		t.Errorf("CountAdmin = %d", n)
 	}
 	if _, err := sessions.Lookup(ctx, "cfs_nope"); !errors.Is(err, ErrInvalid) {
 		t.Errorf("unknown session: %v", err)
@@ -69,9 +69,6 @@ func TestSessionLifecycle(t *testing.T) {
 	clk.Advance(31 * 24 * time.Hour)
 	if _, err := sessions.Lookup(ctx, secret); !errors.Is(err, ErrInvalid) {
 		t.Errorf("expired session: %v", err)
-	}
-	if n, _ := sessions.CountAdmin(ctx); n != 0 {
-		t.Errorf("CountAdmin counts an expired session: %d", n)
 	}
 	if err := sessions.Expire(ctx); err != nil {
 		t.Fatal(err)
@@ -128,7 +125,7 @@ func TestPairingIsSingleUseAndExpires(t *testing.T) {
 	ctx := context.Background()
 	tokens.EnsurePrincipal(ctx, "admin", KindHuman)
 
-	row, code, err := pairings.Create(ctx, "", "guillaume-phone", nil, "admin")
+	row, code, err := pairings.Create(ctx, "", "guillaume-phone", nil, "admin", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +171,11 @@ func TestPairingIsSingleUseAndExpires(t *testing.T) {
 		t.Error("a used code is still kept")
 	}
 
-	_, code2, err := pairings.Create(ctx, "admin", "", NewScopeSet(ScopeRead), "admin")
+	_, code2, err := pairings.Create(ctx, "admin", "", NewScopeSet(ScopeRead), "admin", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, code3, err := pairings.Create(ctx, "admin", "", nil, "cli", 2*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,25 +183,40 @@ func TestPairingIsSingleUseAndExpires(t *testing.T) {
 	if _, _, err := pairings.Redeem(ctx, code2, ""); !errors.Is(err, ErrPairingUsed) {
 		t.Errorf("expired code: %v", err)
 	}
+	if _, _, err := pairings.Redeem(ctx, code3, ""); err != nil {
+		t.Errorf("a two-hour code after five minutes: %v", err)
+	}
+}
+
+func TestPairingNeverGrantsAdminNorLastsPastADay(t *testing.T) {
+	tokens, _, pairings, _ := newSessions(t)
+	ctx := context.Background()
+	tokens.EnsurePrincipal(ctx, "guillaume", KindHuman)
+	if _, _, err := pairings.Create(ctx, "guillaume", "", NewScopeSet(ScopeRead, ScopeAdmin), "admin", 0); !errors.Is(err, ErrBadPairing) {
+		t.Errorf("admin scope: %v", err)
+	}
+	if _, _, err := pairings.Create(ctx, "guillaume", "", nil, "cli", MaxPairingTTL+time.Minute); !errors.Is(err, ErrBadPairing) {
+		t.Errorf("ttl over a day: %v", err)
+	}
 }
 
 func TestPairingRefusesNonHumans(t *testing.T) {
 	tokens, _, pairings, _ := newSessions(t)
 	ctx := context.Background()
 	tokens.EnsurePrincipal(ctx, "codex", KindAgent)
-	if _, _, err := pairings.Create(ctx, "codex", "", nil, "admin"); !errors.Is(err, ErrConflict) {
+	if _, _, err := pairings.Create(ctx, "codex", "", nil, "admin", 0); !errors.Is(err, ErrConflict) {
 		t.Errorf("agent: %v", err)
 	}
-	if _, _, err := pairings.Create(ctx, "", "codex", nil, "admin"); !errors.Is(err, ErrConflict) {
+	if _, _, err := pairings.Create(ctx, "", "codex", nil, "admin", 0); !errors.Is(err, ErrConflict) {
 		t.Errorf("new name of an agent: %v", err)
 	}
-	if _, _, err := pairings.Create(ctx, "nobody", "", nil, "admin"); !errors.Is(err, ErrNotFound) {
+	if _, _, err := pairings.Create(ctx, "nobody", "", nil, "admin", 0); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown principal: %v", err)
 	}
-	if _, _, err := pairings.Create(ctx, "a", "b", nil, "admin"); err == nil {
+	if _, _, err := pairings.Create(ctx, "a", "b", nil, "admin", 0); err == nil {
 		t.Error("both set accepted")
 	}
-	if _, _, err := pairings.Create(ctx, "", "Bad Name", nil, "admin"); err == nil {
+	if _, _, err := pairings.Create(ctx, "", "Bad Name", nil, "admin", 0); err == nil {
 		t.Error("bad name accepted")
 	}
 }

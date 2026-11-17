@@ -6,7 +6,7 @@
   <div class="qr-surface"><img src="{{.QR}}" alt="QR code that signs a phone in as {{.Name}}" width="256" height="256"></div>
   <p class="mono pair-url">{{.URL}}</p>
   {{else}}
-  <p class="muted">The server restarted since this code was made, so it can no longer show it. Make a new one.</p>
+  <p class="muted">This page cannot show this code: cafard pair made it and printed its link, or the server restarted since.</p>
   {{end}}
-  <p class="muted">Valid for 5 minutes, once. <span class="countdown" data-slot="countdown">Expires at {{.ExpiresText}} UTC.</span></p>
+  <p class="muted">Valid once. <span class="countdown" data-slot="countdown">Expires at {{.ExpiresText}} UTC.</span></p>
 </article>

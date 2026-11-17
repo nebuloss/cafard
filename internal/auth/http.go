@@ -14,8 +14,8 @@ import (
 
 // Authenticator establishes who made a request.
 type Authenticator interface {
-	// FromRequest reads "Authorization: Bearer cfd_..." or the session
-	// cookie. Bearer wins when both are present. It returns
+	// FromRequest reads "Authorization: Bearer cfd_..." or the cookies
+	// (CookiePrincipal). Bearer wins when both are present. It returns
 	// ErrNoCredentials or ErrInvalid.
 	FromRequest(r *http.Request) (Principal, error)
 }
@@ -44,23 +44,55 @@ type SessionLookup func(ctx context.Context, cookie string) (Principal, error)
 // SessionCookie is the name of the browser session cookie.
 const SessionCookie = "cafard_session"
 
-// TokenAuthenticator checks bearer tokens, then the session cookie if a
-// session lookup is set.
+// TokenAuthenticator checks bearer tokens, then the cookies: the admin
+// session when Admin is set and the request came through the admin
+// interface, then the browser session if a session lookup is set.
 type TokenAuthenticator struct {
 	Tokens   *Tokens
 	Sessions SessionLookup
+	Admin    *Admin
 }
 
 func (a *TokenAuthenticator) FromRequest(r *http.Request) (Principal, error) {
 	if token, ok := BearerToken(r); ok {
 		return a.Tokens.Lookup(r.Context(), token)
 	}
-	if a.Sessions != nil {
+	return CookiePrincipal(r, a.Admin, a.Sessions)
+}
+
+// CookiePrincipal is the principal of the request's cookies. A stale admin
+// cookie is skipped rather than refused, so a browser that also holds a
+// session keeps it after a restart.
+func CookiePrincipal(r *http.Request, admin *Admin, sessions SessionLookup) (Principal, error) {
+	if admin != nil && OnAdminInterface(r.Context()) {
+		if c, err := r.Cookie(AdminCookie); err == nil && c.Value != "" {
+			if p, err := admin.Lookup(c.Value); err == nil {
+				return p, nil
+			}
+		}
+	}
+	if sessions != nil {
 		if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" {
-			return a.Sessions(r.Context(), c.Value)
+			return sessions(r.Context(), c.Value)
 		}
 	}
 	return Principal{}, ErrNoCredentials
+}
+
+type adminInterfaceKey struct{}
+
+// AdminInterface marks the requests next serves as coming through the
+// admin interface, the only place an admin cookie counts.
+func AdminInterface(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), adminInterfaceKey{}, true)))
+	})
+}
+
+// OnAdminInterface reports whether AdminInterface marked the request.
+func OnAdminInterface(ctx context.Context) bool {
+	on, _ := ctx.Value(adminInterfaceKey{}).(bool)
+	return on
 }
 
 // BearerToken extracts the token of an RFC 6750 Authorization header.
@@ -178,28 +210,25 @@ func IsRoutable(address string) bool {
 	return false
 }
 
-// AdminCounter counts credentials that carry the admin scope.
-type AdminCounter func(ctx context.Context) (int, error)
-
-// ExposureGuard refuses to listen on a routable address when no admin
-// token or session exists: nobody could then revoke a leaked token or pair
-// a phone. Each counter adds its rows (tokens, sessions).
-func ExposureGuard(ctx context.Context, address string, counters ...AdminCounter) error {
-	if !IsRoutable(address) {
-		return nil
-	}
-	total := 0
-	for _, count := range counters {
-		n, err := count(ctx)
-		if err != nil {
-			return err
+// ExposureGuard refuses to listen on a routable address while no admin
+// password is set: nobody could then revoke a leaked token or pair a phone.
+// Empty addresses are skipped.
+func ExposureGuard(ctx context.Context, hasPassword func(context.Context) (bool, error), addresses ...string) error {
+	exposed := ""
+	for _, a := range addresses {
+		if a != "" && IsRoutable(a) {
+			exposed = a
+			break
 		}
-		total += n
 	}
-	if total > 0 {
+	if exposed == "" {
 		return nil
 	}
-	return fmt.Errorf("refusing to listen on %s: no token or session has the admin scope.\n"+
-		"Create one with: cafard token create --name admin --kind human --scopes read,message,ingest,admin\n"+
-		"or listen on loopback (-http-listen 127.0.0.1:8790)", address)
+	ok, err := hasPassword(ctx)
+	if err != nil || ok {
+		return err
+	}
+	return fmt.Errorf("refusing to listen on %s: no admin password is set.\n"+
+		"Set one with: cafard passwd\n"+
+		"or listen on loopback (-http-listen 127.0.0.1:8790)", exposed)
 }

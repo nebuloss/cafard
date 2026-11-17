@@ -46,6 +46,7 @@ variable, which take precedence in that order over the file:
 |---|---|---|---|
 | `data_dir` | `-data-dir` | `CAFARD_DATA_DIR` | `/var/lib/cafard` |
 | `http_listen` | `-http-listen` | `CAFARD_HTTP_LISTEN` | `0.0.0.0:8790` |
+| `admin_listen` | `-admin-listen` | `CAFARD_ADMIN_LISTEN` | none (admin routes on `http_listen`) |
 | `public_url` | `-public-url` | `CAFARD_PUBLIC_URL` | none |
 | `secure` | `-secure` | `CAFARD_SECURE` | `false` |
 | `tls_cert`, `tls_key` | `-tls-cert`, `-tls-key` | `CAFARD_TLS_CERT`, `CAFARD_TLS_KEY` | none |
@@ -55,9 +56,18 @@ Unknown keys in the file are an error, so a typo is caught by `cafard config`.
 
 ## First start
 
-On an empty database `cafard serve` creates the `admin` principal and an
-admin token, and prints the token once. Only its hash is stored. Agents get
-tokens of their own:
+With no admin password set, `cafard serve` makes a random one and prints it
+once, with the address to sign in at. Only its hash is stored. Set your own
+at any time from a shell on the server (no old password needed):
+
+```sh
+cafard passwd
+```
+
+The admin signs in with it at `/signin` and acts as the `admin` person.
+Everyone else signs in with a one-time link or QR code: the Pair page, or
+`cafard pair --name alice-phone`, which prints the link. Agents and devices
+get tokens of their own:
 
 ```sh
 cafard token create --name claude-laptop --kind agent --scopes read,message
@@ -65,8 +75,13 @@ cafard token list
 cafard token revoke 3
 ```
 
-Scopes are `ingest`, `read`, `message`, `serial_write` and `admin`. On a
-routable address cafard refuses to start unless an admin token exists.
+Token scopes are `ingest`, `read`, `message` and `serial_write`. The `admin`
+scope comes only with the password, never with a token. On a routable
+address cafard refuses to start unless an admin password is set.
+
+With `admin_listen` set, the admin pages (sign-in, Agents, Pair) move to
+that address and answer 404 on `http_listen`, which can then face a DMZ
+(`deploy/README.md`, "DMZ: split interfaces").
 
 ## Sending logs
 
@@ -412,12 +427,13 @@ channels:                   # reapplied at every start
 
 Open `public_url` (or `http://<host>:8790`) in a browser:
 
-- **Sign in** at `/signin` by pasting the admin token printed on first
-  start, or any token of a person (`--kind human`). It opens a session in
-  that browser; the token is not stored there.
+- **Sign in**: the admin types the admin password at `/signin` (on the
+  admin interface when `admin_listen` is set); the session lasts 12 hours
+  or until a restart. Everyone else opens a sign-in link from the admin.
 - **Pair a phone** at `/pair` (admin): choose a person or type a new name,
   and scan the QR code with the phone within 5 minutes. Each code works
   once. The page also lists signed-in browsers, each with a revoke button.
+  `cafard pair --name NAME [--ttl 2h]` prints such a link from a shell.
 - **Sources** (`/streams`) shows every source with its status, kind and
   transport, rate, last activity, last line and drops, and updates live.
 - **Live** (`/live`) shows the last 500 lines (or the range in
@@ -591,8 +607,8 @@ curl -fsSL https://raw.githubusercontent.com/nebuloss/cafard/main/deploy/install
 On Debian (systemd) or Alpine (OpenRC), from a release (checked against
 `SHA256SUMS`) or, run as `sudo deploy/install.sh`, from a checkout. It
 creates the `cafard` user (in `dialout`), `/etc/cafard.yaml` from
-`deploy/cafard.yaml.example`, the data directory, and the admin token,
-printed once to your terminal and never to a log. Re-run it to upgrade.
+`deploy/cafard.yaml.example`, the data directory, and a random admin
+password, printed once to your terminal and never to a log. Re-run it to upgrade.
 `deploy/README.md` covers reverse proxies (SSE and long MCP calls), TLS,
 serial ports in a Proxmox container, the Windows push client and updates.
 `scripts/devdeploy.sh` pushes a development build to a box already

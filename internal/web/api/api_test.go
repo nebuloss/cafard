@@ -19,7 +19,7 @@ func newEnv(t *testing.T) *webtest.Env {
 	t.Helper()
 	e := webtest.New(t, webtest.Options{})
 	pairings := auth.NewPairings(e.Store.DB(), e.Clock, e.Sessions)
-	api.New(e.Deps, e.Sessions, pairings, view.NewKinds(e.Tokens)).Mount(e.Mux)
+	api.New(e.Deps, e.Sessions, pairings, view.NewKinds(e.Tokens)).Mount(e.Mux, e.AdminMux)
 	return e
 }
 
@@ -151,8 +151,8 @@ func TestMeMarksAndPrincipals(t *testing.T) {
 
 func TestPairingsCannotGrantMoreThanTheAdminHolds(t *testing.T) {
 	e := newEnv(t)
-	tok := e.Principal("admin", auth.KindHuman, auth.ScopeRead, auth.ScopeMessage, auth.ScopeIngest, auth.ScopeAdmin)
-	rec := e.Do("POST", "/api/pairings", nil, `{"new_name":"phone"}`, "Authorization", "Bearer "+tok)
+	admin := e.Admin()
+	rec := e.Do("POST", "/api/pairings", admin, `{"new_name":"phone"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("pairing: %d %s", rec.Code, rec.Body)
 	}
@@ -160,12 +160,43 @@ func TestPairingsCannotGrantMoreThanTheAdminHolds(t *testing.T) {
 	if !strings.HasPrefix(p.URL, "https://cafard.lan/p/") || p.QRURL != "/pair/"+webtest.Itoa(p.ID)+"/qr.svg" || p.NewName != "phone" {
 		t.Errorf("pairing = %+v", p)
 	}
-	rec = e.Do("POST", "/api/pairings", nil, `{"new_name":"phone2","scopes":["serial_write"]}`, "Authorization", "Bearer "+tok)
+	rec = e.Do("POST", "/api/pairings", admin, `{"new_name":"phone2","scopes":["serial_write"]}`)
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("escalation: %d", rec.Code)
 	}
+	rec = e.Do("POST", "/api/pairings", admin, `{"new_name":"phone3","scopes":["read","admin"]}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("a pairing with the admin scope: %d %s", rec.Code, rec.Body)
+	}
 	e.Principal("codex", auth.KindAgent, auth.ScopeRead)
-	if rec := e.Do("POST", "/api/pairings", nil, `{"principal":"codex"}`, "Authorization", "Bearer "+tok); rec.Code != http.StatusConflict {
+	if rec := e.Do("POST", "/api/pairings", admin, `{"principal":"codex"}`); rec.Code != http.StatusConflict {
 		t.Errorf("pairing an agent: %d", rec.Code)
+	}
+}
+
+// Tokens no longer carry admin, so the admin API answers only an admin
+// session, and only on the admin interface.
+func TestTheAdminAPINeedsAnAdminSessionOnTheAdminInterface(t *testing.T) {
+	e := newEnv(t)
+	admin := e.Admin()
+	human := e.Principal("guillaume", auth.KindHuman, auth.ScopeRead, auth.ScopeMessage, auth.ScopeIngest)
+	if rec := e.Do("GET", "/api/tokens", nil, nil, "Authorization", "Bearer "+human); rec.Code != http.StatusForbidden {
+		t.Errorf("a bearer token on the admin API: %d", rec.Code)
+	}
+	if rec := e.Do("GET", "/api/tokens", admin, nil); rec.Code != http.StatusOK {
+		t.Errorf("an admin session: %d %s", rec.Code, rec.Body)
+	}
+	rec := e.Do("POST", "/api/tokens", admin, `{"principal":"codex","kind":"agent","scopes":["read","admin"]}`)
+	if body := decode[dto.Error](t, rec.Body.Bytes()); rec.Code != http.StatusBadRequest || !strings.Contains(body.Error.Message, "admin") {
+		t.Errorf("a token with the admin scope: %d %s", rec.Code, rec.Body)
+	}
+	for _, path := range []string{"/api/tokens", "/api/pairings"} {
+		if rec := e.DoPublic("GET", path, admin, nil); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s on the public interface: %d", path, rec.Code)
+		}
+	}
+	// The public interface ignores the admin cookie on the routes it serves.
+	if rec := e.DoPublic("GET", "/api/me", admin, nil); rec.Code != http.StatusUnauthorized {
+		t.Errorf("the admin cookie on the public interface: %d", rec.Code)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/hub"
 	"github.com/nebuloss/cafard/internal/mcpserver"
+	"github.com/nebuloss/cafard/internal/ratelimit"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
 )
@@ -57,8 +58,8 @@ type Service struct {
 	log    *slog.Logger
 	opts   Options
 
-	sendLimit   *limiter
-	createLimit *limiter
+	sendLimit   *ratelimit.Limiter
+	createLimit *ratelimit.Limiter
 
 	kinds sync.Map // principal name -> kind; a kind never changes
 
@@ -91,8 +92,8 @@ func New(ctx context.Context, d deps.Deps, o Options) (*Service, error) {
 	s := &Service{
 		st: d.Store, db: d.Store.DB(), w: d.Writer, exec: exec, hub: d.Hub, tokens: d.Tokens, blobs: blobs,
 		clock: d.Clock, log: d.Log.With("component", "messaging"), opts: o,
-		sendLimit:   newLimiter(d.Clock, float64(o.Config.RatePerMinute)/60, float64(o.Config.Burst)),
-		createLimit: newLimiter(d.Clock, float64(o.Config.ChannelCreatePerHour)/3600, float64(o.Config.ChannelCreatePerHour)),
+		sendLimit:   ratelimit.New(d.Clock, float64(o.Config.RatePerMinute)/60, float64(o.Config.Burst)),
+		createLimit: ratelimit.New(d.Clock, float64(o.Config.ChannelCreatePerHour)/3600, float64(o.Config.ChannelCreatePerHour)),
 		subs:        map[string]map[string]*subscription{},
 	}
 	if d.Status != nil {

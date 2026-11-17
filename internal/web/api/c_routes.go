@@ -13,21 +13,22 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// Mount registers the account, stream, entry, token and session routes.
-func (a *API) Mount(mux *http.ServeMux) {
-	mux.Handle("GET /api/me", a.Read(auth.ScopeRead, a.me))
-	mux.Handle("GET /api/principals", a.Read(auth.ScopeRead, a.principals))
-	mux.Handle("GET /api/streams", a.Read(auth.ScopeRead, a.streams))
-	mux.Handle("GET /api/streams/match", a.Read(auth.ScopeRead, a.streamsMatch))
-	mux.Handle("GET /api/entries", a.Read(auth.ScopeRead, a.entries))
-	mux.Handle("GET /api/entries/{seq}/context", a.Read(auth.ScopeRead, a.context))
-	mux.Handle("POST /api/marks", a.Write(auth.ScopeMessage, a.mark))
-	mux.Handle("GET /api/tokens", a.Read(auth.ScopeAdmin, a.tokens))
-	mux.Handle("POST /api/tokens", a.Write(auth.ScopeAdmin, a.createToken))
-	mux.Handle("DELETE /api/tokens/{id}", a.Write(auth.ScopeAdmin, a.revokeToken))
-	mux.Handle("GET /api/sessions", a.Read("", a.listSessions))
-	mux.Handle("DELETE /api/sessions/{id}", a.Write("", a.revokeSession))
-	mux.Handle("POST /api/pairings", a.Write(auth.ScopeAdmin, a.createPairing))
+// Mount registers the account, stream, entry and session routes on
+// public, and the token and pairing routes on admin, the admin interface.
+func (a *API) Mount(public, admin *http.ServeMux) {
+	public.Handle("GET /api/me", a.Read(auth.ScopeRead, a.me))
+	public.Handle("GET /api/principals", a.Read(auth.ScopeRead, a.principals))
+	public.Handle("GET /api/streams", a.Read(auth.ScopeRead, a.streams))
+	public.Handle("GET /api/streams/match", a.Read(auth.ScopeRead, a.streamsMatch))
+	public.Handle("GET /api/entries", a.Read(auth.ScopeRead, a.entries))
+	public.Handle("GET /api/entries/{seq}/context", a.Read(auth.ScopeRead, a.context))
+	public.Handle("POST /api/marks", a.Write(auth.ScopeMessage, a.mark))
+	public.Handle("GET /api/sessions", a.Read("", a.listSessions))
+	public.Handle("DELETE /api/sessions/{id}", a.Write("", a.revokeSession))
+	admin.Handle("GET /api/tokens", a.Read(auth.ScopeAdmin, a.tokens))
+	admin.Handle("POST /api/tokens", a.Write(auth.ScopeAdmin, a.createToken))
+	admin.Handle("DELETE /api/tokens/{id}", a.Write(auth.ScopeAdmin, a.revokeToken))
+	admin.Handle("POST /api/pairings", a.Write(auth.ScopeAdmin, a.createPairing))
 }
 
 func (a *API) me(w http.ResponseWriter, r *http.Request, p auth.Principal) {
@@ -311,7 +312,7 @@ func (a *API) revokeSession(w http.ResponseWriter, r *http.Request, p auth.Princ
 }
 
 // createPairing makes a QR code. A pairing cannot grant a scope the admin
-// does not hold.
+// does not hold, nor admin itself (auth.Pairings.Create refuses it).
 func (a *API) createPairing(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	var req dto.PairingCreate
 	if !Decode(w, r, &req) {
@@ -328,7 +329,7 @@ func (a *API) createPairing(w http.ResponseWriter, r *http.Request, p auth.Princ
 			return
 		}
 	}
-	row, code, err := a.pairings.Create(r.Context(), strings.TrimSpace(req.Principal), strings.TrimSpace(req.NewName), scopes, p.Name)
+	row, code, err := a.pairings.Create(r.Context(), strings.TrimSpace(req.Principal), strings.TrimSpace(req.NewName), scopes, p.Name, 0)
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrNotFound):

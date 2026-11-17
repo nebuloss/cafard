@@ -274,6 +274,7 @@ fi
 cfg_value() { printf '%s\n' "$effective" | sed -n "s/^$1: *//p" | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/" | head -n 1; }
 data_dir=$(cfg_value data_dir)
 http_listen=$(cfg_value http_listen)
+admin_listen=$(cfg_value admin_listen)
 public_url=$(cfg_value public_url)
 tls_cert=$(cfg_value tls_cert)
 
@@ -284,23 +285,28 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0700 "$data_dir"
 
 # --- first start -------------------------------------------------------------
 
-# On an empty database the server makes the admin principal and token itself
-# and prints the token on its stdout, which under a service manager is the
-# journal or /var/log/cafard.log: a secret kept in a log. So the installer
-# does the first-start step instead, with the same name and scopes, and the
-# token goes only to this terminal. The server then finds a principal and
-# prints nothing.
-admin_token=""
-if [ ! -e "$data_dir/cafard.db" ]; then
-	say "first start: creating the admin principal and its token"
-	if ! admin_token=$("$BINARY" token create -config "$CONFIG" --name admin --kind human \
-		--scopes ingest,read,message,admin --label "first start" 2>"$TMP/token.err"); then
-		sed 's/^/  /' "$TMP/token.err" >&2
-		die "could not create the admin token"
-	fi
-	# Created as root; the service must own its database.
-	chown -R "$SERVICE_USER:$SERVICE_USER" "$data_dir"
+# With no admin password, the server makes one at start and prints it on its
+# stdout, which under a service manager is the journal or /var/log/cafard.log:
+# a secret kept in a log. So the installer sets a random one first, on a new
+# install and on an upgrade from a version without passwords, and shows it
+# only on this terminal. The server then finds a password and prints nothing.
+# --if-unset leaves one that is set alone.
+admin_password=""
+password=$(od -An -N18 -tx1 /dev/urandom | tr -d ' \n')
+[ ${#password} -eq 36 ] || die "could not read 18 random bytes from /dev/urandom"
+if ! passwd_out=$(printf '%s\n' "$password" | "$BINARY" passwd -config "$CONFIG" --if-unset 2>"$TMP/passwd.err"); then
+	sed 's/^/  /' "$TMP/passwd.err" >&2
+	die "could not set the admin password"
 fi
+case "$passwd_out" in
+"Admin password set"*)
+	say "set a new admin password"
+	admin_password=$password
+	;;
+esac
+unset password
+# Run as root; the service must own its database.
+chown -R "$SERVICE_USER:$SERVICE_USER" "$data_dir"
 
 # --- the service -------------------------------------------------------------
 
@@ -408,34 +414,47 @@ else
 	say "  $BINARY serve -config $CONFIG"
 fi
 
-if [ -n "$admin_token" ]; then
+admin_url=$public_url
+if [ -n "$admin_listen" ]; then
+	admin_port=${admin_listen##*:}
+	admin_host=${admin_listen%:*}
+	case "$admin_host" in
+	"" | 0.0.0.0 | "[::]" | "::") admin_host=${host_ip:-127.0.0.1} ;;
+	esac
+	admin_url="$scheme://$admin_host:$admin_port"
+fi
+
+if [ -n "$admin_password" ]; then
 	cat <<EOF
 
-+-- THE ADMIN TOKEN --------------------------------------------------------
++-- THE ADMIN PASSWORD -----------------------------------------------------
 |
-|   $admin_token
+|   $admin_password
 |
 |  Shown once: only its hash is stored, and it is in no log.
-|  Sign in with it at $public_url/signin
+|  Sign in with it at $admin_url/signin
+|  Change it on the Agents page, or: sudo -u $SERVICE_USER $BINARY passwd -config $CONFIG
 +--------------------------------------------------------------------------
 EOF
 fi
 
-if [ "$new_config" = yes ] || [ -n "$admin_token" ]; then
+if [ "$new_config" = yes ] || [ -n "$admin_password" ]; then
 	cat <<EOF
 
 Next:
 
-  1. Check public_url in $CONFIG ($public_url): phones scan it in the
-     pairing QR code. Then: $BINARY config -config $CONFIG
-  2. Sign in at $public_url/signin with the token above, then pair your
-     phone at $public_url/pair.
+  1. Check public_url in $CONFIG ($public_url): sign-in links and QR
+     codes point there. Then: $BINARY config -config $CONFIG
+  2. Sign in at $admin_url/signin with the password above, then pair your
+     phone at $admin_url/pair, or print a sign-in link for it:
+       sudo -u $SERVICE_USER $BINARY pair -config $CONFIG --name my-phone
   3. Give each agent its own token and point it at $public_url/mcp:
        sudo -u $SERVICE_USER $BINARY token create -config $CONFIG \\
          --name claude-laptop --kind agent --scopes read,message
   4. Send logs: journalctl -f | cafard push --server $public_url --token cfd_... --stream laptop
 
-Behind a reverse proxy, or for TLS, see deploy/README.md in the repository.
+Behind a reverse proxy, for TLS, or to keep the admin pages off the public
+address (admin_listen), see deploy/README.md in the repository.
 EOF
 else
 	say "Upgraded. $CONFIG and $data_dir were left alone."

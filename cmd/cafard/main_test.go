@@ -91,7 +91,7 @@ func TestServeAnswersHealthzAndShutsDownGracefully(t *testing.T) {
 	addrs := make(chan net.Addr, 1)
 	done := make(chan error, 1)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	go func() { done <- serve(ctx, &cfg, log, io.Discard, func(a net.Addr) { addrs <- a }) }()
+	go func() { done <- serve(ctx, &cfg, log, io.Discard, func(a, _ net.Addr) { addrs <- a }) }()
 
 	var addr net.Addr
 	select {

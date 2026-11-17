@@ -14,6 +14,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/blob"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/ratelimit"
 	"github.com/nebuloss/cafard/internal/store"
 )
 
@@ -164,8 +165,8 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "A message needs text, an image or a log attachment.")
 	}
 
-	if ok, wait := s.sendLimit.take(from.Name); !ok {
-		sec := retrySeconds(wait)
+	if ok, wait := s.sendLimit.Take(from.Name); !ok {
+		sec := ratelimit.RetrySeconds(wait)
 		return store.Entry{}, dto.Errorf(dto.CodeRateLimited,
 			"You sent more than %d messages in a short time (the limit is %d per minute); wait %d s. Do not reply to acknowledgements.",
 			s.opts.Config.Burst, s.opts.Config.RatePerMinute, sec).RetryAfter(sec)

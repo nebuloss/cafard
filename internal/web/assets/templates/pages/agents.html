@@ -66,4 +66,23 @@
     <p class="help">Agents need read and message. Devices that only send logs need ingest.</p>
     <button class="btn filled" type="submit"><svg aria-hidden="true"><use href="/static/icons.svg#key"></use></svg>Create token</button>
   </form>
+
+  <h2 id="admin-password">Admin password</h2>
+  <form class="card outlined narrow stack" method="post" action="/password">
+    <input type="hidden" name="username" value="admin" autocomplete="username">
+    <label class="ofield">
+      <span>Current password</span>
+      <input type="password" name="current" required autocomplete="current-password">
+    </label>
+    <label class="ofield">
+      <span>New password</span>
+      <input type="password" name="new" required minlength="{{.Data.MinPassword}}" autocomplete="new-password">
+    </label>
+    <label class="ofield">
+      <span>New password again</span>
+      <input type="password" name="repeat" required minlength="{{.Data.MinPassword}}" autocomplete="new-password">
+    </label>
+    <p class="help">At least {{.Data.MinPassword}} characters. Changing it signs the admin out of every browser. On the server, cafard passwd sets it without the old one.</p>
+    <button class="btn filled" type="submit">Change password</button>
+  </form>
 </section>

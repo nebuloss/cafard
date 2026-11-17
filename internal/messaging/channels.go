@@ -12,6 +12,7 @@ import (
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/ratelimit"
 	"github.com/nebuloss/cafard/internal/store"
 )
 
@@ -306,9 +307,9 @@ func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.C
 	if _, err := s.channel(ctx, name); err == nil {
 		return Channel{}, dto.Errorf(dto.CodeConflict, "There is already a channel %q.", name)
 	}
-	if ok, wait := s.createLimit.take(p.Name); !ok {
+	if ok, wait := s.createLimit.Take(p.Name); !ok {
 		return Channel{}, dto.Errorf(dto.CodeRateLimited, "You created %d channels in the last hour; wait %d s.",
-			s.opts.Config.ChannelCreatePerHour, retrySeconds(wait)).RetryAfter(retrySeconds(wait))
+			s.opts.Config.ChannelCreatePerHour, ratelimit.RetrySeconds(wait)).RetryAfter(ratelimit.RetrySeconds(wait))
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

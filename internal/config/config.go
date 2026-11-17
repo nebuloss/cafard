@@ -36,6 +36,10 @@ const DefaultPath = "/etc/cafard.yaml"
 type Config struct {
 	DataDir    string `yaml:"data_dir"`
 	HTTPListen string `yaml:"http_listen"`
+	// AdminListen gives the admin routes (password sign-in, tokens,
+	// pairing) an interface of their own and takes them off HTTPListen.
+	// Empty serves everything on HTTPListen.
+	AdminListen string `yaml:"admin_listen"`
 	// PublicURL is the address phones and agents reach this server at. It
 	// cannot be worked out from a request behind a reverse proxy.
 	PublicURL string `yaml:"public_url"`
@@ -84,6 +88,14 @@ func (c *Config) Validate() error {
 	}
 	if err := checkListen(c.HTTPListen); err != nil {
 		return fmt.Errorf("http_listen: %w", err)
+	}
+	if c.AdminListen != "" {
+		if err := checkListen(c.AdminListen); err != nil {
+			return fmt.Errorf("admin_listen: %w", err)
+		}
+		if c.AdminListen == c.HTTPListen {
+			return fmt.Errorf("admin_listen: %q is http_listen too; leave admin_listen empty to serve both on one address", c.AdminListen)
+		}
 	}
 	if c.PublicURL != "" {
 		if err := checkPublicURL(c.PublicURL); err != nil {

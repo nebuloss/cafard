@@ -24,6 +24,8 @@ Commands:
   term      a serial terminal that also pushes what it reads (Windows COM ports)
   mcp       a stdio MCP server that forwards to a remote cafard
   token     create and list tokens
+  passwd    set the admin password
+  pair      print a one-time sign-in link for a person
   config    validate and print the effective configuration
   version   print the version
 
@@ -61,6 +63,8 @@ var commands = map[string]command{
 	"version": cmdVersion,
 	"push":    cmdPush,
 	"token":   cmdToken,
+	"passwd":  cmdPasswd,
+	"pair":    cmdPair,
 	"term":    cmdTerm,
 	"mcp":     cmdMCP,
 }

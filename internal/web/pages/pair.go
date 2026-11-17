@@ -94,7 +94,7 @@ func (s *Site) createPairing(w http.ResponseWriter, r *http.Request, p auth.Prin
 		s.renderPair(w, r, p, http.StatusBadRequest, "Choose who the phone signs in as.")
 		return
 	}
-	if _, _, err := s.pairings.Create(r.Context(), principal, newName, nil, p.Name); err != nil {
+	if _, _, err := s.pairings.Create(r.Context(), principal, newName, nil, p.Name, 0); err != nil {
 		if errors.Is(err, auth.ErrConflict) || errors.Is(err, auth.ErrNotFound) || errors.Is(err, auth.ErrBadPairing) {
 			s.renderPair(w, r, p, http.StatusBadRequest, sentence(err.Error()))
 			return

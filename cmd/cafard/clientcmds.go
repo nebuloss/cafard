@@ -26,8 +26,9 @@ const tokenUsage = `Usage:
   cafard token revoke ID
 
 The token is printed once; only its hash is stored. Scopes: ingest, read,
-message, serial_write, admin. The configuration flags (-data-dir, -config)
-are accepted too.
+message, serial_write. No token carries admin: the admin signs in with the
+password (cafard passwd). The configuration flags (-data-dir, -config) are
+accepted too.
 `
 
 func cmdToken(ctx context.Context, e env, args []string) error {

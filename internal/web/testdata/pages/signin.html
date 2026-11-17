@@ -29,16 +29,19 @@
   </div>
   <h1>Sign in</h1>
   
+  
   <form method="post" action="/signin" class="stack">
     
+    <input type="hidden" name="username" value="admin" autocomplete="username">
     <label class="ofield">
-      <span>Token</span>
-      <input type="password" name="token" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="cfd_..." aria-describedby="token-help">
+      <span>Admin password</span>
+      <input type="password" name="password" required autocomplete="current-password" autocapitalize="off" spellcheck="false" aria-describedby="password-help">
     </label>
-    <p class="help" id="token-help">Paste the admin token printed on first start, or a token of a person. It opens a session in this browser; the token itself is not kept here.</p>
+    <p class="help" id="password-help">The password the installer or the first start printed, or the one set with cafard passwd. The session ends after 12 hours or when the server restarts.</p>
     <button class="btn filled block" type="submit">Sign in</button>
   </form>
-  <p class="muted body-small">On a phone, scan the code an admin shows on the Pair page instead.</p>
+  <p class="muted body-small">Anyone else signs in with a link or QR code from the administrator.</p>
+  
 </section>
 
 </main>

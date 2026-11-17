@@ -129,9 +129,11 @@ func TestValidation(t *testing.T) {
 	cases := map[string]func(*Config){
 		"data_dir":    func(c *Config) { c.DataDir = "" },
 		"http_listen": func(c *Config) { c.HTTPListen = "nope" },
-		"public_url":  func(c *Config) { c.PublicURL = "ftp://x" },
-		"tls_cert":    func(c *Config) { c.TLSCert = "/x.crt" },
-		"log_level":   func(c *Config) { c.LogLevel = "loud" },
+		// One address for both would make the split a no-op.
+		"admin_listen": func(c *Config) { c.AdminListen = c.HTTPListen },
+		"public_url":   func(c *Config) { c.PublicURL = "ftp://x" },
+		"tls_cert":     func(c *Config) { c.TLSCert = "/x.crt" },
+		"log_level":    func(c *Config) { c.LogLevel = "loud" },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -146,6 +148,14 @@ func TestValidation(t *testing.T) {
 	c := Default()
 	if err := c.Validate(); err != nil {
 		t.Fatalf("defaults do not validate: %v", err)
+	}
+	c.AdminListen = "127.0.0.1"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "admin_listen") {
+		t.Errorf("admin_listen without a port: %v", err)
+	}
+	c.AdminListen = "127.0.0.1:8791"
+	if err := c.Validate(); err != nil {
+		t.Errorf("a split interface: %v", err)
 	}
 }
 

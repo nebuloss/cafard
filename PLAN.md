@@ -977,10 +977,10 @@ two.
 | `/`, `/c/{channel}`, `/dm/{principal}` | **Chats**. The main screen: the chat list, the conversation (human drops, agent messages, open questions, event rows), the composer, and the logs of the channel's bound streams (section 9.6.3) |
 | `/live` | Live log view: stream picker, severity filter, regexp filter, follow/pause, ANSI colours, tap a line to copy its seq, attach this line, attach from here on, or select a range |
 | `/streams` | Sources with status (`connected`, `idle`, `down`), rate, drops, claim holder |
-| `/agents` | Admin only. Principals, last seen, tokens (create or revoke; a token is shown once) |
-| `/pair` | Admin only. QR code to sign a phone in (section 10) |
+| `/agents` | Admin only (admin interface). Principals, last seen, tokens (create or revoke; a token is shown once), the admin password |
+| `/pair` | Admin only (admin interface). QR code to sign a phone in (section 10) |
 | `/drop` | Plain quick-drop form with a chat picker (no-JS fallback of the quick drop sheet) |
-| `/signin` | Paste a token to open a browser session (first start, or a new desktop) |
+| `/signin` | The admin password form on the admin interface; on the public one, a note to ask the administrator for a sign-in link (DECISIONS, "Admin password and split interfaces") |
 
 Mobile first:
 
@@ -1639,25 +1639,41 @@ Scopes are `ingest`, `read`, `message`, `serial_write` and `admin`.
 
 ### First start
 
-With an empty database, cafard creates the `admin` human principal and an
-admin token, then prints the token and a pairing URL to stdout once.
+With no admin password set, `cafard serve` makes a random one, stores its
+scrypt hash, and prints it with the admin sign-in URL to stdout once. The
+installer sets one before the first start instead (`cafard passwd
+--if-unset`), so it never reaches the service's log. `cafard passwd` resets
+it from a shell without the old one.
 
-Like grafit, it refuses to bind a routable address unless at least one
-non-revoked token or session with the `admin` scope exists. First start
-creates one, so in practice the guard fires when the admin token was
-revoked. It fails closed if the address cannot be parsed or resolved.
+Like grafit, it refuses to bind a routable address (`http_listen` or
+`admin_listen`) unless an admin password is set. First start sets one, so
+in practice the guard only fires when setting it failed. It fails closed if
+the address cannot be parsed or resolved.
 
-### Browser sessions and pairing
+### Admin, interfaces, browser sessions and pairing
 
-0. The first browser signs in at `/signin` by pasting the admin token
-   printed on first start, or any token of a human principal. That creates a
-   session; the token is never stored in the browser.
+- **One admin account, one password.** Signing in at `/signin` on the admin
+  interface opens an admin session: in memory only (a restart signs the
+  admin out), 12 hours, cookie `cafard_admin` (HttpOnly, SameSite=Strict).
+  It acts as the human principal `admin` with `ingest read message admin`.
+  It is the only credential with the `admin` scope: tokens, browser
+  sessions and pairings refuse it.
+- **Two interfaces.** `http_listen` is the public one. With `admin_listen`
+  set, the admin routes (password sign-in, tokens, pairing, password
+  change) are only on that second address, which also serves every public
+  route; on `http_listen` they answer 404 and the admin cookie is ignored.
+  Without it, one address serves both.
+
+0. Nobody but the admin signs in by typing anything. The admin gives each
+   person a one-time sign-in link: a QR code on `/pair`, or `cafard pair
+   --name NAME`, which prints `<public_url>/p/<code>` (5 minutes by
+   default, `--ttl` up to 24 hours).
 1. The admin opens `/pair` and gets a QR code holding a one-time code (valid
    5 minutes, single use). Codes are stored hashed in the `pairings` table,
    with the chosen principal, or the name the admin typed for a new human.
-2. Scanning it on the phone creates that human principal, or reuses the
-   one chosen on `/pair`, and sets an HttpOnly, SameSite=Lax session
-   cookie.
+2. Scanning it on the phone (on the public interface) creates that human
+   principal, or reuses the one chosen on `/pair`, and sets an HttpOnly,
+   SameSite=Lax session cookie, valid 30 days and renewed while used.
 3. Session tokens are stored hashed, so a copy of the database cannot mint a
    cookie.
 
@@ -1714,6 +1730,7 @@ the installer call it before starting, as piCVert's do.
 ```yaml
 data_dir: /var/lib/cafard
 http_listen: 0.0.0.0:8790
+# admin_listen: 127.0.0.1:8791        # admin routes only here (DMZ setups)
 public_url: http://10.0.50.X:8790     # used in QR codes and links
 secure: false                         # HTTPS-only cookies (behind TLS)
 # tls_cert: /etc/cafard/tls.crt
@@ -1857,8 +1874,8 @@ The files come from grafit and piCVert:
   - It installs the systemd unit, or the OpenRC script on Alpine.
   - It tries the strict unit first. If that fails with `226/NAMESPACE`, it
     installs the container drop-in, as piCVert's installer does.
-  - Finally it prints the admin token (on first start), the pairing URL, and
-    the next steps.
+  - It sets a random admin password when none is set, and finally prints
+    it (once), the sign-in URL, and the next steps.
 - **`cafard.service`**: hardened as grafit's, with these differences:
   - Use `PrivateDevices=no` with `DevicePolicy=closed` and
     `DeviceAllow=char-ttyUSB rw`, `char-ttyACM rw`, `char-ttyS rw`, plus
@@ -2110,8 +2127,9 @@ before more than one agent works.** Until then, one agent works at a time.
   - cross-origin writes are refused;
   - pages escape hostile log lines and messages (`<script>`, ANSI injection);
   - a token is never echoed back;
-  - the exposure guard refuses a routable bind with no non-revoked admin
-    token or session.
+  - the exposure guard refuses a routable bind with no admin password;
+  - on the public interface every admin route answers 404, with or without
+    the admin cookie.
 - **Serial:** the port sits behind an `io.ReadWriteCloser` factory, tested
   with `net.Pipe` and fakes. RFC 2217 is tested against a fake Telnet peer
   in-process. Real hardware and a real ser2net are manual tests the user

@@ -26,16 +26,17 @@ import (
 // noRedirect is a client that shows redirects instead of following them.
 var noRedirect = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
-// session signs in with the admin token, as the sign-in form does.
+// session signs the admin in with the password on the admin interface, as
+// the sign-in form does.
 func (s *server) session() *http.Cookie {
 	s.t.Helper()
-	resp, err := noRedirect.PostForm(s.base+"/signin", url.Values{"token": {s.admin}})
+	resp, err := noRedirect.PostForm(s.adminBase+"/signin", url.Values{"password": {s.password}})
 	if err != nil {
 		s.t.Fatal(err)
 	}
 	resp.Body.Close()
 	for _, c := range resp.Cookies() {
-		if c.Name == auth.SessionCookie {
+		if c.Name == auth.AdminCookie {
 			return c
 		}
 	}
@@ -47,7 +48,19 @@ func (s *server) session() *http.Cookie {
 // browser sets it, and X-Cafard for JSON answers.
 func (s *server) browser(cookie *http.Cookie, method, path, ctype string, body io.Reader, bundle bool) (*http.Response, []byte) {
 	s.t.Helper()
-	req, _ := http.NewRequest(method, s.base+path, body)
+	return s.browserTo(s.base, cookie, method, path, ctype, body, bundle)
+}
+
+// browserAt is browser on one interface, base or adminBase, with JSON
+// answers.
+func (s *server) browserAt(base string, cookie *http.Cookie, method, path, ctype string, body io.Reader) (*http.Response, []byte) {
+	s.t.Helper()
+	return s.browserTo(base, cookie, method, path, ctype, body, true)
+}
+
+func (s *server) browserTo(base string, cookie *http.Cookie, method, path, ctype string, body io.Reader, bundle bool) (*http.Response, []byte) {
+	s.t.Helper()
+	req, _ := http.NewRequest(method, base+path, body)
 	req.AddCookie(cookie)
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	if ctype != "" {

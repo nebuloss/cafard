@@ -24,6 +24,9 @@ func CreateToken(ctx context.Context, tokens *auth.Tokens, base string, req dto.
 	if len(scopes) == 0 {
 		return dto.TokenCreated{}, dto.Errorf(dto.CodeBadRequest, "Choose at least one scope.")
 	}
+	if scopes.Has(auth.ScopeAdmin) {
+		return dto.TokenCreated{}, dto.Errorf(dto.CodeBadRequest, "%s.", capitalise(auth.ErrAdminScope.Error()))
+	}
 	label := strings.TrimSpace(req.Label)
 	if len(label) > 100 {
 		return dto.TokenCreated{}, dto.Errorf(dto.CodeBadRequest, "A label is at most 100 bytes.")

@@ -2,82 +2,113 @@ package pages
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-func (s *Site) mountAccount(mux *http.ServeMux) {
-	mux.HandleFunc("GET /signin", s.signinPage)
-	mux.Handle("POST /signin", auth.RequireSameOrigin(http.HandlerFunc(s.signin)))
-	mux.Handle("POST /signout", s.Write("", s.signout))
-	mux.HandleFunc("GET /p/{code}", s.redeem)
-	mux.Handle("POST /theme", s.Write("", s.theme))
-	mux.Handle("POST /sessions/{id}/revoke", s.Write("", s.revokeSession))
+func (s *Site) mountAccount(public, admin *http.ServeMux) {
+	public.HandleFunc("GET /signin", s.signinPage(false))
+	// Not the 405 the GET above would earn it: on the public interface the
+	// form does not exist, and saying so would point at the admin one.
+	public.HandleFunc("POST /signin", http.NotFound)
+	public.Handle("POST /signout", s.Write("", s.signout))
+	public.HandleFunc("GET /p/{code}", s.redeem)
+	public.Handle("POST /theme", s.Write("", s.theme))
+	public.Handle("POST /sessions/{id}/revoke", s.Write("", s.revokeSession))
+	admin.HandleFunc("GET /signin", s.signinPage(true))
+	admin.Handle("POST /signin", auth.RequireSameOrigin(http.HandlerFunc(s.signin)))
+	admin.Handle("POST /password", s.Write(auth.ScopeAdmin, s.changePassword))
 }
 
 type signinData struct {
-	Next  string
-	Error string
+	Password bool // the admin's password form, on the admin interface only
+	Next     string
+	Error    string
 }
 
 func (s *Site) renderSignin(w http.ResponseWriter, r *http.Request, status int, data signinData) {
-	s.Render(w, status, "signin", s.Shell(r, nil, "Sign in", "signin", ""), []string{"tpl-toast"}, data)
-}
-
-func (s *Site) signinPage(w http.ResponseWriter, r *http.Request) {
-	next := SafeNext(r.URL.Query().Get("next"))
-	if _, ok := s.Session(r); ok {
-		if next == "" {
-			next = "/"
-		}
-		http.Redirect(w, r, next, http.StatusSeeOther)
-		return
+	l := s.Shell(r, nil, "Sign in", "signin", "")
+	if r.URL.Query().Get("changed") == "1" {
+		l.Notice = "Password changed. Sign in with the new one."
 	}
-	s.renderSignin(w, r, http.StatusOK, signinData{Next: next})
+	s.Render(w, status, "signin", l, []string{"tpl-toast"}, data)
 }
 
-// signin trades a pasted token for a session. The token is never echoed
-// back, not even into the form after a mistake.
+// signinPage is the password form on the admin interface. On the public
+// one there is nothing to type: people sign in with a link or QR code the
+// admin makes.
+func (s *Site) signinPage(password bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		next := SafeNext(r.URL.Query().Get("next"))
+		if _, ok := s.Session(r); ok {
+			if next == "" {
+				next = "/"
+			}
+			http.Redirect(w, r, next, http.StatusSeeOther)
+			return
+		}
+		s.renderSignin(w, r, http.StatusOK, signinData{Password: password, Next: next})
+	}
+}
+
+// signin trades the admin password for an admin session. Every refusal of
+// the password reads the same, whether a password is set or not.
 func (s *Site) signin(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	token := strings.TrimSpace(r.PostFormValue("token"))
+	password := r.PostFormValue("password")
 	next := SafeNext(r.PostFormValue("next"))
-	if token == "" {
-		s.renderSignin(w, r, http.StatusBadRequest, signinData{Next: next, Error: "Paste a token to sign in."})
+	data := signinData{Password: true, Next: next}
+	if password == "" {
+		data.Error = "Type the admin password."
+		s.renderSignin(w, r, http.StatusBadRequest, data)
 		return
 	}
-	p, err := s.d.Tokens.Lookup(r.Context(), token)
-	if err != nil {
-		msg := "This token is not valid. It may have been revoked, or a character is missing."
-		if strings.HasPrefix(token, auth.SessionPrefix) {
-			msg = "That is a session cookie, not a token. Paste a token that starts with cfd_."
-		}
-		s.renderSignin(w, r, http.StatusUnauthorized, signinData{Next: next, Error: msg})
+	secret, err := s.d.Admin.SignIn(r.Context(), remoteHost(r), password)
+	switch {
+	case errors.Is(err, auth.ErrRateLimited):
+		data.Error = "Too many attempts from this address. Wait a minute, then try again."
+		s.renderSignin(w, r, http.StatusTooManyRequests, data)
 		return
-	}
-	if p.Kind != auth.KindHuman {
-		s.renderSignin(w, r, http.StatusForbidden, signinData{Next: next,
-			Error: "This token belongs to " + p.Name + ", a " + p.Kind + ". Only a person's token opens a browser session."})
+	case errors.Is(err, auth.ErrWrongPassword):
+		data.Error = "This is not the admin password."
+		s.renderSignin(w, r, http.StatusUnauthorized, data)
 		return
-	}
-	_, secret, err := s.sessions.Create(r.Context(), p.Name, p.Scopes, auth.SessionLabel(r.UserAgent()), r.UserAgent())
-	if err != nil {
+	case err != nil:
 		s.Oops(w, r, nil, err)
 		return
 	}
-	auth.SetSessionCookie(w, secret, s.d.Server.Secure)
+	auth.SetAdminCookie(w, secret, s.d.Server.Secure)
 	if next == "" {
 		next = "/"
 	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
+// remoteHost is the rate limit's key: the peer's address without its port.
+func remoteHost(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// signout ends the session the request came with: the admin one, which
+// alone carries the admin scope, or the browser one.
 func (s *Site) signout(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	if p.Has(auth.ScopeAdmin) {
+		if c, err := r.Cookie(auth.AdminCookie); err == nil {
+			s.d.Admin.SignOut(c.Value)
+		}
+		auth.ClearAdminCookie(w, s.d.Server.Secure)
+		http.Redirect(w, r, "/signin", http.StatusSeeOther)
+		return
+	}
 	if err := s.sessions.Revoke(r.Context(), p.SessionID); err != nil && !errors.Is(err, auth.ErrNotFound) {
 		s.Oops(w, r, &p, err)
 		return
@@ -86,18 +117,44 @@ func (s *Site) signout(w http.ResponseWriter, r *http.Request, p auth.Principal)
 	http.Redirect(w, r, "/signin", http.StatusSeeOther)
 }
 
+// changePassword needs the current password even in an admin session, so
+// a browser left open is not enough to lock the admin out. It ends every
+// admin session, this one included.
+func (s *Site) changePassword(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	current, next := r.PostFormValue("current"), r.PostFormValue("new")
+	if next != r.PostFormValue("repeat") {
+		s.renderAgents(w, r, p, http.StatusBadRequest, nil, "The two new passwords differ.")
+		return
+	}
+	err := s.d.Admin.ChangePassword(r.Context(), current, next)
+	switch {
+	case errors.Is(err, auth.ErrShortPassword):
+		s.renderAgents(w, r, p, http.StatusBadRequest, nil, sentence(err.Error()))
+		return
+	case errors.Is(err, auth.ErrWrongPassword):
+		s.renderAgents(w, r, p, http.StatusUnauthorized, nil, "The current password is wrong.")
+		return
+	case err != nil:
+		s.Oops(w, r, &p, err)
+		return
+	}
+	auth.ClearAdminCookie(w, s.d.Server.Secure)
+	http.Redirect(w, r, "/signin?changed=1", http.StatusSeeOther)
+}
+
 // redeem is the phone side of pairing: the QR's URL. GET because a camera
 // app opens it as a link; the code works once, so a link preview that
 // fetched it first would only make the phone show "already used".
 func (s *Site) redeem(w http.ResponseWriter, r *http.Request) {
 	_, secret, err := s.pairings.Redeem(r.Context(), r.PathValue("code"), r.UserAgent())
 	if err != nil {
-		msg := "This pairing code expired or was already used. Ask for a new one on the Pair page."
+		msg := "This sign-in link expired or was already used. Ask the administrator for a new one."
 		if !errors.Is(err, auth.ErrPairingUsed) && !errors.Is(err, auth.ErrConflict) {
 			s.log.Error("redeeming a pairing code failed", "err", err)
 			msg = "The server could not redeem this code. Its log says why."
 		}
-		s.renderSignin(w, r, http.StatusBadRequest, signinData{Error: msg})
+		s.renderSignin(w, r, http.StatusBadRequest, signinData{Password: auth.OnAdminInterface(r.Context()), Error: msg})
 		return
 	}
 	auth.SetSessionCookie(w, secret, s.d.Server.Secure)

@@ -28,6 +28,9 @@ var (
 	ErrConflict = errors.New("conflict")
 	// ErrNotFound is an unknown principal or token.
 	ErrNotFound = errors.New("not found")
+	// ErrAdminScope is a token, session or pairing asked with the admin
+	// scope, which only the admin password gives.
+	ErrAdminScope = errors.New("the admin scope comes only with the admin password; a token, a session or a pairing cannot carry it")
 )
 
 // PrincipalRow is a principal as stored.
@@ -82,18 +85,21 @@ func newSecret(prefix string) (string, error) {
 // EnsurePrincipal creates a principal, or returns the existing one if its
 // kind matches.
 func (t *Tokens) EnsurePrincipal(ctx context.Context, name, kind string) (PrincipalRow, error) {
+	return ensurePrincipal(ctx, t.db, t.clock.Now(), name, kind)
+}
+
+func ensurePrincipal(ctx context.Context, db *sql.DB, now time.Time, name, kind string) (PrincipalRow, error) {
 	if err := ValidateName(name); err != nil {
 		return PrincipalRow{}, err
 	}
 	if !ValidKind(kind) {
 		return PrincipalRow{}, fmt.Errorf("principal kind %q must be agent, human or device", kind)
 	}
-	now := t.clock.Now().UTC()
-	if _, err := t.db.ExecContext(ctx, `INSERT INTO principals(name, kind, created_at) VALUES (?, ?, ?) ON CONFLICT(name) DO NOTHING`,
-		name, kind, now.UnixNano()); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO principals(name, kind, created_at) VALUES (?, ?, ?) ON CONFLICT(name) DO NOTHING`,
+		name, kind, now.UTC().UnixNano()); err != nil {
 		return PrincipalRow{}, err
 	}
-	p, err := t.Principal(ctx, name)
+	p, err := lookupPrincipal(ctx, db, name)
 	if err != nil {
 		return PrincipalRow{}, err
 	}
@@ -124,7 +130,11 @@ func scanPrincipal(row interface{ Scan(...any) error }) (PrincipalRow, error) {
 
 // Principal looks one up.
 func (t *Tokens) Principal(ctx context.Context, name string) (PrincipalRow, error) {
-	p, err := scanPrincipal(t.db.QueryRowContext(ctx, `SELECT `+principalColumns+` FROM principals WHERE name = ?`, name))
+	return lookupPrincipal(ctx, t.db, name)
+}
+
+func lookupPrincipal(ctx context.Context, db *sql.DB, name string) (PrincipalRow, error) {
+	p, err := scanPrincipal(db.QueryRowContext(ctx, `SELECT `+principalColumns+` FROM principals WHERE name = ?`, name))
 	if errors.Is(err, sql.ErrNoRows) {
 		return PrincipalRow{}, fmt.Errorf("%w: principal %s", ErrNotFound, name)
 	}
@@ -157,18 +167,14 @@ func (t *Tokens) Principals(ctx context.Context, kind string) ([]PrincipalRow, e
 	return out, rows.Err()
 }
 
-// CountPrincipals is how many principals exist.
-func (t *Tokens) CountPrincipals(ctx context.Context) (int, error) {
-	var n int
-	err := t.db.QueryRowContext(ctx, `SELECT count(*) FROM principals`).Scan(&n)
-	return n, err
-}
-
 // CreateToken mints a token for an existing principal and returns it in
 // clear, once. Only its hash is stored.
 func (t *Tokens) CreateToken(ctx context.Context, principal, label string, scopes ScopeSet) (TokenRow, string, error) {
 	if len(scopes) == 0 {
 		return TokenRow{}, "", errors.New("a token needs at least one scope")
+	}
+	if scopes.Has(ScopeAdmin) {
+		return TokenRow{}, "", ErrAdminScope
 	}
 	p, err := t.Principal(ctx, principal)
 	if err != nil {
@@ -234,32 +240,6 @@ func (t *Tokens) RevokeToken(ctx context.Context, id int64) error {
 	return nil
 }
 
-// CountAdminTokens is how many tokens carry the admin scope.
-func (t *Tokens) CountAdminTokens(ctx context.Context) (int, error) {
-	return countAdmin(ctx, t.db, `SELECT scopes FROM tokens`)
-}
-
-// countAdmin counts the rows of query, a list of scope sets, that hold
-// the admin scope.
-func countAdmin(ctx context.Context, db *sql.DB, query string, args ...any) (int, error) {
-	rows, err := db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-	n := 0
-	for rows.Next() {
-		var s string
-		if err := rows.Scan(&s); err != nil {
-			return 0, err
-		}
-		if set, _ := ParseScopes(s); set.Has(ScopeAdmin) {
-			n++
-		}
-	}
-	return n, rows.Err()
-}
-
 // touchEvery bounds how often last_used and last_seen are written for one
 // token, so a busy agent does not turn every request into a write.
 const touchEvery = time.Minute
@@ -306,21 +286,6 @@ func (t *Tokens) touch(ctx context.Context, p Principal) {
 	_, _ = t.db.ExecContext(ctx, `UPDATE principals SET last_seen = ? WHERE name = ?`, ns, p.Name)
 }
 
-// AdminName is the human principal created on first start.
+// AdminName is the human principal the admin acts as once signed in with
+// the password.
 const AdminName = "admin"
-
-// Bootstrap creates the admin principal and an admin token when the
-// database has no principal at all. The token is returned in clear so the
-// caller can print it once; on later starts it returns "".
-func (t *Tokens) Bootstrap(ctx context.Context) (string, error) {
-	n, err := t.CountPrincipals(ctx)
-	if err != nil || n > 0 {
-		return "", err
-	}
-	if _, err := t.EnsurePrincipal(ctx, AdminName, KindHuman); err != nil {
-		return "", err
-	}
-	_, secret, err := t.CreateToken(ctx, AdminName, "first start",
-		NewScopeSet(ScopeIngest, ScopeRead, ScopeMessage, ScopeAdmin))
-	return secret, err
-}

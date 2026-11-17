@@ -18,9 +18,11 @@ import (
 )
 
 // Register mounts pages, /api/* (but /api/log and the message routes,
-// which api.RegisterMessages mounts) and /api/events. It has no background work of its own; expired
-// sessions and pairings are removed by the janitor.
-func Register(mux *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(context.Context) error, error) {
+// which api.RegisterMessages mounts) and /api/events. What only the admin
+// interface serves (password sign-in, tokens, pairing) goes on admin, the
+// rest on public. It has no background work of its own; expired sessions
+// and pairings are removed by the janitor.
+func Register(public, admin *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(context.Context) error, error) {
 	sessions := auth.NewSessions(d.Store.DB(), d.Clock)
 	// One Pairings per process: it keeps the clear codes of pending QRs.
 	pairings := auth.NewPairings(d.Store.DB(), d.Clock, sessions)
@@ -36,11 +38,11 @@ func Register(mux *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(contex
 		svc.SetStagedLookup(shares.Lookup)
 		svc.Blobs().SetGrant(shares.Visible)
 		site.SetChats(svc, shares)
-		a.MountChats(mux, svc, shares)
+		a.MountChats(public, svc, shares)
 	}
-	site.Mount(mux)
-	a.Mount(mux)
-	sse.Register(mux, sse.New(d, kinds))
+	site.Mount(public, admin)
+	a.Mount(public, admin)
+	sse.Register(public, sse.New(d, kinds))
 	if d.Janitor != nil {
 		d.Janitor.Add(store.Task{Name: "sessions", Run: sessions.Expire})
 	}

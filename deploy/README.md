@@ -26,8 +26,8 @@ latest release, and refuses to install it unless it matches the published
    address;
 4. runs `cafard config` and stops on any error, with the reason;
 5. creates the data directory (`/var/lib/cafard`, mode 0700);
-6. on a new install, creates the `admin` principal and its token and prints
-   the token, once;
+6. when no admin password is set (a new install, or an upgrade from a
+   version without one), sets a random one and prints it, once;
 7. installs and starts the systemd unit, or the OpenRC script on Alpine, and
    waits for `GET /healthz`.
 
@@ -50,25 +50,68 @@ CAFARD_INSTALL_VERSION=v0.6.0 sh`.
 The installer is idempotent. Run it again to upgrade: it never overwrites
 `/etc/cafard.yaml` or the data directory.
 
-### The admin token
+### The admin password
 
-Started on an empty database, `cafard serve` creates the `admin` principal
-and prints its token on stdout. Under systemd or OpenRC, stdout is the
-journal or `/var/log/cafard.log`, so the token would sit in a log. The
-installer therefore creates the principal and the token itself, before the
-first start (`cafard token create --name admin --kind human --scopes
-ingest,read,message,admin`), and prints the token only to your terminal. The
-service then finds a principal and prints nothing.
+There is one admin account. Its password opens an admin session (12 hours,
+kept in memory, so a restart signs the admin out) in which the admin acts as
+the `admin` person in the chats and manages tokens and pairing. No token
+carries the admin scope; the password is the only way in.
 
-Lost it? Make another, as the service user so the database stays its own:
+Started with no password set, `cafard serve` makes a random one and prints
+it on stdout. Under systemd or OpenRC, stdout is the journal or
+`/var/log/cafard.log`, so the password would sit in a log. The installer
+therefore sets one itself before the service starts (`cafard passwd
+--if-unset`, fed from a pipe) and prints it only on your terminal. The
+service then finds a password and prints nothing.
+
+Forgot it, or want your own? Set it from a shell on the server, without the
+old one, as the service user so the database stays its own:
 
 ```sh
-sudo -u cafard cafard token create -config /etc/cafard.yaml \
-  --name admin --kind human --scopes ingest,read,message,admin
-cafard token list -config /etc/cafard.yaml
+sudo -u cafard cafard passwd -config /etc/cafard.yaml
 ```
 
-On a routable address cafard refuses to start while no admin token exists.
+It asks twice on a terminal, or reads one line from a pipe. Admin sessions
+already open end when the service restarts. Signed in, the Agents page can
+also change it (it asks for the current one, and signs the admin out
+everywhere).
+
+On a routable address cafard refuses to start while no admin password is
+set.
+
+### Signing people in
+
+People other than the admin never type a password: the admin gives them a
+one-time sign-in link, which signs their browser in for 30 days (renewed
+while used). On the admin interface, the Pair page shows it as a QR code
+for a phone (valid 5 minutes). From a shell, `cafard pair` prints one, for
+up to 24 hours, to send by other means:
+
+```sh
+sudo -u cafard cafard pair -config /etc/cafard.yaml --name alice-phone
+sudo -u cafard cafard pair -config /etc/cafard.yaml --name alice --ttl 2h --scopes read,message
+```
+
+The link starts with `public_url`. It opens on the public interface, so it
+works from wherever people reach cafard. Scopes default to `read`,
+`message` and `ingest`, and never include `admin`.
+
+### Upgrading from a version with an admin token
+
+The upgrade removes the `admin` scope from every token and browser session
+(they keep their other scopes), and the `/signin` page no longer takes a
+token. Re-running the installer sets a random admin password and prints it;
+upgrading another way (`scripts/devdeploy.sh`, a copied binary) lets the
+server make one at its next start and print it to its log, so set your own
+right after:
+
+```sh
+sudo -u cafard cafard passwd -config /etc/cafard.yaml
+sudo rc-service cafard restart        # or: systemctl restart cafard
+```
+
+The old first-start token still works for `cafard push` and MCP, without
+admin; revoke it on the Agents page if nothing uses it.
 
 ## Configuration
 
@@ -86,6 +129,50 @@ cafard from starting, and `cafard config` says which key.
 
 `public_url` is the address phones and agents use: it goes into pairing QR
 codes and links. Behind a reverse proxy it is the proxy's address.
+
+## DMZ: split interfaces
+
+By default `http_listen` serves everything. To put cafard where the public
+side faces a DMZ or the internet, give the admin pages an address of their
+own:
+
+```yaml
+http_listen: 127.0.0.1:8790        # behind the reverse proxy and its TLS
+public_url: https://cafard.example.org
+secure: true
+admin_listen: 10.0.50.2:8791       # the internal network only
+```
+
+- **`http_listen`, the public interface**: `/healthz`, the static files,
+  `/mcp` (bearer tokens), ingest (`/api/log`, `/v1/logs`), the pages and the
+  API of signed-in people (chats, live, sources, photos, their own
+  sessions), and the sign-in links (`/p/...`). Its `/signin` page only says
+  to ask the administrator for a link or QR code.
+- **`admin_listen`, the admin interface**: the password sign-in, the Agents
+  page and `/api/tokens`, the Pair page and `/api/pairings`, the password
+  change, and everything the public interface serves, so the admin can chat
+  and watch logs from there too. Only this interface reads the admin
+  session cookie.
+
+On the public interface the admin routes answer 404, whatever the proxy in
+front does, and an admin cookie that reaches it (cookies do not tell ports
+apart) opens nothing. Both addresses are bound before anything is served;
+if either fails, cafard does not start. They must differ.
+
+Without an internal network, bind the admin interface to loopback and reach
+it through SSH:
+
+```yaml
+admin_listen: 127.0.0.1:8791
+```
+
+```sh
+ssh -L 8791:127.0.0.1:8791 cafard-host     # then open http://localhost:8791/signin
+```
+
+Do not route the admin interface through the public reverse proxy: that
+would publish exactly what the split keeps private. If cafard terminates
+TLS itself (`tls_cert`), both interfaces use it.
 
 ## The systemd unit
 

@@ -3,6 +3,72 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-17: admin password and split interfaces
+
+Asked for by the user, so cafard can sit in a DMZ, and to make admin access
+as simple as in the sibling project claudication. This replaces the admin
+token, the token sign-in and the token counting of the exposure guard (PLAN
+section 10, CONTRACTS section 2).
+
+- **Two interfaces.** `http_listen` stays the public interface. A new root
+  key `admin_listen` gives the admin routes an address of their own: the
+  password sign-in (`POST /signin`), the password change (`POST /password`),
+  `/agents`, `/tokens/...`, `/pair`, `/pair/{id}/qr.svg`, `/api/tokens` and
+  `/api/pairings`. On `http_listen` they then answer 404 (`POST /signin`
+  is registered as a 404 rather than left to the 405 its `GET` twin would
+  earn), so publishing the public side cannot publish them, whatever the
+  proxy does. Empty `admin_listen` serves both on one address, as before.
+  Both addresses are bound before anything serves; a failure stops the
+  start. They must differ (`cafard config` refuses the same value).
+- **Two muxes instead of claudication's `routes(role)`.** cafard's
+  `Register` functions add MCP tools and background work, so they cannot run
+  once per listener. The public mux is built as before; `web.Register` also
+  gets an admin mux for the admin-only routes, and the admin mux ends with
+  `/` handing everything else to the public mux. Each mux is built once
+  (no pattern registered twice). The admin listener, or the only listener,
+  serves the admin mux wrapped in `auth.AdminInterface`, which marks the
+  request context; `TestSplitListenersDoNotServeEachOther` pins the 404s.
+- **One admin password.** Stored as `scrypt$N$salt$key` (N=32768, r=8, p=1,
+  16-byte salt, 32-byte key, hex) in a one-row table `admin` (migration
+  `0060_auth_admin.sql`); `golang.org/x/crypto/scrypt` is pure Go. At least
+  8 characters. At most two key derivations run at once (each takes 32 MiB),
+  and a wrong password, or a sign-in while none is set, costs the same
+  derivation and the same message. Sign-in is limited to 10 a minute, burst
+  10, per remote address, on the injected clock. The token bucket moved from
+  `internal/messaging` to `internal/ratelimit` so both use it; it now drops
+  refilled buckets past 4096 keys, since remote addresses are unbounded.
+- **Admin sessions live in memory** (a restart signs the admin out), for 12
+  hours fixed, in the cookie `cafard_admin` (HttpOnly, SameSite=Strict,
+  Secure per `secure`). Only the admin interface reads that cookie; the
+  public one ignores it, which matters because cookies do not tell ports
+  apart. The session acts as the human principal `admin` with `ingest read
+  message admin`, the old bootstrap token's set. Changing the password (on
+  `/agents`, needs the current one) or `cafard passwd` ends every admin
+  session of the process that did it; the CLI says that open sessions end
+  at the next restart.
+- **The admin scope exists only there.** Token, session and pairing
+  creation refuse it (`auth.ErrAdminScope`); the token form no longer offers
+  it. The migration removes it from every stored token, session and
+  pairing, and deletes those left with no scope. An install's old
+  first-start token keeps `ingest read message`.
+- **No sign-in by token any more.** The public `/signin` page only says to
+  ask the administrator for a sign-in link or QR code. People sign in with
+  the existing pairing flow; `cafard pair --name NAME [--scopes]
+  [--ttl 5m, at most 24h]` makes such a link from a shell and prints
+  `<public_url>/p/<code>`. That code is not in the server's memory, so the
+  Pair page lists it without its QR.
+- **First start.** `Tokens.Bootstrap` is gone. With no password set, `serve`
+  makes a random one (18 bytes, hex), stores it and prints it once to
+  stdout with the admin sign-in URL (stdout only, never the log). The
+  installer runs `cafard passwd --if-unset` from a pipe first, on a new
+  install and on an upgrade from a version without passwords, so the
+  service has nothing to print. `cafard passwd` sets the password without
+  the old one (a shell on the server is the higher privilege), from a
+  terminal without echo or from one piped line.
+- **Exposure guard.** It now refuses a routable `http_listen` or
+  `admin_listen` while no admin password is set. After the first-start step
+  one always is; the guard stays for the case where setting it failed.
+
 ## 2026-11-16: trim pass
 
 - **The chat list's long-press menu and the channel dialog's pattern preview wait on the injected `Clock`,** not the global timer, and the chat list cancels a pending long press when it is unmounted (before, a press could open a menu on a page already gone, and tests could not drive either delay).

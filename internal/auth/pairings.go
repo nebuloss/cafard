@@ -13,8 +13,13 @@ import (
 	"github.com/nebuloss/cafard/internal/clock"
 )
 
-// PairingTTL is how long a pairing code can be redeemed.
-const PairingTTL = 5 * time.Minute
+const (
+	// PairingTTL is how long a pairing code can be redeemed, unless its
+	// maker chose otherwise.
+	PairingTTL = 5 * time.Minute
+	// MaxPairingTTL bounds that choice: a code is a credential until used.
+	MaxPairingTTL = 24 * time.Hour
+)
 
 // PairingScopes is what a paired phone gets unless the admin chose others.
 var PairingScopes = NewScopeSet(ScopeRead, ScopeMessage, ScopeIngest)
@@ -46,9 +51,10 @@ func (p PairingRow) Name() string {
 }
 
 // Pairings owns the pairings table. Codes are stored hashed; the clear code
-// of a pending pairing is also kept in memory for its five minutes, so the
-// QR can be drawn again on a page reload. A restart forgets them, and the
-// admin makes a new one.
+// of a pending pairing is also kept in memory while it lasts, so the QR can
+// be drawn again on a page reload. A restart forgets them, and the admin
+// makes a new one. A code made by cafard pair is never in this memory: the
+// command prints it instead.
 type Pairings struct {
 	db       *sql.DB
 	clock    clock.Clock
@@ -80,13 +86,23 @@ func newCode() (string, error) {
 }
 
 // Create makes a one-time code that signs a browser in as principal (an
-// existing human) or as a new human named newName. Exactly one is set.
-func (p *Pairings) Create(ctx context.Context, principal, newName string, scopes ScopeSet, createdBy string) (PairingRow, string, error) {
+// existing human) or as a new human named newName. Exactly one is set. The
+// code works for ttl, PairingTTL when 0.
+func (p *Pairings) Create(ctx context.Context, principal, newName string, scopes ScopeSet, createdBy string, ttl time.Duration) (PairingRow, string, error) {
 	if (principal == "") == (newName == "") {
 		return PairingRow{}, "", fmt.Errorf("%w: choose an existing person or type a new name, not both", ErrBadPairing)
 	}
 	if len(scopes) == 0 {
 		scopes = PairingScopes
+	}
+	if scopes.Has(ScopeAdmin) {
+		return PairingRow{}, "", fmt.Errorf("%w: %v", ErrBadPairing, ErrAdminScope)
+	}
+	if ttl == 0 {
+		ttl = PairingTTL
+	}
+	if ttl < 0 || ttl > MaxPairingTTL {
+		return PairingRow{}, "", fmt.Errorf("%w: a pairing code lasts at most %s", ErrBadPairing, MaxPairingTTL)
 	}
 	name := principal + newName
 	if err := ValidateName(name); err != nil {
@@ -111,7 +127,7 @@ func (p *Pairings) Create(ctx context.Context, principal, newName string, scopes
 		return PairingRow{}, "", err
 	}
 	now := p.clock.Now().UTC()
-	row := PairingRow{Principal: principal, NewName: newName, Scopes: scopes, CreatedBy: createdBy, CreatedAt: now, ExpiresAt: now.Add(PairingTTL)}
+	row := PairingRow{Principal: principal, NewName: newName, Scopes: scopes, CreatedBy: createdBy, CreatedAt: now, ExpiresAt: now.Add(ttl)}
 	res, err := p.db.ExecContext(ctx, `INSERT INTO pairings(code_hash, principal, new_name, scopes, created_by, created_at, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, HashToken(code), nullable(principal), nullable(newName), scopes.String(), createdBy,
 		now.UnixNano(), row.ExpiresAt.UnixNano())

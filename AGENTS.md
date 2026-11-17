@@ -19,10 +19,12 @@ and the remote exist (CONTRACTS.md section 7).
 
 What exists:
 - `cmd/cafard`: `serve`, `config`, `version`, `token create|list|revoke`,
-  `push` from stdin. `term` and `mcp` say which milestone brings them.
+  `passwd` (the admin password), `pair` (a sign-in link), `push`, `term`,
+  `mcp`.
 - `internal/store` (migrations, entry queries, retention janitor),
-  `writer`, `hub`, `status`, `textclean`, `auth` (tokens, bearer auth,
-  same-origin check, exposure guard), `deps`, `dto` with fixtures in
+  `writer`, `hub`, `status`, `textclean`, `auth` (tokens, sessions,
+  pairings, the admin password and its in-memory sessions, bearer auth,
+  same-origin check, exposure guard), `ratelimit`, `deps`, `dto` with fixtures in
   `internal/web/testdata/api`, `units`, `clock`.
 - `internal/ingest/httpapi` (`POST /api/log`), `internal/push`.
 - `internal/mcpserver`: streamable HTTP at `/mcp` with `whoami`,
@@ -78,8 +80,13 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   environment variable appear on their own; lists and maps are file-only.
   Unknown keys in the file are errors, so the example config must not list
   keys whose feature has not landed.
-- **Build the mux once** (`newHandler` in `cmd/cafard/serve.go`). Registering
-  the same pattern twice panics at start, not at compile time.
+- **Build the mux once** (`build` in `cmd/cafard/serve.go`). Registering
+  the same pattern twice panics at start, not at compile time. There are
+  two muxes, each built once: the public one every `Register` gets, and
+  the admin one (`web.Register`'s second argument) for the admin-only
+  routes, which hands every other path to the public one. A new admin-only
+  route goes on the admin mux, or it is published on `http_listen`; add it
+  to `adminRoutes` in `cmd/cafard/listeners_test.go`.
 - **Severity 0 is emergency.** `store.Entry{}` has severity 0, so every
   producer sets `store.DefaultSeverity` (6) unless it knows better, and
   `store.Query.MinSeverity` is a pointer for the same reason.
@@ -115,9 +122,19 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   prints. When your feature adds a config section, replace its commented
   "available once ... lands" block in the example with the real keys, or
   the test fails after the merge.
-- **The installer creates the admin token, not the first `serve`**, so it
-  never lands in the journal (DECISIONS, track F). Changing the name or
-  scopes in `Tokens.Bootstrap` means changing `deploy/install.sh` too.
+- **The installer sets the admin password, not the first `serve`**, so it
+  never lands in the journal (`cafard passwd --if-unset` from a pipe; it
+  parses the "Admin password set" line, so keep that wording). There is no
+  admin token: `Tokens.Bootstrap` is gone, and tokens, sessions and
+  pairings refuse the `admin` scope. Only an admin session has it.
+- **Admin sessions are in memory** (`auth.Admin`; a restart signs the admin
+  out) and their cookie `cafard_admin` counts only on requests that went
+  through `auth.AdminInterface`. A test that needs the admin uses
+  `webtest.Env.Admin()` (a session without the 0.3 s scrypt derivation) and
+  `Do`, which serves the admin mux; `DoPublic` is the public interface
+  alone. In `cmd/cafard`, `startServer` reads the printed password
+  (`s.password`), `s.session()` signs in with it, and `s.admin` is a token
+  of the `admin` person without the admin scope.
 - **The systemd unit allows only ttyUSB, ttyACM and ttyS devices** and only
   `/var/lib/cafard` for writes. A feature that opens another device class
   or writes elsewhere must change `deploy/cafard.service`.

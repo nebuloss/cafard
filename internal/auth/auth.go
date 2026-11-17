@@ -24,6 +24,11 @@ const (
 // AllScopes in canonical order.
 var AllScopes = []Scope{ScopeIngest, ScopeRead, ScopeMessage, ScopeSerialWrite, ScopeAdmin}
 
+// GrantableScopes are those a token, a browser session or a pairing may
+// carry. The admin scope exists only on an admin session (Admin), which
+// the password opens on the admin interface.
+var GrantableScopes = []Scope{ScopeIngest, ScopeRead, ScopeMessage, ScopeSerialWrite}
+
 // ScopeSet is a sorted, duplicate-free list of scopes. Scopes are
 // independent: admin does not imply the others.
 type ScopeSet []Scope

@@ -33,9 +33,10 @@ type scopeOption struct {
 }
 
 type agentsData struct {
-	Principals []principalRow
-	Scopes     []scopeOption
-	Created    *createdView
+	Principals  []principalRow
+	Scopes      []scopeOption
+	Created     *createdView
+	MinPassword int
 }
 
 type createdView struct {
@@ -67,11 +68,11 @@ func (s *Site) agentsData(r *http.Request) (agentsData, error) {
 		byPrincipal[t.Principal] = append(byPrincipal[t.Principal], tokenRow{ID: t.ID, Label: label,
 			Scopes: strings.Join(t.Scopes.Strings(), ", "), Created: Day(t.CreatedAt), LastUsed: lu})
 	}
-	data := agentsData{}
+	data := agentsData{MinPassword: auth.MinPasswordLength}
 	for _, p := range principals {
 		data.Principals = append(data.Principals, principalRow{Name: p.Name, Kind: p.Kind, LastSeen: lastSeen(p.LastSeen), Tokens: byPrincipal[p.Name]})
 	}
-	for _, sc := range auth.AllScopes {
+	for _, sc := range auth.GrantableScopes {
 		data.Scopes = append(data.Scopes, scopeOption{Name: string(sc), Checked: sc == auth.ScopeRead || sc == auth.ScopeMessage})
 	}
 	return data, nil

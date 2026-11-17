@@ -28,18 +28,24 @@ import (
 
 // server is a whole cafard started on a loopback port for one test.
 type server struct {
-	t      *testing.T
-	base   string
-	admin  string
-	dir    string
-	cancel context.CancelFunc
-	logs   *syncBuffer
+	t    *testing.T
+	base string
+	// adminBase is the admin interface: base itself unless the test set
+	// admin_listen.
+	adminBase string
+	// password is the admin password the first start printed; admin is a
+	// token of the admin principal, without the admin scope no token has.
+	password string
+	admin    string
+	dir      string
+	cancel   context.CancelFunc
+	logs     *syncBuffer
 
 	dbOnce sync.Once
 	st     *store.Store
 }
 
-var tokenLine = regexp.MustCompile(`(?m)^\s+(cfd_[A-Za-z0-9_-]+)$`)
+var passwordLine = regexp.MustCompile(`(?m)^\s+([0-9a-f]{36})$`)
 
 func startServer(t *testing.T, opts ...func(*config.Config)) *server {
 	t.Helper()
@@ -50,26 +56,31 @@ func startServer(t *testing.T, opts ...func(*config.Config)) *server {
 		o(&cfg)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	addrs := make(chan net.Addr, 1)
+	addrs := make(chan [2]net.Addr, 1)
 	done := make(chan error, 1)
 	var out syncBuffer
 	logs := new(syncBuffer)
 	go func() {
-		done <- serve(ctx, &cfg, slog.New(slog.NewTextHandler(logs, nil)), &out, func(a net.Addr) { addrs <- a })
+		done <- serve(ctx, &cfg, slog.New(slog.NewTextHandler(logs, nil)), &out, func(public, admin net.Addr) { addrs <- [2]net.Addr{public, admin} })
 	}()
-	var addr net.Addr
+	var bound [2]net.Addr
 	select {
-	case addr = <-addrs:
+	case bound = <-addrs:
 	case err := <-done:
 		t.Fatalf("serve: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("server did not start")
 	}
-	m := tokenLine.FindStringSubmatch(out.String())
+	m := passwordLine.FindStringSubmatch(out.String())
 	if m == nil {
-		t.Fatalf("no admin token printed on first start:\n%s", out.String())
+		t.Fatalf("no admin password printed on first start:\n%s", out.String())
 	}
-	s := &server{t: t, base: "http://" + addr.String(), admin: m[1], dir: cfg.DataDir, cancel: cancel, logs: logs}
+	s := &server{t: t, base: "http://" + bound[0].String(), password: m[1], dir: cfg.DataDir, cancel: cancel, logs: logs}
+	s.adminBase = s.base
+	if bound[1] != nil {
+		s.adminBase = "http://" + bound[1].String()
+	}
+	s.admin = s.token(auth.AdminName, auth.KindHuman, auth.ScopeIngest, auth.ScopeRead, auth.ScopeMessage)
 	t.Cleanup(func() {
 		cancel()
 		select {
@@ -443,24 +454,5 @@ func TestPushReportsARefusal(t *testing.T) {
 	err = p.Reader(context.Background(), strings.NewReader("one\ntwo\n"))
 	if err == nil || !strings.Contains(err.Error(), "ingest") {
 		t.Fatalf("err = %v, want the server's sentence about the ingest scope", err)
-	}
-}
-
-func TestRoutableBindNeedsAnAdminToken(t *testing.T) {
-	cfg := config.Default()
-	cfg.HTTPListen = "0.0.0.0:0"
-	cfg.DataDir = t.TempDir()
-	st, err := openStore(context.Background(), &cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tokens := auth.NewTokens(st.DB(), clock.System{})
-	if _, err := tokens.EnsurePrincipal(context.Background(), "someone", auth.KindAgent); err != nil {
-		t.Fatal(err)
-	}
-	st.Close()
-	err = serve(context.Background(), &cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), io.Discard, nil)
-	if err == nil || !strings.Contains(err.Error(), "admin") {
-		t.Fatalf("err = %v, want the exposure guard", err)
 	}
 }

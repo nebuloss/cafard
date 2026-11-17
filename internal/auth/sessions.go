@@ -59,6 +59,9 @@ func (s *Sessions) Create(ctx context.Context, principal string, scopes ScopeSet
 	if len(scopes) == 0 {
 		return SessionRow{}, "", errors.New("a session needs at least one scope")
 	}
+	if scopes.Has(ScopeAdmin) {
+		return SessionRow{}, "", ErrAdminScope
+	}
 	kind, err := principalKind(ctx, s.db, principal)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -197,12 +200,6 @@ func (s *Sessions) Revoke(ctx context.Context, id int64) error {
 		return fmt.Errorf("%w: session %d", ErrNotFound, id)
 	}
 	return nil
-}
-
-// CountAdmin is how many live sessions carry the admin scope, for the
-// exposure guard.
-func (s *Sessions) CountAdmin(ctx context.Context) (int, error) {
-	return countAdmin(ctx, s.db, `SELECT scopes FROM sessions WHERE expires_at > ?`, s.clock.Now().UTC().UnixNano())
 }
 
 // Expire deletes expired sessions and pairings that are used or expired.

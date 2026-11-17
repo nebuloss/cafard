@@ -22,10 +22,18 @@
 # /var/lib/cafard: change ReadWritePaths in the unit if you move it.
 data_dir: /var/lib/cafard
 
-# The web UI, the HTTP ingest API and MCP (/mcp). On a routable address cafard
-# refuses to start unless an admin token exists; the installer creates one.
+# The public interface: the web UI for signed-in people, sign-in links
+# (/p/...), the HTTP ingest API and MCP (/mcp). On a routable address cafard
+# refuses to start unless an admin password is set; the installer sets one.
 # Bind 127.0.0.1:8790 when a reverse proxy on the same machine fronts it.
 http_listen: 0.0.0.0:8790
+
+# The admin interface: password sign-in, tokens (Agents) and pairing (Pair).
+# Empty, http_listen serves them too. Set, they answer 404 on http_listen
+# and only this address serves them (with everything else), so http_listen
+# can face a DMZ while this one stays on the internal network or on
+# 127.0.0.1 behind an SSH tunnel. It must differ from http_listen.
+# admin_listen: 127.0.0.1:8791
 
 # The address phones and agents reach this server at, used in pairing QR codes
 # and links. It cannot be worked out from a request behind a reverse proxy.

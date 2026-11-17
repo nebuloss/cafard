@@ -24,18 +24,22 @@ import (
 // Now is the fake clock's start.
 var Now = time.Date(2026, 11, 16, 9, 40, 0, 0, time.UTC)
 
-// Env is a running stack. Mount adds handlers to Mux.
+// Env is a running stack. Mount adds the public handlers to Mux and the
+// admin-only ones to AdminMux, which falls back to Mux as the admin
+// interface does in cmd/cafard.
 type Env struct {
 	T        testing.TB
 	Store    *store.Store
 	Tokens   *auth.Tokens
 	Sessions *auth.Sessions
+	Account  *auth.Admin
 	Hub      *hub.Memory
 	Status   *status.Memory
 	Writer   *writer.W
 	Clock    *clock.Fake
 	Deps     deps.Deps
 	Mux      *http.ServeMux
+	AdminMux *http.ServeMux
 }
 
 // Options change the stack.
@@ -53,15 +57,19 @@ func New(t testing.TB, o Options) *Env {
 	st, h, stat, w, log := s.Store, s.Hub, s.Status, s.Writer, s.Log
 	tokens := auth.NewTokens(st.DB(), clk)
 	sessions := auth.NewSessions(st.DB(), clk)
-	e := &Env{T: t, Store: st, Tokens: tokens, Sessions: sessions, Hub: h, Status: stat, Writer: w, Clock: clk, Mux: http.NewServeMux()}
+	account := auth.NewAdmin(st.DB(), clk)
+	e := &Env{T: t, Store: st, Tokens: tokens, Sessions: sessions, Account: account, Hub: h, Status: stat, Writer: w, Clock: clk,
+		Mux: http.NewServeMux(), AdminMux: http.NewServeMux()}
+	e.AdminMux.Handle("/", e.Mux)
 	e.Deps = deps.Deps{
 		Server:    deps.Server{PublicURL: "https://cafard.lan", HTTPListen: "127.0.0.1:8790", Secure: o.Secure},
 		Store:     st,
 		Writer:    w,
 		Hub:       h,
 		Status:    stat,
-		Auth:      &auth.TokenAuthenticator{Tokens: tokens, Sessions: sessions.Lookup},
+		Auth:      &auth.TokenAuthenticator{Tokens: tokens, Sessions: sessions.Lookup, Admin: account},
 		Tokens:    tokens,
+		Admin:     account,
 		Janitor:   store.NewJanitor(st, w.Exec, store.Retention{}, clk, log),
 		Messaging: o.Messaging,
 		Clock:     clk,
@@ -95,11 +103,19 @@ func (e *Env) Session(name string, scopes ...auth.Scope) *http.Cookie {
 	return &http.Cookie{Name: auth.SessionCookie, Value: secret}
 }
 
-// Admin is the human admin with a session, as after signing in.
+// Admin is the admin's session cookie, as after signing in with the
+// password on the admin interface. It skips the password's key
+// derivation, which would cost most of a second per test.
 func (e *Env) Admin() *http.Cookie {
 	e.T.Helper()
-	e.Principal("admin", auth.KindHuman, auth.ScopeIngest, auth.ScopeRead, auth.ScopeMessage, auth.ScopeAdmin)
-	return e.Session("admin", auth.ScopeIngest, auth.ScopeRead, auth.ScopeMessage, auth.ScopeAdmin)
+	if _, err := e.Tokens.EnsurePrincipal(context.Background(), auth.AdminName, auth.KindHuman); err != nil {
+		e.T.Fatal(err)
+	}
+	secret, err := e.Account.NewSession()
+	if err != nil {
+		e.T.Fatal(err)
+	}
+	return &http.Cookie{Name: auth.AdminCookie, Value: secret}
 }
 
 // Commit writes entries through the writer and returns the last seq.
@@ -122,9 +138,23 @@ func Line(stream, text string) store.Entry {
 	return store.Entry{Stream: stream, Kind: store.KindLine, Severity: store.DefaultSeverity, Text: text}
 }
 
-// Request is a request with optional cookie; body is a form when it is
-// url.Values, a multipart form when it is Multipart, raw JSON otherwise.
+// Do sends a request to the admin interface, which serves every route, as
+// one listener does when admin_listen is not set. cookie is optional; body
+// is a form when it is url.Values, a multipart form when it is Multipart,
+// raw JSON otherwise.
 func (e *Env) Do(method, target string, cookie *http.Cookie, body any, header ...string) *httptest.ResponseRecorder {
+	e.T.Helper()
+	return e.serve(auth.AdminInterface(e.AdminMux), method, target, cookie, body, header...)
+}
+
+// DoPublic is Do on the public interface alone, as when admin_listen is
+// set: no admin route, and the admin cookie counts for nothing.
+func (e *Env) DoPublic(method, target string, cookie *http.Cookie, body any, header ...string) *httptest.ResponseRecorder {
+	e.T.Helper()
+	return e.serve(e.Mux, method, target, cookie, body, header...)
+}
+
+func (e *Env) serve(h http.Handler, method, target string, cookie *http.Cookie, body any, header ...string) *httptest.ResponseRecorder {
 	e.T.Helper()
 	var r *http.Request
 	switch b := body.(type) {
@@ -150,6 +180,6 @@ func (e *Env) Do(method, target string, cookie *http.Cookie, body any, header ..
 		r.Header.Set(header[i], header[i+1])
 	}
 	rec := httptest.NewRecorder()
-	e.Mux.ServeHTTP(rec, r)
+	h.ServeHTTP(rec, r)
 	return rec
 }

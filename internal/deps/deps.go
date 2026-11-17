@@ -28,6 +28,7 @@ type Deps struct {
 	Status    status.Registry
 	Auth      auth.Authenticator
 	Tokens    *auth.Tokens
+	Admin     *auth.Admin // nil in tests without the admin account
 	Janitor   *store.Janitor
 	Blobs     BlobStore // nil in tests without messaging
 	Messaging Messaging // nil in tests without messaging
@@ -40,11 +41,12 @@ type Deps struct {
 // get their own config section as a separate Register argument: a feature
 // package cannot import internal/config, which imports it.
 type Server struct {
-	PublicURL  string // as configured, may be empty
-	HTTPListen string
-	Secure     bool
-	TLS        bool
-	DataDir    string
+	PublicURL   string // as configured, may be empty
+	HTTPListen  string
+	AdminListen string // empty: the admin routes are on HTTPListen too
+	Secure      bool
+	TLS         bool
+	DataDir     string
 }
 
 // BaseURL is the address to print in links and snippets: public_url, or
@@ -53,11 +55,24 @@ func (s Server) BaseURL() string {
 	if s.PublicURL != "" {
 		return strings.TrimRight(s.PublicURL, "/")
 	}
+	return s.listenURL(s.HTTPListen)
+}
+
+// AdminURL is where the admin signs in: the admin interface when it has an
+// address of its own, else BaseURL.
+func (s Server) AdminURL() string {
+	if s.AdminListen == "" {
+		return s.BaseURL()
+	}
+	return s.listenURL(s.AdminListen)
+}
+
+func (s Server) listenURL(address string) string {
 	scheme := "http"
 	if s.TLS {
 		scheme = "https"
 	}
-	host, port, err := net.SplitHostPort(s.HTTPListen)
+	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return scheme + "://localhost"
 	}

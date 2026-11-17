@@ -65,13 +65,14 @@ by a later track, except through an interface defined in `internal/deps`.
 ```go
 // internal/deps
 type Deps struct {
-	Server    Server           // root settings: public_url, http_listen, secure, tls, data_dir
+	Server    Server           // root settings: public_url, http_listen, admin_listen, secure, tls, data_dir
 	Store     *store.Store
 	Writer    writer.Writer
 	Hub       hub.Hub
 	Status    status.Registry
 	Auth      auth.Authenticator
 	Tokens    *auth.Tokens
+	Admin     *auth.Admin      // the admin password and in-memory admin sessions
 	Janitor   *store.Janitor   // Add(store.Task) for acks, blobs, claims, sessions
 	Blobs     BlobStore        // nil until track A; an interface, see below
 	Messaging Messaging        // nil until track A; an interface, see below
@@ -88,6 +89,12 @@ func Register(mux *http.ServeMux, mcp *mcpserver.Server, d deps.Deps[, cfg *Conf
   readers) until the context is cancelled. It is `nil` when there is none.
 - `main` builds the mux once (a grafit gotcha), calls every `Register`,
   starts everything in an `errgroup`, and shuts down on SIGINT and SIGTERM.
+  `mux` is the public mux. `web.Register` alone also takes the admin mux
+  (`Register(public, admin, mcp, d)`) for the admin-only routes; the admin
+  mux hands every other path to the public one. Each is built once, so no
+  pattern is registered twice on one mux. With `admin_listen` empty,
+  `http_listen` serves the admin mux; set, it serves the public mux and
+  `admin_listen` the admin one.
 - A feature gets its own config section as an argument, not through
   `Deps`: `internal/config` imports every feature package for its section
   type, so a feature cannot import `internal/config`.
@@ -289,11 +296,17 @@ lands.
 **Auth** column:
 
 - `public`: no authentication.
-- `session`: browser cookie only.
+- `session`: browser cookie only (on the admin interface, the admin
+  session's `cafard_admin` cookie counts too).
 - `bearer`: token only.
 - `any`: bearer or session.
 
-**Scope** is the scope required on top of that.
+**Scope** is the scope required on top of that. Only an admin session has
+`admin`; no token or browser session can carry it.
+
+**Admin interface.** Routes marked *(admin interface)* are on the admin mux
+only: with `admin_listen` set they answer 404 on `http_listen`. The admin
+mux serves every other route too, by handing it to the public mux.
 
 **CSRF** column:
 
@@ -310,23 +323,25 @@ lands.
 | GET | `/drop` | session | message | - | quick-drop form; `?share=<id>` preloads shared files |
 | GET | `/live` | session | read | - | query `streams, channel, from_seq, to_seq, sev, re, kinds` |
 | GET | `/streams` | session | read | - | sources |
-| GET | `/agents` | session | admin | - | principals, tokens |
-| GET | `/pair` | session | admin | - | pairing |
-| GET | `/pair/{id}/qr.svg` | session | admin | - | QR image of a pending pairing |
-| GET | `/signin` | public | - | - | paste-a-token form |
-| POST | `/signin` | public | - | SO | form `token`; creates a session; 303 to `/` |
-| POST | `/signout` | session | - | SO | 303 to `/signin` |
+| GET | `/agents` | session | admin | - | principals, tokens, password change *(admin interface)* |
+| GET | `/pair` | session | admin | - | pairing *(admin interface)* |
+| GET | `/pair/{id}/qr.svg` | session | admin | - | QR image of a pending pairing *(admin interface)* |
+| GET | `/signin` | public | - | - | admin interface: the password form; public: "ask the administrator for a sign-in link" |
+| POST | `/signin` | public | - | SO | form `password`; opens an admin session (cookie `cafard_admin`); 303 to `next` or `/`; 10 a minute per address *(admin interface; 404 on the public one)* |
+| POST | `/password` | session | admin | SO | form `current, new, repeat`; ends every admin session; 303 to `/signin?changed=1` *(admin interface)* |
+| POST | `/signout` | session | - | SO | ends the admin session or the browser session; 303 to `/signin` |
 | GET | `/p/{code}` | public | - | - | redeems a pairing code, sets the cookie, 303 to `/` |
 | POST | `/theme` | session | - | SO | form `theme=system\|light\|dark`, cookie, 303 back |
-| POST | `/pair` | session | admin | SO | form `principal` or `new_name`; 303 to `/pair` |
+| POST | `/pair` | session | admin | SO | form `principal` or `new_name`; 303 to `/pair` *(admin interface)* |
 | POST | `/share` | session | message | SO | Web Share Target, multipart `text, title, url, files[]`; see 2.4 |
 | GET | `/seen` | session | message | same-origin `Sec-Fetch-Site` only | `?seqs=1,2`: the no-JS read beacon in `<noscript>` (a 1x1 GIF); acks those messages |
-| POST | `/tokens` | session | admin | SO | no-JS token creation; renders `/agents` showing the token once |
-| POST | `/tokens/{id}/revoke` | session | admin | SO | 303 to `/agents` |
+| POST | `/tokens` | session | admin | SO | no-JS token creation; renders `/agents` showing the token once *(admin interface)* |
+| POST | `/tokens/{id}/revoke` | session | admin | SO | 303 to `/agents` *(admin interface)* |
 | POST | `/sessions/{id}/revoke` | session | admin, or own session | SO | 303 back |
 
 Revoking a token or a session **deletes its row**. There is no
-`revoked_at` column. The exposure guard counts the rows that remain.
+`revoked_at` column. The exposure guard checks that an admin password is
+set.
 
 ### 2.2 Data and ingest
 
@@ -368,12 +383,12 @@ The DTOs are in section 3.
 | GET | `/api/entries` | read | `?streams=&channel=&since_seq=&before_seq=&from_seq=&to_seq=&sev=&re=&kinds=&limit=` | `Page<Entry>` (never `chan:*`/`dm:*`) |
 | GET | `/api/entries/{seq}/context` | read | `?before=20&after=20` | `Page<Entry>` with `focus_seq` |
 | POST | `/api/marks` | message | `{stream, label}` | `{seq}` |
-| GET | `/api/tokens` | admin | | `{tokens: Token[]}` |
-| POST | `/api/tokens` | admin | `{principal, kind?, label, scopes[]}` (principal created if new) | `TokenCreated` |
-| DELETE | `/api/tokens/{id}` | admin | | 204 |
+| GET | `/api/tokens` | admin | | `{tokens: Token[]}` *(admin interface)* |
+| POST | `/api/tokens` | admin | `{principal, kind?, label, scopes[]}` (principal created if new; `admin` refused) | `TokenCreated` *(admin interface)* |
+| DELETE | `/api/tokens/{id}` | admin | | 204 *(admin interface)* |
 | GET | `/api/sessions` | admin (others: own only) | | `{sessions: Session[]}` |
 | DELETE | `/api/sessions/{id}` | admin, or own | | 204 |
-| POST | `/api/pairings` | admin | `{principal?, new_name?, scopes?}` | `Pairing` |
+| POST | `/api/pairings` | admin | `{principal?, new_name?, scopes?}` (`admin` refused) | `Pairing` *(admin interface)* |
 
 `{chat}` is a chat id: `chan:<name>` or `dm:<peer>`, where peer is the
 other principal. The server builds `dm:<a>~<b>` itself, so the client

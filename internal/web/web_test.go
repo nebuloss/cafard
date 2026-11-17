@@ -44,7 +44,7 @@ func newEnv(t *testing.T, o webtest.Options) *env {
 	if _, err := api.RegisterMessages(e.Mux, mcpserver.New(e.Deps, mcpserver.Config{}), e.Deps, e.svc); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := web.Register(e.Mux, nil, e.Deps); err != nil {
+	if _, err := web.Register(e.Mux, e.AdminMux, nil, e.Deps); err != nil {
 		t.Fatal(err)
 	}
 	return e
@@ -119,6 +119,9 @@ func TestEveryPageCarriesItsTwins(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	seed(e)
 	cookie := e.Admin()
+	// A token and a browser of the admin's, for the Agents and Pair fixtures.
+	e.Principal("admin", auth.KindHuman, auth.ScopeIngest, auth.ScopeRead, auth.ScopeMessage)
+	e.Session("admin", auth.ScopeRead, auth.ScopeMessage)
 	names := make([]string, 0, len(pageTwins))
 	for page := range pageTwins {
 		names = append(names, page)
@@ -231,10 +234,11 @@ func TestPagesEscapeHostileLogLines(t *testing.T) {
 	}
 }
 
-func TestSignInWithATokenOpensASession(t *testing.T) {
+func TestTheAdminSignsInWithThePassword(t *testing.T) {
 	e := newEnv(t, webtest.Options{Secure: true})
-	admin := e.Principal("admin", auth.KindHuman, auth.ScopeRead, auth.ScopeAdmin)
-	agent := e.Principal("codex", auth.KindAgent, auth.ScopeRead)
+	if err := e.Account.SetPassword(context.Background(), "correct horse"); err != nil {
+		t.Fatal(err)
+	}
 
 	if rec := e.Do("GET", "/streams", nil, nil); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/signin?next=%2Fstreams" {
 		t.Errorf("no session: %d %s", rec.Code, rec.Header().Get("Location"))
@@ -242,39 +246,37 @@ func TestSignInWithATokenOpensASession(t *testing.T) {
 	if rec := e.Do("GET", "/", nil, nil); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/signin" {
 		t.Errorf("home without a session: %d %s", rec.Code, rec.Header().Get("Location"))
 	}
-
-	rec := e.Do("POST", "/signin", nil, url.Values{"token": {agent}})
-	if rec.Code != http.StatusForbidden || strings.Contains(rec.Body.String(), agent) {
-		t.Errorf("agent token: %d", rec.Code)
-	}
-	rec = e.Do("POST", "/signin", nil, url.Values{"token": {"cfd_wrong"}})
-	if rec.Code != http.StatusUnauthorized || strings.Contains(rec.Body.String(), "cfd_wrong") {
-		t.Errorf("wrong token: %d, or echoed", rec.Code)
+	if body := e.Do("GET", "/signin", nil, nil).Body.String(); !strings.Contains(body, `name="password"`) {
+		t.Error("no password form on the admin interface")
 	}
 
-	rec = e.Do("POST", "/signin", nil, url.Values{"token": {admin}, "next": {"/streams"}})
+	if rec := e.Do("POST", "/signin", nil, url.Values{"password": {""}}); rec.Code != http.StatusBadRequest {
+		t.Errorf("empty password: %d", rec.Code)
+	}
+	rec := e.Do("POST", "/signin", nil, url.Values{"password": {"wrong horse"}})
+	if rec.Code != http.StatusUnauthorized || strings.Contains(rec.Body.String(), "wrong horse") {
+		t.Errorf("wrong password: %d, or echoed", rec.Code)
+	}
+
+	rec = e.Do("POST", "/signin", nil, url.Values{"password": {"correct horse"}, "next": {"/streams"}})
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/streams" {
 		t.Fatalf("sign in: %d %s", rec.Code, rec.Header().Get("Location"))
 	}
-	c := sessionCookie(t, rec)
-	if !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode || c.Path != "/" {
+	c := cookieNamed(t, rec, auth.AdminCookie)
+	if !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteStrictMode || c.Path != "/" || c.MaxAge != 12*3600 {
 		t.Errorf("cookie attributes: %+v", c)
 	}
-	if strings.Contains(c.Value, admin) || !strings.HasPrefix(c.Value, auth.SessionPrefix) {
-		t.Error("the cookie carries the token")
-	}
-	if rec := e.Do("GET", "/streams", c, nil); rec.Code != http.StatusOK {
+	if rec := e.Do("GET", "/agents", c, nil); rec.Code != http.StatusOK {
 		t.Errorf("signed in: %d", rec.Code)
 	}
-	// A session copies the token's scopes: no message scope here.
-	if rec := e.Do("POST", "/api/marks", c, `{"stream":"x:y","label":"z"}`); rec.Code != http.StatusForbidden {
-		t.Errorf("scope not copied: %d", rec.Code)
+	if rec := e.DoPublic("GET", "/streams", c, nil); rec.Code != http.StatusSeeOther {
+		t.Errorf("the admin cookie on the public interface: %d", rec.Code)
 	}
 	if rec := e.Do("GET", "/signin?next=/live", c, nil); rec.Header().Get("Location") != "/live" {
 		t.Errorf("signed-in /signin: %s", rec.Header().Get("Location"))
 	}
 	// Off-site next targets are ignored.
-	rec = e.Do("POST", "/signin", nil, url.Values{"token": {admin}, "next": {"//evil.example"}})
+	rec = e.Do("POST", "/signin", nil, url.Values{"password": {"correct horse"}, "next": {"//evil.example"}})
 	if rec.Header().Get("Location") != "/" {
 		t.Errorf("off-site next: %s", rec.Header().Get("Location"))
 	}
@@ -283,19 +285,75 @@ func TestSignInWithATokenOpensASession(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/signin" {
 		t.Errorf("sign out: %d", rec.Code)
 	}
+	if cleared := cookieOrNil(rec, auth.AdminCookie); cleared == nil || cleared.MaxAge >= 0 {
+		t.Errorf("sign out left the cookie: %+v", cleared)
+	}
 	if rec := e.Do("GET", "/streams", c, nil); rec.Code != http.StatusSeeOther {
 		t.Errorf("after sign out: %d", rec.Code)
 	}
 }
 
+func TestChangingThePasswordSignsTheAdminOut(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	ctx := context.Background()
+	if err := e.Account.SetPassword(ctx, "first password"); err != nil {
+		t.Fatal(err)
+	}
+	c := e.Admin()
+	if rec := e.Do("POST", "/password", c, url.Values{"current": {"first password"}, "new": {"second password"}, "repeat": {"other password"}}); rec.Code != http.StatusBadRequest {
+		t.Errorf("repeat differs: %d", rec.Code)
+	}
+	if rec := e.Do("POST", "/password", c, url.Values{"current": {"nope nope"}, "new": {"second password"}, "repeat": {"second password"}}); rec.Code != http.StatusUnauthorized {
+		t.Errorf("wrong current: %d", rec.Code)
+	}
+	if rec := e.Do("POST", "/password", c, url.Values{"current": {"first password"}, "new": {"short"}, "repeat": {"short"}}); rec.Code != http.StatusBadRequest {
+		t.Errorf("short: %d", rec.Code)
+	}
+	rec := e.Do("POST", "/password", c, url.Values{"current": {"first password"}, "new": {"second password"}, "repeat": {"second password"}})
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/signin?changed=1" {
+		t.Fatalf("change: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	if rec := e.Do("GET", "/agents", c, nil); rec.Code != http.StatusSeeOther {
+		t.Errorf("the old session survived: %d", rec.Code)
+	}
+	if !strings.Contains(e.Do("GET", "/signin?changed=1", nil, nil).Body.String(), "Password changed") {
+		t.Error("no notice after the change")
+	}
+}
+
+// On the public interface nobody types anything: the page says where a
+// sign-in link comes from, and the admin form is not there at all.
+func TestThePublicSigninPageHasNoForm(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	body := e.DoPublic("GET", "/signin", nil, nil).Body.String()
+	if strings.Contains(body, "<form method=\"post\" action=\"/signin\"") || !strings.Contains(body, "Ask the administrator for a sign-in link or QR code") {
+		t.Errorf("public /signin:\n%s", body)
+	}
+	if rec := e.DoPublic("POST", "/signin", nil, url.Values{"password": {"x"}}); rec.Code != http.StatusNotFound {
+		t.Errorf("POST /signin on the public interface: %d", rec.Code)
+	}
+}
+
 func sessionCookie(t *testing.T, rec interface{ Result() *http.Response }) *http.Cookie {
 	t.Helper()
+	return cookieNamed(t, rec, auth.SessionCookie)
+}
+
+func cookieNamed(t *testing.T, rec interface{ Result() *http.Response }, name string) *http.Cookie {
+	t.Helper()
+	if c := cookieOrNil(rec, name); c != nil && c.Value != "" {
+		return c
+	}
+	t.Fatalf("no %s cookie", name)
+	return nil
+}
+
+func cookieOrNil(rec interface{ Result() *http.Response }, name string) *http.Cookie {
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == auth.SessionCookie && c.Value != "" {
+		if c.Name == name {
 			return c
 		}
 	}
-	t.Fatal("no session cookie")
 	return nil
 }
 
@@ -338,7 +396,7 @@ func TestATokenIsShownOnlyOnce(t *testing.T) {
 // Every write a session can make. A cookie is all a forged cross-site
 // form would carry, so this check is the whole CSRF defence.
 var sessionWrites = []struct{ method, path string }{
-	{"POST", "/signin"}, {"POST", "/signout"}, {"POST", "/theme"}, {"POST", "/pair"},
+	{"POST", "/signin"}, {"POST", "/signout"}, {"POST", "/password"}, {"POST", "/theme"}, {"POST", "/pair"},
 	{"POST", "/tokens"}, {"POST", "/tokens/1/revoke"}, {"POST", "/sessions/1/revoke"},
 	{"POST", "/api/marks"}, {"POST", "/api/tokens"}, {"DELETE", "/api/tokens/1"},
 	{"DELETE", "/api/sessions/1"}, {"POST", "/api/pairings"},
@@ -411,17 +469,18 @@ func TestPairingSignsAPhoneInOnce(t *testing.T) {
 		t.Errorf("qr without a session: %d", rec.Code)
 	}
 
-	rec := e.Do("GET", "/p/"+link[1], nil, nil, "User-Agent", "Mozilla/5.0 (Linux; Android 15) Chrome/141.0")
+	// The phone is on the public interface, where the link is spent.
+	rec := e.DoPublic("GET", "/p/"+link[1], nil, nil, "User-Agent", "Mozilla/5.0 (Linux; Android 15) Chrome/141.0")
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
 		t.Fatalf("redeem: %d", rec.Code)
 	}
 	phone := sessionCookie(t, rec)
 	var me dto.Me
-	_ = json.Unmarshal(e.Do("GET", "/api/me", phone, nil).Body.Bytes(), &me)
+	_ = json.Unmarshal(e.DoPublic("GET", "/api/me", phone, nil).Body.Bytes(), &me)
 	if me.Name != "guillaume-phone" || me.Kind != dto.KindHuman || me.SessionID == 0 || len(me.Scopes) != 3 {
 		t.Errorf("phone me = %+v", me)
 	}
-	if rec := e.Do("GET", "/p/"+link[1], nil, nil); rec.Code != http.StatusBadRequest {
+	if rec := e.DoPublic("GET", "/p/"+link[1], nil, nil); rec.Code != http.StatusBadRequest {
 		t.Errorf("second redeem: %d", rec.Code)
 	}
 	if strings.Contains(e.Do("GET", "/pair", cookie, nil).Body.String(), link[1]) {
@@ -442,6 +501,7 @@ func TestPairingSignsAPhoneInOnce(t *testing.T) {
 func TestAPersonCanRevokeOnlyTheirOwnSessions(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	admin := e.Admin()
+	e.Session("admin", auth.ScopeRead) // the admin's paired phone
 	e.Principal("alice", auth.KindHuman, auth.ScopeRead)
 	alice := e.Session("alice", auth.ScopeRead)
 	var list struct{ Sessions []dto.Session }
@@ -464,24 +524,6 @@ func TestAPersonCanRevokeOnlyTheirOwnSessions(t *testing.T) {
 	}
 	if rec := e.Do("POST", "/sessions/"+webtest.Itoa(adminID)+"/revoke", alice, url.Values{}); rec.Code != http.StatusNotFound {
 		t.Errorf("alice revoking admin by form: %d", rec.Code)
-	}
-}
-
-func TestTheExposureGuardCountsAdminSessions(t *testing.T) {
-	e := newEnv(t, webtest.Options{})
-	ctx := context.Background()
-	guard := func() error {
-		return auth.ExposureGuard(ctx, "0.0.0.0:8790", e.Tokens.CountAdminTokens, e.Sessions.CountAdmin)
-	}
-	e.Principal("admin", auth.KindHuman, auth.ScopeAdmin)
-	toks, _ := e.Tokens.ListTokens(ctx, "")
-	_ = e.Tokens.RevokeToken(ctx, toks[0].ID)
-	if guard() == nil {
-		t.Fatal("guard passed with no admin credential")
-	}
-	e.Session("admin", auth.ScopeRead, auth.ScopeAdmin)
-	if err := guard(); err != nil {
-		t.Errorf("an admin session does not count: %v", err)
 	}
 }
 
