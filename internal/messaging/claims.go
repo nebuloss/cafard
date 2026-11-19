@@ -32,12 +32,21 @@ func (c ClaimRow) DTO() dto.Claim {
 	return dto.Claim{Principal: c.Principal, Note: c.Note, ExpiresAt: dto.TimeOf(c.ExpiresAt)}
 }
 
-func checkResource(resource string) error {
+// checkResource refuses what is not a log stream p may claim: one it can
+// read (or the claim would say it exists) with message on it.
+func (s *Service) checkResource(ctx context.Context, p auth.Principal, resource string) error {
 	if store.IsMessageStream(resource) {
-		return dto.Errorf(dto.CodeBadRequest, "Claims are on log streams such as serial:dut1, not on %s.", resource)
+		return dto.Errorf(dto.CodeBadRequest, "Claims are on log streams such as serial:lab/dut1, not on %s.", resource)
 	}
 	if err := store.ValidateStreamID(resource); err != nil {
 		return dto.Errorf(dto.CodeBadRequest, "%v.", err)
+	}
+	a := s.access(ctx, p)
+	if !a.Can(resource, auth.ScopeRead) {
+		return dto.Errorf(dto.CodeNotFound, "There is no stream %s you can read.", resource)
+	}
+	if !a.Can(resource, auth.ScopeMessage) {
+		return dto.Errorf(dto.CodeForbidden, "Claiming %s needs message on it; ask the admin for a grant.", resource)
 	}
 	return nil
 }
@@ -49,7 +58,7 @@ func (s *Service) Claim(ctx context.Context, p auth.Principal, resource string, 
 	if err := needMessage(p); err != nil {
 		return ClaimRow{}, false, err
 	}
-	if err := checkResource(resource); err != nil {
+	if err := s.checkResource(ctx, p, resource); err != nil {
 		return ClaimRow{}, false, err
 	}
 	if len(note) > maxClaimNote {
@@ -125,7 +134,7 @@ func (s *Service) Release(ctx context.Context, p auth.Principal, resource string
 	if err := needMessage(p); err != nil {
 		return err
 	}
-	if err := checkResource(resource); err != nil {
+	if err := s.checkResource(ctx, p, resource); err != nil {
 		return err
 	}
 	if _, err := s.expire(ctx, resource); err != nil {

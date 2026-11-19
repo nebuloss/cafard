@@ -301,3 +301,32 @@ func TestImportConfigOnce(t *testing.T) {
 		t.Errorf("a deleted sink came back: %+v", ks)
 	}
 }
+
+func TestAPairingLinkGivesItsGrants(t *testing.T) {
+	s, st := open(t)
+	ctx := context.Background()
+	_, err := s.Create(ctx, "lab", "")
+	must(t, err)
+	_, err = st.DB().Exec(`INSERT INTO channels(name, created_by, created_at, last_activity) VALUES ('lab/dut1', 'admin', 1, 1)`)
+	must(t, err)
+	clk := clock.NewFake(time.Unix(1e9, 0))
+	pairings := auth.NewPairings(st.DB(), clk, auth.NewSessions(st.DB(), clk), s)
+	for _, bad := range []string{"nowhere=read", "lab:nope=read", "lab=admin"} {
+		if _, _, err := pairings.Create(ctx, "", "phone", nil, bad, "admin", 0); err == nil {
+			t.Errorf("a link with grant %q was made", bad)
+		}
+	}
+	_, code, err := pairings.Create(ctx, "", "phone", nil, "lab:dut1=read,message", "admin", 0)
+	must(t, err)
+	p := auth.Principal{Name: "phone", Kind: auth.KindHuman, Scopes: auth.PairingScopes}
+	if s.Access(ctx, p).CanChannel("lab/dut1", auth.ScopeRead) {
+		t.Fatal("the grant is there before the link is opened")
+	}
+	if _, _, err := pairings.Redeem(ctx, code, ""); err != nil {
+		t.Fatal(err)
+	}
+	a := s.Access(ctx, p)
+	if !a.CanChannel("lab/dut1", auth.ScopeMessage) || a.CanChannel("lab/general", auth.ScopeRead) {
+		t.Errorf("after redeeming: dut1 %v, general %v", a.Scopes("chan:lab/dut1"), a.Scopes("chan:lab/general"))
+	}
+}

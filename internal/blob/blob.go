@@ -59,10 +59,19 @@ type Store struct {
 	clock clock.Clock
 	log   *slog.Logger
 
-	pool    chan struct{} // decoding slots
-	visible VisibleFunc
-	grant   GrantFunc
+	pool     chan struct{} // decoding slots
+	visible  VisibleFunc
+	snapshot SnapshotFunc
+	grant    GrantFunc
 }
+
+// SnapshotFunc reports whether p may read the lines of a log attachment,
+// which seeing its message does not imply.
+type SnapshotFunc func(ctx context.Context, p auth.Principal, a store.Attachment) bool
+
+// SetSnapshotVisible installs the rule for log snapshots; without it a
+// snapshot is visible with its message. Call it before serving.
+func (b *Store) SetSnapshotVisible(f SnapshotFunc) { b.snapshot = f }
 
 // GrantFunc lets p see a blob no message references yet (a staged share).
 type GrantFunc func(ctx context.Context, sha string, p auth.Principal) bool
@@ -334,7 +343,7 @@ func (b *Store) VisibleTo(ctx context.Context, sha string, p auth.Principal) (bo
 			if err != nil {
 				return false, err
 			}
-			if b.visible(ctx, p, e) && references(e, o) {
+			if b.visible(ctx, p, e) && b.references(ctx, p, e, o) {
 				return true, nil
 			}
 		}
@@ -347,9 +356,14 @@ func (b *Store) referencing(ctx context.Context, sha string) ([]int64, error) {
 		AND instr(attachments, ?) > 0 ORDER BY seq DESC LIMIT 200`, sha)
 }
 
-func references(e store.Entry, sha string) bool {
+// references reports whether e shows sha to p: as an image, or as the
+// snapshot of a log attachment whose streams p may read.
+func (b *Store) references(ctx context.Context, p auth.Principal, e store.Entry, sha string) bool {
 	for _, a := range e.Attachments {
-		if a.SHA256 == sha || a.SnapshotSHA256 == sha {
+		if a.SHA256 == sha {
+			return true
+		}
+		if a.SnapshotSHA256 == sha && (b.snapshot == nil || b.snapshot(ctx, p, a)) {
 			return true
 		}
 	}

@@ -284,7 +284,7 @@ type BlobStore interface {
 type Messaging interface {
 	Send(ctx context.Context, from auth.Principal, m dto.SendRequest) (dto.Entry, error)
 	Visible(ctx context.Context, p auth.Principal, e store.Entry) bool
-	ResolveChannel(ctx context.Context, name string) (streams []string, err error) // binding patterns (ids, globs)
+	ResolveChannel(ctx context.Context, p auth.Principal, name string) (chat string, patterns []string, err error) // chan:<project>/<name>, binding patterns (ids, globs)
 	ChatOf(e store.Entry) string                                                   // "chan:x" | "dm:a~b" | ""
 }
 ```
@@ -296,8 +296,8 @@ lands.
 entry is visible when the viewer may read its stream, a channel message
 when it may read the channel, a direct message to its two parties only.
 `ResolveChannel` takes `project/name`, or a bare `name` that only one
-project visible to the principal in the context has, and returns the
-bindings the caller may read.
+project visible to `p` has, and returns its bindings, which reading the
+channel lets `p` read.
 
 ### 1.10 Projects and access
 
@@ -464,7 +464,7 @@ The DTOs are in section 3.
 | DELETE | `/api/tokens/{id}` | admin | | 204 *(admin interface)* |
 | GET | `/api/sessions` | admin (others: own only) | | `{sessions: Session[]}` |
 | DELETE | `/api/sessions/{id}` | admin, or own | | 204 |
-| POST | `/api/pairings` | admin | `{principal?, new_name?, scopes?}` (`admin` refused) | `Pairing` *(admin interface)* |
+| POST | `/api/pairings` | admin | `{principal?, new_name?, scopes?, grants?}` (`admin` refused; grants `project[:channel]=scopes`, added when redeemed) | `Pairing` *(admin interface)* |
 
 `{chat}` is a chat id: `chan:<project>/<name>` or `dm:<peer>`, where peer
 is the other principal. The server builds `dm:<a>~<b>` itself, so the
@@ -638,7 +638,7 @@ type TokenCreated = Token & {
 };
 type Session = { id: number; label: string; principal: string; user_agent?: string; created_at: string; expires_at: string; current: boolean };
 type Pairing = { id: number; url: string; qr_url: string; expires_at: string; principal?: string; new_name?: string; grants?: string[] }; // "lab:dut1=read,message"
-type IngestResult = { accepted: number; last_seq: number; dropped?: number };   // POST /api/log
+type LogAccepted = { accepted: number; last_seq: number; dropped?: number };   // POST /api/log
 type Share = { id: string; text?: string; files: ImageAttachment[]; expires_at: string };
 ```
 

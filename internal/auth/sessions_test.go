@@ -17,7 +17,7 @@ func newSessions(t *testing.T) (*Tokens, *Sessions, *Pairings, *clock.Fake) {
 	t.Helper()
 	tokens, c := newTokens(t)
 	s := NewSessions(tokens.db, c)
-	return tokens, s, NewPairings(tokens.db, c, s), c
+	return tokens, s, NewPairings(tokens.db, c, s, nil), c
 }
 
 func TestSessionLifecycle(t *testing.T) {
@@ -125,7 +125,7 @@ func TestPairingIsSingleUseAndExpires(t *testing.T) {
 	ctx := context.Background()
 	tokens.EnsurePrincipal(ctx, "admin", KindHuman)
 
-	row, code, err := pairings.Create(ctx, "", "guillaume-phone", nil, "admin", 0)
+	row, code, err := pairings.Create(ctx, "", "guillaume-phone", nil, "", "admin", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,11 +171,11 @@ func TestPairingIsSingleUseAndExpires(t *testing.T) {
 		t.Error("a used code is still kept")
 	}
 
-	_, code2, err := pairings.Create(ctx, "admin", "", NewScopeSet(ScopeRead), "admin", 0)
+	_, code2, err := pairings.Create(ctx, "admin", "", NewScopeSet(ScopeRead), "", "admin", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, code3, err := pairings.Create(ctx, "admin", "", nil, "cli", 2*time.Hour)
+	_, code3, err := pairings.Create(ctx, "admin", "", nil, "", "cli", 2*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,10 +192,10 @@ func TestPairingNeverGrantsAdminNorLastsPastADay(t *testing.T) {
 	tokens, _, pairings, _ := newSessions(t)
 	ctx := context.Background()
 	tokens.EnsurePrincipal(ctx, "guillaume", KindHuman)
-	if _, _, err := pairings.Create(ctx, "guillaume", "", NewScopeSet(ScopeRead, ScopeAdmin), "admin", 0); !errors.Is(err, ErrBadPairing) {
+	if _, _, err := pairings.Create(ctx, "guillaume", "", NewScopeSet(ScopeRead, ScopeAdmin), "", "admin", 0); !errors.Is(err, ErrBadPairing) {
 		t.Errorf("admin scope: %v", err)
 	}
-	if _, _, err := pairings.Create(ctx, "guillaume", "", nil, "cli", MaxPairingTTL+time.Minute); !errors.Is(err, ErrBadPairing) {
+	if _, _, err := pairings.Create(ctx, "guillaume", "", nil, "", "cli", MaxPairingTTL+time.Minute); !errors.Is(err, ErrBadPairing) {
 		t.Errorf("ttl over a day: %v", err)
 	}
 }
@@ -204,19 +204,19 @@ func TestPairingRefusesNonHumans(t *testing.T) {
 	tokens, _, pairings, _ := newSessions(t)
 	ctx := context.Background()
 	tokens.EnsurePrincipal(ctx, "codex", KindAgent)
-	if _, _, err := pairings.Create(ctx, "codex", "", nil, "admin", 0); !errors.Is(err, ErrConflict) {
+	if _, _, err := pairings.Create(ctx, "codex", "", nil, "", "admin", 0); !errors.Is(err, ErrConflict) {
 		t.Errorf("agent: %v", err)
 	}
-	if _, _, err := pairings.Create(ctx, "", "codex", nil, "admin", 0); !errors.Is(err, ErrConflict) {
+	if _, _, err := pairings.Create(ctx, "", "codex", nil, "", "admin", 0); !errors.Is(err, ErrConflict) {
 		t.Errorf("new name of an agent: %v", err)
 	}
-	if _, _, err := pairings.Create(ctx, "nobody", "", nil, "admin", 0); !errors.Is(err, ErrNotFound) {
+	if _, _, err := pairings.Create(ctx, "nobody", "", nil, "", "admin", 0); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown principal: %v", err)
 	}
-	if _, _, err := pairings.Create(ctx, "a", "b", nil, "admin", 0); err == nil {
+	if _, _, err := pairings.Create(ctx, "a", "b", nil, "", "admin", 0); err == nil {
 		t.Error("both set accepted")
 	}
-	if _, _, err := pairings.Create(ctx, "", "Bad Name", nil, "admin", 0); err == nil {
+	if _, _, err := pairings.Create(ctx, "", "Bad Name", nil, "", "admin", 0); err == nil {
 		t.Error("bad name accepted")
 	}
 }

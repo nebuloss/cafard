@@ -81,7 +81,7 @@ func (s *Service) EntryDTO(ctx context.Context, viewer auth.Principal, e store.E
 		case dto.AttachmentImage:
 			out.Attachments = append(out.Attachments, dto.ImageOf(ImageDTO(a)))
 		case dto.AttachmentLog:
-			la, err := s.logDTO(ctx, a)
+			la, err := s.logDTO(ctx, viewer, a)
 			if err != nil {
 				return dto.Entry{}, err
 			}

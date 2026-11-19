@@ -1,0 +1,23 @@
+{
+  "name": "lab",
+  "title": "Lab bench",
+  "created_at": "2026-11-16T08:00:00Z",
+  "scopes": [
+    "read",
+    "message"
+  ],
+  "channels": [
+    "chan:lab/dut1",
+    "chan:lab/general"
+  ],
+  "sinks": [
+    "bench-pi",
+    "dut1"
+  ],
+  "retention": {
+    "lines_max_age_s": 1209600,
+    "lines_max_bytes": 2000000000,
+    "messages_max_age_s": 7776000,
+    "blobs_max_bytes": 5000000000
+  }
+}

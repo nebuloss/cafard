@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -16,6 +17,7 @@ import (
 // InboxQuery selects inbox messages.
 type InboxQuery struct {
 	Channel      string // only this channel
+	Project      string // only the channels of this project
 	Limit        int
 	IncludeAcked bool
 }
@@ -31,6 +33,29 @@ const inboxWhere = `e.kind = 'message' AND coalesce(e.sender, '') != ?1
 
 const notAcked = ` AND NOT EXISTS (SELECT 1 FROM acks a WHERE a.principal = ?1 AND a.seq = e.seq)`
 
+// readableWhere keeps direct messages (the inbox rule only lets in those
+// of p) and messages of the channels in the JSON array bound at ?n.
+func readableWhere(n int) string {
+	return fmt.Sprintf(` AND (e.stream LIKE 'dm:%%' OR e.stream IN (SELECT value FROM json_each(?%d)))`, n)
+}
+
+// readableChannels is the JSON array of the message streams of the
+// channels p may read, of one project when project is set.
+func (s *Service) readableChannels(ctx context.Context, p auth.Principal, project string) (string, error) {
+	chs, err := s.Channels(ctx, p, true)
+	if err != nil {
+		return "", err
+	}
+	ids := []string{}
+	for _, ch := range chs {
+		if project == "" || ch.Project() == project {
+			ids = append(ids, ch.Stream())
+		}
+	}
+	b, err := json.Marshal(ids)
+	return string(b), err
+}
+
 // Inbox returns p's inbox, oldest first. With IncludeAcked it returns the
 // latest messages, acked or not.
 func (s *Service) Inbox(ctx context.Context, p auth.Principal, q InboxQuery) ([]store.Entry, bool, error) {
@@ -39,17 +64,24 @@ func (s *Service) Inbox(ctx context.Context, p auth.Principal, q InboxQuery) ([]
 		limit = 20
 	}
 	limit = min(limit, 200)
-	where := inboxWhere
-	args := []any{p.Name, b2i(p.Kind == auth.KindHuman)}
+	readable, err := s.readableChannels(ctx, p, q.Project)
+	if err != nil {
+		return nil, false, err
+	}
+	where := inboxWhere + readableWhere(3)
+	args := []any{p.Name, b2i(p.Kind == auth.KindHuman), readable}
 	if !q.IncludeAcked {
 		where += notAcked
 	}
+	if q.Project != "" {
+		where += ` AND e.stream NOT LIKE 'dm:%'`
+	}
 	if q.Channel != "" {
-		ch, err := s.Channel(ctx, q.Channel)
+		ch, err := s.Channel(ctx, p, q.Channel)
 		if err != nil {
 			return nil, false, err
 		}
-		where += ` AND e.stream = ?3`
+		where += ` AND e.stream = ?4`
 		args = append(args, ch.Stream())
 	}
 	order := `ASC`
@@ -164,13 +196,13 @@ func (s *Service) waitMatches(ctx context.Context, p auth.Principal, q WaitQuery
 func (s *Service) Wait(ctx context.Context, p auth.Principal, q WaitQuery) (store.Entry, bool, error) {
 	stream := ""
 	if q.Channel != "" {
-		ch, err := s.Channel(ctx, q.Channel)
+		ch, err := s.Channel(ctx, p, q.Channel)
 		if err != nil {
 			return store.Entry{}, false, err
 		}
 		stream = ch.Stream()
 	}
-	filter := hub.Filter{Streams: []string{"chan:*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}
+	filter := hub.Filter{Streams: s.access(ctx, p).MessagePatterns(), Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}
 	sub := s.hub.Subscribe(filter, waitSubBuffer)
 	defer func() { sub.Close() }()
 
@@ -231,11 +263,15 @@ func (s *Service) waitStored(ctx context.Context, p auth.Principal, q WaitQuery,
 	if err != nil {
 		return store.Entry{}, false, 0, err
 	}
+	readable, err := s.readableChannels(ctx, p, "")
+	if err != nil {
+		return store.Entry{}, false, 0, err
+	}
 	var (
 		where strings.Builder
-		args  = []any{p.Name, b2i(p.Kind == auth.KindHuman)}
+		args  = []any{p.Name, b2i(p.Kind == auth.KindHuman), readable}
 	)
-	where.WriteString(`e.kind = 'message' AND coalesce(e.sender, '') != ?1` + notAcked)
+	where.WriteString(`e.kind = 'message' AND coalesce(e.sender, '') != ?1` + notAcked + readableWhere(3))
 	if q.ReplyTo != 0 {
 		where.WriteString(fmt.Sprintf(` AND e.reply_to = %d`, q.ReplyTo))
 	} else {

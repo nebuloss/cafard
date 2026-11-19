@@ -26,11 +26,11 @@ func TestAttachmentUnion(t *testing.T) {
 		t.Errorf("image round trip: %+v", back)
 	}
 
-	b, err = json.Marshal(LogOf(LogAttachment{Stream: "serial:dut1", FromSeq: 5}))
+	b, err = json.Marshal(LogOf(LogAttachment{Stream: "serial:lab/dut1", FromSeq: 5}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"type":"log","stream":"serial:dut1","streams":[],"from_seq":5,"to_seq":null,"lines":0,"snapshot":false,"expired":false,"preview":[]}`
+	want := `{"type":"log","stream":"serial:lab/dut1","streams":[],"from_seq":5,"to_seq":null,"lines":0,"snapshot":false,"expired":false,"preview":[]}`
 	if string(b) != want {
 		t.Errorf("log: got %s, want %s", b, want)
 	}

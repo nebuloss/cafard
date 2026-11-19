@@ -56,13 +56,17 @@ func NewSessions(db *sql.DB, c clock.Clock) *Sessions {
 // Create opens a session for an existing principal and returns its secret
 // in clear, once, for the cookie.
 func (s *Sessions) Create(ctx context.Context, principal string, scopes ScopeSet, label, userAgent string) (SessionRow, string, error) {
+	return s.create(ctx, s.db, principal, scopes, label, userAgent)
+}
+
+func (s *Sessions) create(ctx context.Context, db execQuerier, principal string, scopes ScopeSet, label, userAgent string) (SessionRow, string, error) {
 	if len(scopes) == 0 {
 		return SessionRow{}, "", errors.New("a session needs at least one scope")
 	}
 	if scopes.Has(ScopeAdmin) {
 		return SessionRow{}, "", ErrAdminScope
 	}
-	kind, err := principalKind(ctx, s.db, principal)
+	kind, err := principalKind(ctx, db, principal)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SessionRow{}, "", fmt.Errorf("%w: principal %s", ErrNotFound, principal)
@@ -76,7 +80,7 @@ func (s *Sessions) Create(ctx context.Context, principal string, scopes ScopeSet
 	now := s.clock.Now().UTC()
 	row := SessionRow{Principal: principal, Kind: kind, Label: label, UserAgent: clip(userAgent, 300), Scopes: scopes,
 		CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
-	res, err := s.db.ExecContext(ctx, `INSERT INTO sessions(hash, principal, label, user_agent, scopes, created_at, expires_at)
+	res, err := db.ExecContext(ctx, `INSERT INTO sessions(hash, principal, label, user_agent, scopes, created_at, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, HashToken(secret), principal, row.Label, row.UserAgent, scopes.String(),
 		now.UnixNano(), row.ExpiresAt.UnixNano())
 	if err != nil {

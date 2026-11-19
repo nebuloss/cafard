@@ -173,7 +173,9 @@ const (
 type Chat struct {
 	ID            string       `json:"id"`
 	Kind          ChatKind     `json:"kind"`
-	Name          string       `json:"name"`
+	Project       string       `json:"project,omitempty"` // channels only
+	ProjectTitle  string       `json:"project_title,omitempty"`
+	Name          string       `json:"name"` // inside its project for a channel
 	Title         string       `json:"title,omitempty"`
 	Topic         string       `json:"topic,omitempty"`
 	Peer          *Principal   `json:"peer,omitempty"`
@@ -231,6 +233,8 @@ type Stream struct {
 	Kind         string            `json:"kind"`
 	Transport    string            `json:"transport"`
 	Labels       map[string]string `json:"labels"`
+	Project      string            `json:"project,omitempty"` // "lab" for serial:lab/dut1
+	Sink         string            `json:"sink,omitempty"`    // "dut1"
 	Status       StreamState       `json:"status"`
 	LastSeq      int64             `json:"last_seq"`
 	LastActivity *Time             `json:"last_activity,omitempty"`
@@ -308,7 +312,8 @@ type ChatCount struct {
 
 // ChannelCreate is the body that creates a channel.
 type ChannelCreate struct {
-	Name     string   `json:"name"`
+	Name     string   `json:"name"`              // "dut1", or "lab/dut1"
+	Project  string   `json:"project,omitempty"` // needed when the creator may make channels in several projects
 	Title    string   `json:"title,omitempty"`
 	Topic    string   `json:"topic,omitempty"`
 	Patterns []string `json:"patterns,omitempty"`
@@ -397,12 +402,13 @@ type Session struct {
 
 // Pairing is a pending device pairing.
 type Pairing struct {
-	ID        int64  `json:"id"`
-	URL       string `json:"url"`
-	QRURL     string `json:"qr_url"`
-	ExpiresAt Time   `json:"expires_at"`
-	Principal string `json:"principal,omitempty"`
-	NewName   string `json:"new_name,omitempty"`
+	ID        int64    `json:"id"`
+	URL       string   `json:"url"`
+	QRURL     string   `json:"qr_url"`
+	ExpiresAt Time     `json:"expires_at"`
+	Principal string   `json:"principal,omitempty"`
+	NewName   string   `json:"new_name,omitempty"`
+	Grants    []string `json:"grants,omitempty"` // "lab:dut1=read,message"
 }
 
 // Share is content staged by the share target, waiting to be sent.
@@ -425,4 +431,33 @@ func (s Share) MarshalJSON() ([]byte, error) {
 type LogAccepted struct {
 	Accepted int   `json:"accepted"`
 	LastSeq  int64 `json:"last_seq"`
+	// Dropped counts the lines that reached no sink and were not stored.
+	Dropped int `json:"dropped,omitempty"`
+}
+
+// Project is a project as its viewer reaches it.
+type Project struct {
+	Name      string           `json:"name"`
+	Title     string           `json:"title,omitempty"`
+	CreatedAt Time             `json:"created_at"`
+	Scopes    []Scope          `json:"scopes"`   // the viewer's project-wide scopes
+	Channels  []string         `json:"channels"` // chat ids the viewer can read
+	Sinks     []string         `json:"sinks"`    // when the viewer may read the project's logs
+	Retention ProjectRetention `json:"retention"`
+}
+
+// ProjectRetention is a project's limits; 0 means none.
+type ProjectRetention struct {
+	LinesMaxAgeS    int64 `json:"lines_max_age_s"`
+	LinesMaxBytes   int64 `json:"lines_max_bytes"`
+	MessagesMaxAgeS int64 `json:"messages_max_age_s"`
+	BlobsMaxBytes   int64 `json:"blobs_max_bytes"`
+}
+
+// MarshalJSON implements json.Marshaler.
+func (p Project) MarshalJSON() ([]byte, error) {
+	type plain Project
+	q := plain(p)
+	q.Scopes, q.Channels, q.Sinks = nonNil(q.Scopes), nonNil(q.Channels), nonNil(q.Sinks)
+	return json.Marshal(q)
 }

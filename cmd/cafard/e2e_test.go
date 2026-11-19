@@ -22,6 +22,8 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/config"
+	"github.com/nebuloss/cafard/internal/messaging"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/push"
 	"github.com/nebuloss/cafard/internal/store"
 )
@@ -47,11 +49,16 @@ type server struct {
 
 var passwordLine = regexp.MustCompile(`(?m)^\s+([0-9a-f]{36})$`)
 
+// testProject is the project every test server has (its config lists
+// its #general), where token grants its principals.
+const testProject = "lab"
+
 func startServer(t *testing.T, opts ...func(*config.Config)) *server {
 	t.Helper()
 	cfg := testConfig()
 	cfg.HTTPListen = "127.0.0.1:0"
 	cfg.DataDir = t.TempDir()
+	cfg.Channels.List = append(cfg.Channels.List, messaging.ChannelConfig{Name: testProject + "/general"})
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -127,8 +134,18 @@ func (s *server) db() *store.Store {
 	return s.st
 }
 
-// token creates a principal and a token in the running server's database.
+// token creates a principal and a token in the running server's
+// database, and grants the principal the token's scopes on the whole of
+// testProject.
 func (s *server) token(name, kind string, scopes ...auth.Scope) string {
+	s.t.Helper()
+	secret := s.tokenOnly(name, kind, scopes...)
+	s.grant(name, testProject, scopes...)
+	return secret
+}
+
+// tokenOnly is token without the grant.
+func (s *server) tokenOnly(name, kind string, scopes ...auth.Scope) string {
 	s.t.Helper()
 	tokens := auth.NewTokens(s.db().DB(), clock.System{})
 	if _, err := tokens.EnsurePrincipal(context.Background(), name, kind); err != nil {
@@ -139,6 +156,30 @@ func (s *server) token(name, kind string, scopes ...auth.Scope) string {
 		s.t.Fatal(err)
 	}
 	return secret
+}
+
+// grant adds scopes (those a grant may hold) on the whole of project, made
+// when missing, as cafard token create --grant does. The server sees it
+// at once for a principal it has not served yet, and within 5 s else.
+func (s *server) grant(name, project string, scopes ...auth.Scope) {
+	s.t.Helper()
+	ctx := context.Background()
+	projs, err := projects.New(ctx, s.db().DB(), clock.System{}, store.Limits{}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	var granted []auth.Scope
+	for _, sc := range scopes {
+		if projects.GrantScopes.Has(sc) {
+			granted = append(granted, sc)
+		}
+	}
+	if len(granted) == 0 {
+		return
+	}
+	if err := projs.AddGrants(ctx, projects.Grant{Principal: name, Project: project, Scopes: auth.NewScopeSet(granted...)}); err != nil {
+		s.t.Fatal(err)
+	}
 }
 
 func (s *server) count(stream string) int {
@@ -208,17 +249,17 @@ func TestSeq100000ThroughPushLands(t *testing.T) {
 	}
 	vars := map[string]string{"CAFARD_SERVER": s.base, "CAFARD_TOKEN": s.admin}
 	var out, errOut strings.Builder
-	err := run(context.Background(), []string{"push", "--stream", "seq"}, strings.NewReader(b.String()), &out, &errOut,
+	err := run(context.Background(), []string{"push", "--stream", testProject + "/seq"}, strings.NewReader(b.String()), &out, &errOut,
 		func(k string) string { return vars[k] })
 	if err != nil {
 		t.Fatalf("push: %v\n%s", err, errOut.String())
 	}
-	if n := s.count("push:seq"); n != 100000 {
+	if n := s.count("push:lab/seq"); n != 100000 {
 		t.Fatalf("%d lines landed, want 100000", n)
 	}
 
 	cs := s.mcp(s.admin)
-	text, page := call(t, cs, "tail", map[string]any{"streams": []string{"push:seq"}, "lines": 3})
+	text, page := call(t, cs, "tail", map[string]any{"streams": []string{"push:lab/seq"}, "lines": 3})
 	if !strings.Contains(text, " 99999") || !strings.HasSuffix(strings.TrimSpace(lastLine(text)), "100000") {
 		t.Errorf("tail = %q", text)
 	}
@@ -236,7 +277,7 @@ func TestWaitForIsReleasedByALaterLineAndByOneBeforeTheCall(t *testing.T) {
 	s := startServer(t)
 	cs := s.mcp(s.admin)
 	ingest := func(text string) {
-		resp := s.post(s.admin, "/api/log?stream=dut&severity=info", "text/plain", text+"\n")
+		resp := s.post(s.admin, "/api/log?stream=lab/dut&severity=info", "text/plain", text+"\n")
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			t.Fatalf("ingest: %d %s", resp.StatusCode, body)
@@ -251,7 +292,7 @@ func TestWaitForIsReleasedByALaterLineAndByOneBeforeTheCall(t *testing.T) {
 	}
 	got := make(chan result, 1)
 	go func() {
-		text, out := call(t, cs, "wait_for", map[string]any{"pattern": "login:", "streams": []string{"push:*"}, "timeout_s": 20})
+		text, out := call(t, cs, "wait_for", map[string]any{"pattern": "login:", "streams": []string{"push:lab/*"}, "timeout_s": 20})
 		got <- result{text, out}
 	}()
 	time.Sleep(300 * time.Millisecond)
@@ -306,9 +347,9 @@ func TestWaitForIsCancelledWithTheCall(t *testing.T) {
 func TestLogToolsReadMarkAndContext(t *testing.T) {
 	s := startServer(t)
 	cs := s.mcp(s.admin)
-	body := `{"text":"\u001b[31mred error\u001b[0m","severity":"err","stream":"serial:dut1","ts":"2026-11-16T10:00:00Z"}
-{"text":"plain","stream":"serial:dut1"}
-{"text":"other","stream":"syslog:box"}
+	body := `{"text":"\u001b[31mred error\u001b[0m","severity":"err","stream":"serial:lab/dut1","ts":"2026-11-16T10:00:00Z"}
+{"text":"plain","stream":"serial:lab/dut1"}
+{"text":"other","stream":"syslog:lab/box"}
 `
 	if resp := s.post(s.admin, "/api/log", "application/x-ndjson", body); resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
@@ -321,12 +362,12 @@ func TestLogToolsReadMarkAndContext(t *testing.T) {
 	}
 
 	text, out = call(t, cs, "list_streams", nil)
-	if !strings.Contains(text, "serial:dut1") || !strings.Contains(text, "syslog:box") {
+	if !strings.Contains(text, "serial:lab/dut1") || !strings.Contains(text, "syslog:lab/box") {
 		t.Errorf("list_streams = %q", text)
 	}
 	_ = out
 
-	text, out = call(t, cs, "read", map[string]any{"streams": []string{"serial:*"}, "since_seq": 0})
+	text, out = call(t, cs, "read", map[string]any{"streams": []string{"serial:*/*"}, "since_seq": 0})
 	if strings.Contains(text, "\x1b") || !strings.Contains(text, "ERR red error") || strings.Contains(text, "other") {
 		t.Errorf("read = %q", text)
 	}
@@ -340,7 +381,7 @@ func TestLogToolsReadMarkAndContext(t *testing.T) {
 		t.Errorf("read min_severity = %q", text)
 	}
 
-	_, out = call(t, cs, "mark", map[string]any{"stream": "serial:dut1", "label": "test 42 starts"})
+	_, out = call(t, cs, "mark", map[string]any{"stream": "serial:lab/dut1", "label": "test 42 starts"})
 	markSeq := out["seq"].(float64)
 	text, _ = call(t, cs, "context", map[string]any{"seq": markSeq, "before": 1, "after": 0})
 	if !strings.Contains(text, "admin: test 42 starts") || !strings.Contains(text, "plain") {

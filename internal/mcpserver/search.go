@@ -23,6 +23,7 @@ import (
 type searchIn struct {
 	Query    string   `json:"query" jsonschema:"full-text query (SQLite FTS5): words that must all appear, \"an exact phrase\", prefix*, OR, NOT, NEAR(a b, 5); punctuation inside a word is fine"`
 	Channel  string   `json:"channel,omitempty" jsonschema:"search this channel: its messages and its bound streams"`
+	Project  string   `json:"project,omitempty" jsonschema:"only the streams of this project"`
 	Streams  []string `json:"streams,omitempty" jsonschema:"stream ids or globs; default every log stream"`
 	From     string   `json:"from,omitempty" jsonschema:"earliest time: RFC 3339 (2026-11-16T10:00:00Z) or relative to now (-2h, -30m, -1d, -1h30m)"`
 	To       string   `json:"to,omitempty" jsonschema:"latest time, same forms as from"`
@@ -51,9 +52,17 @@ func (s *Server) search(ctx context.Context, c *Call, in searchIn) (string, Page
 	if !from.IsZero() && !to.IsZero() && to.Before(from) {
 		return "", Page{}, dto.Errorf(dto.CodeBadRequest, "to (%s) is before from (%s).", to.Format(time.RFC3339), from.Format(time.RFC3339))
 	}
-	ids, err := s.selectIDs(ctx, selectIn{Channel: in.Channel, Streams: in.Streams})
+	ids, err := s.selectIDs(ctx, c.Principal, selectIn{Channel: in.Channel, Streams: in.Streams})
 	if err != nil {
 		return "", Page{}, err
+	}
+	if in.Project != "" {
+		if ids == nil {
+			if ids, err = s.deps.Store.MatchStreams(ctx, nil); err != nil {
+				return "", Page{}, err
+			}
+		}
+		ids = slices.DeleteFunc(ids, func(id string) bool { return store.ProjectOf(id) != in.Project })
 	}
 	kinds := logKinds
 	var keep func(store.Entry) bool
@@ -61,13 +70,14 @@ func (s *Server) search(ctx context.Context, c *Call, in searchIn) (string, Page
 		// The channel's own messages, each checked for the caller: a
 		// question to someone else in the channel is still visible, a
 		// direct message never is (it lives in dm:*, not chan:*).
-		chat := "chan:" + channelName(in.Channel)
+		chat, _, err := s.deps.Messaging.ResolveChannel(ctx, c.Principal, in.Channel)
+		if err != nil {
+			return "", Page{}, err
+		}
 		if ids == nil {
-			all, err := s.streamIDs(ctx, []string{"*"})
-			if err != nil {
+			if ids, err = s.deps.Store.MatchStreams(ctx, nil); err != nil {
 				return "", Page{}, err
 			}
-			ids = all
 		}
 		ids = append(slices.Clone(ids), chat)
 		kinds = slices.Concat(logKinds, []store.Kind{store.KindMessage})
@@ -101,13 +111,6 @@ func (s *Server) search(ctx context.Context, c *Call, in searchIn) (string, Page
 		}
 	}
 	return text, page, nil
-}
-
-// channelName is a channel= argument as messaging names it.
-func channelName(name string) string {
-	name = strings.TrimSpace(name)
-	name = strings.TrimPrefix(name, "#")
-	return strings.TrimPrefix(name, "chan:")
 }
 
 var relative = regexp.MustCompile(`^-((?:\d+(?:\.\d+)?(?:ms|s|m|h|d|w))+)$`)

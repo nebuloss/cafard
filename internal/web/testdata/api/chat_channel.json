@@ -1,20 +1,22 @@
 {
-  "id": "chan:dut1",
+  "id": "chan:lab/dut1",
   "kind": "channel",
+  "project": "lab",
+  "project_title": "Lab bench",
   "name": "dut1",
   "title": "DUT 1 (RK3588 board)",
   "topic": "Bring-up of the 6.18 kernel",
   "patterns": [
-    "serial:dut1",
-    "syslog:dut1*"
+    "serial:lab/dut1",
+    "syslog:lab/dut1*"
   ],
   "streams": [
     {
-      "id": "serial:dut1",
+      "id": "serial:lab/dut1",
       "status": "connected"
     },
     {
-      "id": "syslog:dut1",
+      "id": "syslog:lab/dut1",
       "status": "idle"
     }
   ],

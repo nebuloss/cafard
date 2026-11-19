@@ -36,17 +36,19 @@ var seeded struct {
 	direct   int64
 }
 
-// seedChats: #dut1 bound to serial:dut1, an agent message with a photo
+// seedChats: #lab/dut1 bound to serial:lab/dut1, two agents members of
+// lab, an agent message with a photo
 // and a log slice, an open question for the humans, a direct message.
 func seedChats(e *env) {
 	t := e.T
 	ctx := context.Background()
-	for name, kind := range map[string]string{"admin": auth.KindHuman, "codex-build": auth.KindAgent, "claude-laptop": auth.KindAgent} {
-		if _, err := e.Tokens.EnsurePrincipal(ctx, name, kind); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := e.Tokens.EnsurePrincipal(ctx, auth.AdminName, auth.KindHuman); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := e.svc.CreateChannel(ctx, adminP, dto.ChannelCreate{Name: "dut1", Title: "DUT 1 (x86 board)", Patterns: []string{"serial:dut1"}}); err != nil {
+	for _, p := range []auth.Principal{agentCodex, agentClaude} {
+		e.Stack.Member(t, p.Name, p.Kind, p.Scopes...)
+	}
+	if _, err := e.svc.CreateChannel(ctx, adminP, dto.ChannelCreate{Name: "dut1", Title: "DUT 1 (x86 board)", Patterns: []string{"serial:lab/dut1"}}); err != nil {
 		t.Fatal(err)
 	}
 	b, err := e.svc.Blobs().Put(ctx, bytes.NewReader(webtest.PNG(t, 64, 48)), "")
@@ -56,7 +58,7 @@ func seedChats(e *env) {
 	to := int64(2)
 	m, err := e.svc.SendMessage(ctx, agentCodex, messaging.SendInput{SendRequest: dto.SendRequest{
 		Text: "image v42 ready, `dwc3` fails, see https://git.example.com/k/4a1f", Channel: "dut1",
-		Logs: []dto.LogRequest{{Stream: "serial:dut1", FromSeq: 1, ToSeq: &to, Title: "boot"}},
+		Logs: []dto.LogRequest{{Stream: "serial:lab/dut1", FromSeq: 1, ToSeq: &to, Title: "boot"}},
 	}, Blobs: []dto.Blob{b}})
 	if err != nil {
 		t.Fatal(err)
@@ -78,19 +80,19 @@ func noBundleChats() map[string][]string {
 	return map[string][]string{
 		"/": {
 			"Needs you", "Power-cycle dut1?", `action="/api/messages"`, `name="choice" value="done"`, `name="reply_to" value="` + q + `"`,
-			`name="next" value="/"`, `href="/c/dut1"`, `href="/dm/codex-build"`, `href="/drop"`, `href="/?all=1"`, `href="/?archived=1"`,
+			`name="next" value="/"`, `href="/c/lab/dut1"`, `href="/dm/codex-build"`, `href="/drop"`, `href="/?all=1"`, `href="/?archived=1"`,
 			"Build 812 is green.",
 		},
-		"/c/dut1": {
+		"/c/lab/dut1": {
 			"image v42 ready", "<code>dwc3</code>", `<a href="https://git.example.com/k/4a1f" rel="noopener noreferrer" target="_blank">`,
-			`<form class="composer"`, `enctype="multipart/form-data"`, `name="files[]"`, `capture="environment"`, `name="chat" value="chan:dut1"`,
-			`class="event-row"`, "codex-build: flashed linux-6.18-rc3", `href="/c/dut1?view=logs"`, `href="/c/dut1?f=questions"`,
-			`href="/blob/` + seeded.sha + `"`, `href="/live?from_seq=1&amp;streams=serial%3Adut1&amp;to_seq=2"`, "Power-cycle dut1?",
-			`href="/live?streams=serial%3Adut1"`, "1 question waiting for you",
+			`<form class="composer"`, `enctype="multipart/form-data"`, `name="files[]"`, `capture="environment"`, `name="chat" value="chan:lab/dut1"`,
+			`class="event-row"`, "codex-build: flashed linux-6.18-rc3", `href="/c/lab/dut1?view=logs"`, `href="/c/lab/dut1?f=questions"`,
+			`href="/blob/` + seeded.sha + `"`, `href="/live?from_seq=1&amp;streams=serial%3Alab%2Fdut1&amp;to_seq=2"`, "Power-cycle dut1?",
+			`href="/live?streams=serial%3Alab%2Fdut1"`, "1 question waiting for you",
 		},
-		"/c/dut1?view=logs": {`data-view="logs"`, "U-Boot 2024.04", `class="marker"`, `action="/c/dut1"`},
-		"/dm/codex-build":   {"Build 812 is green.", `name="chat" value="dm:codex-build"`},
-		"/drop":             {`<select name="chat"`, `<option value="chan:dut1">#dut1</option>`, `action="/api/messages"`, `name="back" value="/drop"`},
+		"/c/lab/dut1?view=logs": {`data-view="logs"`, "U-Boot 2024.04", `class="marker"`, `action="/c/lab/dut1"`},
+		"/dm/codex-build":       {"Build 812 is green.", `name="chat" value="dm:codex-build"`},
+		"/drop":                 {`<select name="chat"`, `<option value="chan:lab/dut1">#dut1</option>`, `action="/api/messages"`, `name="back" value="/drop"`},
 	}
 }
 
@@ -99,7 +101,7 @@ func TestANoScriptRenderAcksWhatItShows(t *testing.T) {
 	seed(e)
 	cookie := e.Admin()
 	unread := func() int {
-		ch, err := e.svc.Channel(context.Background(), "dut1")
+		ch, err := e.svc.Channel(context.Background(), adminP, "dut1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -112,7 +114,7 @@ func TestANoScriptRenderAcksWhatItShows(t *testing.T) {
 	if n := unread(); n != 2 {
 		t.Fatalf("unread before = %d", n)
 	}
-	body := e.Do("GET", "/c/dut1", cookie, nil).Body.String()
+	body := e.Do("GET", "/c/lab/dut1", cookie, nil).Body.String()
 	if !assets.BundleBuilt() {
 		if n := unread(); n != 0 {
 			t.Errorf("unread after a no-bundle render = %d", n)
@@ -143,7 +145,7 @@ func TestHomeAnswersAQuestionWithThePlainForm(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	seed(e)
 	cookie := e.Admin()
-	form := url.Values{"chat": {"chan:dut1"}, "reply_to": {fmt.Sprint(seeded.question)}, "choice": {"done"}, "next": {"/"}, "back": {"/"}}
+	form := url.Values{"chat": {"chan:lab/dut1"}, "reply_to": {fmt.Sprint(seeded.question)}, "choice": {"done"}, "next": {"/"}, "back": {"/"}}
 	rec := e.Do("POST", "/api/messages", cookie, form, "Sec-Fetch-Site", "same-origin")
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
 		t.Fatalf("answer: %d %s %s", rec.Code, rec.Header().Get("Location"), rec.Body)
@@ -158,7 +160,7 @@ func TestHomeAnswersAQuestionWithThePlainForm(t *testing.T) {
 	}
 	// A wrong choice comes back to home with a banner.
 	q2, _ := e.svc.AskHuman(context.Background(), agentClaude, "Flash again?", []string{"yes", "no"}, "dut1", 0, nil)
-	form = url.Values{"chat": {"chan:dut1"}, "reply_to": {fmt.Sprint(q2.Question.Seq)}, "choice": {"maybe"}, "next": {"/"}, "back": {"/"}}
+	form = url.Values{"chat": {"chan:lab/dut1"}, "reply_to": {fmt.Sprint(q2.Question.Seq)}, "choice": {"maybe"}, "next": {"/"}, "back": {"/"}}
 	rec = e.Do("POST", "/api/messages", cookie, form, "Sec-Fetch-Site", "same-origin")
 	if loc := rec.Header().Get("Location"); loc != "/?error=bad_request" {
 		t.Fatalf("bad choice: %s", loc)
@@ -212,7 +214,7 @@ func TestTheShareTargetStagesFilesForTheDropForm(t *testing.T) {
 		t.Errorf("someone else's staged photo: %d", rec.Code)
 	}
 	// Sending with staged= attaches the files.
-	rec = e.Do("POST", "/api/messages", cookie, url.Values{"chat": {"chan:dut1"}, "staged": {id}, "text": {"from the share"}}, "X-Cafard", "1", "Sec-Fetch-Site", "same-origin")
+	rec = e.Do("POST", "/api/messages", cookie, url.Values{"chat": {"chan:lab/dut1"}, "staged": {id}, "text": {"from the share"}}, "X-Cafard", "1", "Sec-Fetch-Site", "same-origin")
 	var sent dto.Entry
 	if err := json.Unmarshal(rec.Body.Bytes(), &sent); err != nil || rec.Code != http.StatusCreated || len(sent.Attachments) != 1 || sent.Attachments[0].Image.SHA256 != sh.Files[0].SHA256 {
 		t.Fatalf("send staged: %d %s", rec.Code, rec.Body)
@@ -238,7 +240,7 @@ func TestChatAPIListsPagesAndMarksRead(t *testing.T) {
 	for _, c := range list.Chats {
 		ids = append(ids, c.ID)
 	}
-	if strings.Join(ids, " ") != "chan:dut1 chan:general dm:codex-build" {
+	if strings.Join(ids, " ") != "chan:lab/dut1 chan:lab/general dm:codex-build" {
 		t.Errorf("chats = %v", ids)
 	}
 	if c := list.Chats[0]; c.Unread != 2 || c.OpenQuestions != 1 || len(c.Streams) != 1 || c.Preview == nil {
@@ -246,7 +248,7 @@ func TestChatAPIListsPagesAndMarksRead(t *testing.T) {
 	}
 
 	var page dto.Page[dto.Entry]
-	_ = json.Unmarshal(e.Do("GET", "/api/chats/chan:dut1/timeline", cookie, nil).Body.Bytes(), &page)
+	_ = json.Unmarshal(e.Do("GET", "/api/chats/chan:lab%2Fdut1/timeline", cookie, nil).Body.Bytes(), &page)
 	var kinds []string
 	for _, it := range page.Items {
 		k := string(it.Kind)
@@ -258,14 +260,14 @@ func TestChatAPIListsPagesAndMarksRead(t *testing.T) {
 	if strings.Join(kinds, " ") != "marker(event) marker message message" {
 		t.Errorf("timeline kinds = %v", kinds)
 	}
-	_ = json.Unmarshal(e.Do("GET", "/api/chats/chan:dut1/timeline?f=questions", cookie, nil).Body.Bytes(), &page)
+	_ = json.Unmarshal(e.Do("GET", "/api/chats/chan:lab%2Fdut1/timeline?f=questions", cookie, nil).Body.Bytes(), &page)
 	if len(page.Items) != 1 || page.Items[0].Question == nil {
 		t.Errorf("questions filter = %+v", page.Items)
 	}
-	if rec := e.Do("GET", "/api/chats/chan%3Adut1/timeline", cookie, nil); rec.Code != http.StatusOK {
+	if rec := e.Do("GET", "/api/chats/chan%3Alab%2Fdut1/timeline", cookie, nil); rec.Code != http.StatusOK {
 		t.Errorf("escaped chat id (as the bundle sends it): %d", rec.Code)
 	}
-	if rec := e.Do("GET", "/api/chats/chan:dut1/timeline?f=nope", cookie, nil); rec.Code != http.StatusBadRequest {
+	if rec := e.Do("GET", "/api/chats/chan:lab%2Fdut1/timeline?f=nope", cookie, nil); rec.Code != http.StatusBadRequest {
 		t.Errorf("bad filter: %d", rec.Code)
 	}
 	if rec := e.Do("GET", "/api/chats/dm:nobody~else/timeline", cookie, nil); rec.Code != http.StatusNotFound {
@@ -279,7 +281,7 @@ func TestChatAPIListsPagesAndMarksRead(t *testing.T) {
 	}
 
 	var acked dto.Acked
-	rec := e.Do("POST", "/api/chats/chan:dut1/read", cookie, fmt.Sprintf(`{"up_to_seq":%d}`, seeded.question), so...)
+	rec := e.Do("POST", "/api/chats/chan:lab%2Fdut1/read", cookie, fmt.Sprintf(`{"up_to_seq":%d}`, seeded.question), so...)
 	if err := json.Unmarshal(rec.Body.Bytes(), &acked); err != nil || acked.Acked != 2 {
 		t.Errorf("read: %d %s", rec.Code, rec.Body)
 	}
@@ -289,21 +291,21 @@ func TestChatAPIListsPagesAndMarksRead(t *testing.T) {
 	}
 
 	var chat dto.Chat
-	rec = e.Do("PUT", "/api/chats/chan:general/prefs", cookie, `{"pinned":true,"muted":true}`, so...)
+	rec = e.Do("PUT", "/api/chats/chan:lab%2Fgeneral/prefs", cookie, `{"pinned":true,"muted":true}`, so...)
 	if err := json.Unmarshal(rec.Body.Bytes(), &chat); err != nil || !chat.Pinned || !chat.Muted {
 		t.Errorf("prefs: %d %s", rec.Code, rec.Body)
 	}
 	_ = json.Unmarshal(e.Do("GET", "/api/chats", cookie, nil).Body.Bytes(), &list)
-	if list.Chats[0].ID != "chan:general" {
+	if list.Chats[0].ID != "chan:lab/general" {
 		t.Errorf("a pinned chat is not first: %s", list.Chats[0].ID)
 	}
-	rec = e.Do("PUT", "/api/chats/chan:general/prefs", cookie, `{"followed":false}`, so...)
+	rec = e.Do("PUT", "/api/chats/chan:lab%2Fgeneral/prefs", cookie, `{"followed":false}`, so...)
 	if err := json.Unmarshal(rec.Body.Bytes(), &chat); err != nil || chat.Followed {
 		t.Errorf("unfollow: %d %s", rec.Code, rec.Body)
 	}
 	_ = json.Unmarshal(e.Do("GET", "/api/chats", cookie, nil).Body.Bytes(), &list)
 	for _, c := range list.Chats {
-		if c.ID == "chan:general" {
+		if c.ID == "chan:lab/general" {
 			t.Error("an unfollowed channel is listed without all=1")
 		}
 	}
@@ -316,12 +318,12 @@ func TestChatAPIListsPagesAndMarksRead(t *testing.T) {
 	}
 
 	// Channels: create, bind, rename, delete with confirmation.
-	rec = e.Do("POST", "/api/channels", cookie, `{"name":"run-42","patterns":["serial:*"]}`, so...)
-	if err := json.Unmarshal(rec.Body.Bytes(), &chat); err != nil || rec.Code != http.StatusCreated || chat.ID != "chan:run-42" || !chat.CanManage {
+	rec = e.Do("POST", "/api/channels", cookie, `{"name":"run-42","patterns":["serial:lab/*"]}`, so...)
+	if err := json.Unmarshal(rec.Body.Bytes(), &chat); err != nil || rec.Code != http.StatusCreated || chat.ID != "chan:lab/run-42" || !chat.CanManage {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body)
 	}
 	rec = e.Do("PATCH", "/api/channels/run-42", cookie, `{"rename":"run-43","surface":"errors"}`, so...)
-	if err := json.Unmarshal(rec.Body.Bytes(), &chat); err != nil || chat.ID != "chan:run-43" || chat.Surface != dto.SurfaceErrors {
+	if err := json.Unmarshal(rec.Body.Bytes(), &chat); err != nil || chat.ID != "chan:lab/run-43" || chat.Surface != dto.SurfaceErrors {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body)
 	}
 	if rec := e.Do("DELETE", "/api/channels/run-43", cookie, nil, so...); rec.Code != http.StatusBadRequest {
@@ -332,7 +334,7 @@ func TestChatAPIListsPagesAndMarksRead(t *testing.T) {
 	}
 	for _, w := range []struct{ method, path string }{
 		{"POST", "/api/channels"}, {"PATCH", "/api/channels/dut1"}, {"DELETE", "/api/channels/dut1"},
-		{"PUT", "/api/chats/chan:dut1/prefs"}, {"POST", "/api/chats/chan:dut1/read"}, {"POST", "/api/acks"},
+		{"PUT", "/api/chats/chan:lab%2Fdut1/prefs"}, {"POST", "/api/chats/chan:lab%2Fdut1/read"}, {"POST", "/api/acks"},
 		{"POST", "/api/messages"}, {"POST", "/share"},
 	} {
 		if rec := e.Do(w.method, w.path, cookie, `{}`, "Sec-Fetch-Site", "cross-site"); rec.Code != http.StatusForbidden {
@@ -353,11 +355,11 @@ func TestChatPageHasAnOlderLinkAndFilters(t *testing.T) {
 		}
 	}
 	shown := func(page, text string) bool { return strings.Contains(page, `data-slot="body">`+text+`</div>`) }
-	body := e.Do("GET", "/c/dut1", cookie, nil).Body.String()
+	body := e.Do("GET", "/c/lab/dut1", cookie, nil).Body.String()
 	if !shown(body, "step 59") || shown(body, "step 05") {
 		t.Error("the page is not the latest 50")
 	}
-	m := regexp.MustCompile(`href="(/c/dut1\?before_seq=\d+)" data-slot="older"`).FindStringSubmatch(body)
+	m := regexp.MustCompile(`href="(/c/lab/dut1\?before_seq=\d+)" data-slot="older"`).FindStringSubmatch(body)
 	if m == nil {
 		t.Fatal("no Older link")
 	}
@@ -365,15 +367,15 @@ func TestChatPageHasAnOlderLinkAndFilters(t *testing.T) {
 	if !shown(older, "step 05") || shown(older, "step 59") || !strings.Contains(older, "Newest messages") {
 		t.Error("the Older page is wrong")
 	}
-	q := e.Do("GET", "/c/dut1?f=questions", cookie, nil).Body.String()
+	q := e.Do("GET", "/c/lab/dut1?f=questions", cookie, nil).Body.String()
 	if !shown(q, "Power-cycle dut1?") || shown(q, "step 59") {
 		t.Error("the questions filter is wrong")
 	}
-	img := e.Do("GET", "/c/dut1?f=images", cookie, nil).Body.String()
+	img := e.Do("GET", "/c/lab/dut1?f=images", cookie, nil).Body.String()
 	if !strings.Contains(img, "image v42 ready") || shown(img, "step 59") {
 		t.Error("the images filter is wrong")
 	}
-	if rec := e.Do("GET", "/c/nope", cookie, nil); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Existing channels") {
+	if rec := e.Do("GET", "/c/lab/nope", cookie, nil); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Channels you can read") {
 		t.Errorf("unknown channel: %d", rec.Code)
 	}
 	if rec := e.Do("GET", "/dm/admin", cookie, nil); rec.Code != http.StatusNotFound {
@@ -389,7 +391,7 @@ func TestChatPagesEscapeHostileMessages(t *testing.T) {
 		Text: "<script>alert(1)</script> [x](javascript:alert(2)) javascript:alert(3) \x1b]0;owned\x07", Channel: "dut1"}}); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/", "/c/dut1"} {
+	for _, path := range []string{"/", "/c/lab/dut1"} {
 		body := e.Do("GET", path, cookie, nil).Body.String()
 		for _, bad := range []string{"<script>alert", `href="javascript:`, "\x1b"} {
 			if strings.Contains(body, bad) {
@@ -397,8 +399,8 @@ func TestChatPagesEscapeHostileMessages(t *testing.T) {
 			}
 		}
 	}
-	e.Commit(store.Entry{Stream: "serial:dut1", Kind: store.KindMarker, Severity: 6, Text: "<img src=x onerror=alert(4)>"})
-	if body := e.Do("GET", "/c/dut1", cookie, nil).Body.String(); strings.Contains(body, "<img src=x") {
+	e.Commit(store.Entry{Stream: "serial:lab/dut1", Kind: store.KindMarker, Severity: 6, Text: "<img src=x onerror=alert(4)>"})
+	if body := e.Do("GET", "/c/lab/dut1", cookie, nil).Body.String(); strings.Contains(body, "<img src=x") {
 		t.Error("a hostile marker reached the page")
 	}
 }

@@ -40,7 +40,7 @@ func (s *Service) SetFollow(ctx context.Context, p auth.Principal, channel strin
 	if err := needMessage(p); err != nil {
 		return FollowState{}, err
 	}
-	ch, err := s.Channel(ctx, channel)
+	ch, err := s.Channel(ctx, p, channel)
 	if err != nil {
 		return FollowState{}, err
 	}
@@ -123,15 +123,19 @@ func (s *Service) ChannelChat(ctx context.Context, p auth.Principal, ch Channel)
 		}
 		refs = append(refs, dto.StreamRef{ID: id, Status: st})
 	}
+	a := s.access(ctx, p)
 	c := dto.Chat{
-		ID: ch.Stream(), Kind: dto.ChatChannel, Name: ch.Name, Title: ch.Title, Topic: ch.Topic,
+		ID: ch.Stream(), Kind: dto.ChatChannel, Project: ch.Project(), Name: ch.Local(), Title: ch.Title, Topic: ch.Topic,
 		Patterns: ch.Patterns, Streams: refs, Surface: ch.Surface,
 		Followed: fs.Followed, Pinned: fs.Pinned, Muted: fs.Muted, Archived: ch.Archived(),
-		Source: ch.Source, CreatedBy: ch.CreatedBy, CanManage: ch.CanManage(p),
+		Source: ch.Source, CreatedBy: ch.CreatedBy, CanManage: ch.CanManage(p, a),
 		LastActivity: dto.TimePtr(ch.LastActivity),
 	}
 	if ch.CreatedBy == systemName {
 		c.CreatedBy = ""
+	}
+	if pr, err := s.projects.Project(ctx, ch.Project()); err == nil {
+		c.ProjectTitle = pr.Title
 	}
 	if err := s.fillCounts(ctx, p, ch.Stream(), &c); err != nil {
 		return dto.Chat{}, err

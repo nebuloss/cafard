@@ -22,7 +22,7 @@ func TestToneIsStable(t *testing.T) {
 
 func TestEntryKeepsSeverityAndSender(t *testing.T) {
 	at := time.Date(2026, 11, 16, 9, 41, 2, 0, time.UTC)
-	e := Entry(context.Background(), store.Entry{Seq: 3, TS: at, Stream: "serial:dut1", Kind: store.KindMarker, Severity: 0, Text: "x", Sender: "codex"}, nil)
+	e := Entry(context.Background(), store.Entry{Seq: 3, TS: at, Stream: "serial:lab/dut1", Kind: store.KindMarker, Severity: 0, Text: "x", Sender: "codex"}, nil)
 	if e.Severity != 0 || e.Sender == nil || e.Sender.Name != "codex" || e.Sender.Kind != dto.KindAgent || e.Kind != dto.EntryMarker {
 		t.Errorf("entry = %+v", e)
 	}

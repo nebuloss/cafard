@@ -53,6 +53,8 @@ export interface LogAttachment {
   readonly last_ts?: string;
   readonly snapshot: boolean;
   readonly expired: boolean;
+  /** The viewer may not read every stream: no lines are shown. */
+  readonly hidden?: boolean;
   readonly preview: readonly Entry[];
 }
 
@@ -115,6 +117,8 @@ export interface Stream {
   readonly kind: string;
   readonly transport: string;
   readonly labels: Readonly<Record<string, string>>;
+  readonly project?: string;
+  readonly sink?: string;
   readonly status: StreamState;
   readonly last_seq: number;
   readonly last_activity?: string;
@@ -178,6 +182,7 @@ export interface Pairing {
   readonly expires_at: string;
   readonly principal?: string;
   readonly new_name?: string;
+  readonly grants?: readonly string[];
 }
 
 export interface Page<T> {
@@ -234,6 +239,9 @@ export interface ChatPreview {
 export interface Chat {
   readonly id: string;
   readonly kind: 'channel' | 'direct';
+  /** Channels only: the project, and its title. */
+  readonly project?: string;
+  readonly project_title?: string;
   readonly name: string;
   readonly title?: string;
   readonly topic?: string;
@@ -290,6 +298,7 @@ export interface ChatPrefs {
 
 export interface ChannelCreate {
   readonly name: string;
+  readonly project?: string;
   readonly title?: string;
   readonly topic?: string;
   readonly patterns?: readonly string[];
@@ -315,4 +324,21 @@ export interface LogRequest {
   readonly grep?: string;
   readonly min_severity?: number;
   readonly title?: string;
+}
+
+export interface ProjectRetention {
+  readonly lines_max_age_s: number;
+  readonly lines_max_bytes: number;
+  readonly messages_max_age_s: number;
+  readonly blobs_max_bytes: number;
+}
+
+export interface Project {
+  readonly name: string;
+  readonly title?: string;
+  readonly created_at: string;
+  readonly scopes: readonly Scope[];
+  readonly channels: readonly string[];
+  readonly sinks: readonly string[];
+  readonly retention: ProjectRetention;
 }

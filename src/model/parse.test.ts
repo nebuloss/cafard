@@ -15,6 +15,7 @@ import {
   parseMe,
   parsePairing,
   parsePrincipal,
+  parseProject,
   parseReset,
   parseSession,
   parseStream,
@@ -49,6 +50,7 @@ const parsers: Record<string, (raw: unknown) => unknown> = {
   seen: parseSeen,
   answered: parseAnswered,
   acked: parseAcked,
+  project: (raw) => parseProject(raw),
 };
 
 // Fixtures the bundle never reads: request bodies, and what only programs

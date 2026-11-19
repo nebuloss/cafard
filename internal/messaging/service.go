@@ -54,7 +54,7 @@ type Service struct {
 	hub      hub.Hub
 	status   statusSnapshot
 	tokens   *auth.Tokens
-	projects *projects.Service // nil in tests without projects
+	projects *projects.Service
 	blobs    *blob.Store
 	clock    clock.Clock
 	log      *slog.Logger
@@ -87,6 +87,9 @@ func New(ctx context.Context, d deps.Deps, o Options) (*Service, error) {
 	if !ok {
 		return nil, errors.New("messaging: the writer cannot run transactions")
 	}
+	if d.Projects == nil {
+		return nil, errors.New("messaging: channels live in projects, and there is no projects service")
+	}
 	blobs, err := blob.New(d.Store, d.Server.DataDir, o.Images, d.Clock, d.Log.With("component", "blobs"))
 	if err != nil {
 		return nil, err
@@ -102,9 +105,11 @@ func New(ctx context.Context, d deps.Deps, o Options) (*Service, error) {
 		s.status = d.Status
 	}
 	blobs.SetVisible(s.Visible)
+	blobs.SetSnapshotVisible(s.CanReadAttachment)
 	if m, ok := d.Hub.(interface{ SetVisible(hub.VisibleFunc) }); ok {
 		m.SetVisible(func(p auth.Principal, e store.Entry) bool { return s.Visible(context.Background(), p, e) })
 	}
+	d.Projects.OnCreate(s.ensureGeneral)
 	if err := s.applyConfigChannels(ctx); err != nil {
 		return nil, fmt.Errorf("channels: %w", err)
 	}
@@ -129,11 +134,7 @@ func (s *Service) JanitorTasks() []store.Task {
 		{Name: "expired claims", Run: func(ctx context.Context) error { _, err := s.ExpireClaims(ctx); return err }},
 		{Name: "follows of deleted chats", Run: s.deleteOrphanFollows},
 	}
-	var limits store.ProjectLimits
-	if s.projects != nil {
-		limits = s.projects.Limits
-	}
-	return append(tasks, s.blobs.Tasks(s.opts.BlobsMaxBytes, limits)...)
+	return append(tasks, s.blobs.Tasks(s.opts.BlobsMaxBytes, s.projects.Limits)...)
 }
 
 // Start runs the auto-archive loop and the resource notifications until
@@ -217,20 +218,23 @@ func DMParties(stream string) (a, b string, ok bool) {
 	return a, b, ok && a != "" && b != ""
 }
 
-// Visible reports whether p may see e. Log entries are visible to
-// everyone; a channel to every reader; a direct conversation to its two
-// parties only, admins included.
-func (s *Service) Visible(_ context.Context, p auth.Principal, e store.Entry) bool {
-	if !store.IsMessageStream(e.Stream) {
-		return true
-	}
+// access is what p may reach in the projects.
+func (s *Service) access(ctx context.Context, p auth.Principal) *projects.Access {
+	return s.projects.Access(ctx, p)
+}
+
+// Visible reports whether p may see e: a direct conversation is for its
+// two parties only, the admin included; anything else needs read on its
+// stream, through a grant on its project or on a channel (PLAN section 4,
+// "Projects, sinks and grants").
+func (s *Service) Visible(ctx context.Context, p auth.Principal, e store.Entry) bool {
 	if a, b, ok := DMParties(e.Stream); ok {
 		return p.Name != "" && (p.Name == a || p.Name == b)
 	}
 	if strings.HasPrefix(e.Stream, "dm:") {
 		return false
 	}
-	return p.Has(auth.ScopeRead)
+	return s.access(ctx, p).Can(e.Stream, auth.ScopeRead)
 }
 
 // ChatOf is the chat a message stream entry belongs to.

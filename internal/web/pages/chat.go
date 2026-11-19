@@ -32,7 +32,7 @@ const (
 )
 
 func (s *Site) mountChats(mux *http.ServeMux) {
-	mux.HandleFunc("GET /c/{name}", s.Auth(auth.ScopeRead, s.channelPage))
+	mux.HandleFunc("GET /c/{project}/{name}", s.Auth(auth.ScopeRead, s.channelPage))
 	mux.HandleFunc("GET /dm/{peer}", s.Auth(auth.ScopeRead, s.directPage))
 	mux.HandleFunc("GET /drop", s.Auth(auth.ScopeMessage, s.drop))
 	mux.Handle("POST /share", s.Write(auth.ScopeMessage, s.share))
@@ -135,7 +135,7 @@ var surfaceLabels = []sevOption{
 
 func (s *Site) channelPage(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	ctx := r.Context()
-	ch, err := s.chats.svc.Channel(ctx, r.PathValue("name"))
+	ch, err := s.chats.svc.Channel(ctx, p, r.PathValue("project")+"/"+r.PathValue("name"))
 	var apiErr *dto.APIError
 	if errors.As(err, &apiErr) {
 		s.Fail(w, r, &p, http.StatusNotFound, "No such channel", apiErr.Message)
@@ -235,7 +235,7 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	}
 	data.Banner = banner(data.List.NeedsYou.Questions, chat.ID, data.Items, base)
 	if bound {
-		data.Logs = s.logsPane(ctx, r, ch, base, data.View == "logs")
+		data.Logs = s.logsPane(ctx, r, p, ch, base, data.View == "logs")
 	}
 	if !p.Has(auth.ScopeMessage) {
 		data.Composer.CanSend = false
@@ -322,7 +322,7 @@ func banner(qs []QuestionView, chat string, items []TimelineItem, base string) *
 	return b
 }
 
-func (s *Site) logsPane(ctx context.Context, r *http.Request, ch *messaging.Channel, base string, full bool) *LogsPaneView {
+func (s *Site) logsPane(ctx context.Context, r *http.Request, p auth.Principal, ch *messaging.Channel, base string, full bool) *LogsPaneView {
 	q := r.URL.Query()
 	pane := &LogsPaneView{Action: base, Re: q.Get("re"), Streams: ch.Patterns}
 	f, apiErr := view.ParseLogFilter(url.Values{"channel": {ch.Name}, "sev": {q.Get("sev")}, "re": {q.Get("re")}})
@@ -336,12 +336,12 @@ func (s *Site) logsPane(ctx context.Context, r *http.Request, ch *messaging.Chan
 		limit = viewLines
 	}
 	pane.Query = f.URL()
-	patterns, apiErr := f.Patterns(ctx, s.d)
+	patterns, apiErr := f.Patterns(ctx, s.d, p)
 	if apiErr != nil {
 		pane.Error = apiErr.Message
 		return pane
 	}
-	ids, err := view.StreamIDs(ctx, s.d.Store, patterns)
+	ids, err := view.StreamIDs(ctx, s.d.Store, s.d.Projects.Access(ctx, p), patterns)
 	if err != nil {
 		pane.Error = "The lines could not be read."
 		return pane

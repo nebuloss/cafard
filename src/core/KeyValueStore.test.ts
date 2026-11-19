@@ -11,8 +11,8 @@ describe.each([
   it('round-trips a value', () => {
     const store = make();
     expect(store.get(lastChat)).toBeNull();
-    store.set(lastChat, 'chan:dut1');
-    expect(store.get(lastChat)).toBe('chan:dut1');
+    store.set(lastChat, 'chan:lab/dut1');
+    expect(store.get(lastChat)).toBe('chan:lab/dut1');
   });
 
   it('returns null for a value of the wrong type', () => {

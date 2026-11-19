@@ -143,7 +143,13 @@ func lookupPrincipal(ctx context.Context, db *sql.DB, name string) (PrincipalRow
 }
 
 // principalKind is a principal's kind, or sql.ErrNoRows.
-func principalKind(ctx context.Context, db *sql.DB, name string) (string, error) {
+// execQuerier is a *sql.DB or a *sql.Tx.
+type execQuerier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func principalKind(ctx context.Context, db execQuerier, name string) (string, error) {
 	var kind string
 	err := db.QueryRowContext(ctx, `SELECT kind FROM principals WHERE name = ?`, name).Scan(&kind)
 	return kind, err

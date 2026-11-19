@@ -1,14 +1,14 @@
 {
   "seq": 48395,
   "ts": "2026-11-16T09:42:30.551209874Z",
-  "stream": "chan:dut1",
+  "stream": "chan:lab/dut1",
   "kind": "message",
   "severity": 6,
   "text": "The new kernel boots but `dwc3` fails to init, see the log. Photo of the board attached. Patch at https://git.example.com/kernel/commit/4a1f",
   "meta": {
     "client": "claude-code"
   },
-  "chat": "chan:dut1",
+  "chat": "chan:lab/dut1",
   "sender": {
     "name": "claude-laptop",
     "kind": "agent"
@@ -47,9 +47,9 @@
     },
     {
       "type": "log",
-      "stream": "serial:dut1",
+      "stream": "serial:lab/dut1",
       "streams": [
-        "serial:dut1"
+        "serial:lab/dut1"
       ],
       "from_seq": 48211,
       "to_seq": 48390,
@@ -63,7 +63,7 @@
         {
           "seq": 48211,
           "ts": "2026-11-16T09:41:02.118734502Z",
-          "stream": "serial:dut1",
+          "stream": "serial:lab/dut1",
           "kind": "line",
           "severity": 6,
           "host": "bench-pi",
@@ -72,7 +72,7 @@
         {
           "seq": 48212,
           "ts": "2026-11-16T09:41:02.240117893Z",
-          "stream": "serial:dut1",
+          "stream": "serial:lab/dut1",
           "kind": "line",
           "severity": 6,
           "host": "bench-pi",
@@ -81,7 +81,7 @@
         {
           "seq": 48213,
           "ts": "2026-11-16T09:41:02.512904417Z",
-          "stream": "serial:dut1",
+          "stream": "serial:lab/dut1",
           "kind": "line",
           "severity": 3,
           "host": "bench-pi",

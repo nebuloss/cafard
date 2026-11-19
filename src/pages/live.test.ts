@@ -66,12 +66,12 @@ describe('LivePage', () => {
     const sheet = document.querySelector<HTMLDialogElement>('[data-component="QuickDropSheet"]');
     expect(sheet?.open).toBe(true);
     const chip = sheet?.querySelector('[data-slot="tray"] [data-kind="log"]');
-    expect(chip?.textContent).toContain('serial:dut1');
+    expect(chip?.textContent).toContain('serial:lab/dut1');
     sheet?.querySelector<HTMLFormElement>('form.drop-form')?.requestSubmit();
     await flush();
     const seq = Number(first?.dataset['seq']);
-    expect(uploads.sent[0]?.chat).toBe('chan:dut1');
-    expect(uploads.sent[0]?.logs).toEqual([{ stream: 'serial:dut1', from_seq: seq, to_seq: seq }]);
+    expect(uploads.sent[0]?.chat).toBe('chan:lab/dut1');
+    expect(uploads.sent[0]?.logs).toEqual([{ stream: 'serial:lab/dut1', from_seq: seq, to_seq: seq }]);
   });
 
   it('selects a range with click then shift-click, and with a long press on a phone', () => {

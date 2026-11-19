@@ -40,20 +40,20 @@ func info(int) int { return 6 }
 func TestLogAttachmentValidation(t *testing.T) {
 	e := newEnv(t)
 	a := e.agent("agent-a")
-	first, last := e.lines("serial:dut1", 10, info)
+	first, last := e.lines("serial:lab/dut1", 10, info)
 	cases := []struct {
 		name string
 		r    dto.LogRequest
 		code string
 	}{
 		{"neither", dto.LogRequest{FromSeq: first}, dto.CodeBadRequest},
-		{"both", dto.LogRequest{Stream: "serial:dut1", Channel: "general", FromSeq: first}, dto.CodeBadRequest},
-		{"zero from", logReq("serial:dut1", 0, nil), dto.CodeBadRequest},
-		{"reversed", logReq("serial:dut1", last, ptr(first)), dto.CodeBadRequest},
-		{"missing stream", logReq("serial:nope", first, nil), dto.CodeNotFound},
-		{"message stream", logReq("chan:general", first, nil), dto.CodeBadRequest},
-		{"bad grep", dto.LogRequest{Stream: "serial:dut1", FromSeq: first, Grep: "("}, dto.CodeInvalidPattern},
-		{"bad severity", dto.LogRequest{Stream: "serial:dut1", FromSeq: first, MinSeverity: ptr(9)}, dto.CodeBadRequest},
+		{"both", dto.LogRequest{Stream: "serial:lab/dut1", Channel: "general", FromSeq: first}, dto.CodeBadRequest},
+		{"zero from", logReq("serial:lab/dut1", 0, nil), dto.CodeBadRequest},
+		{"reversed", logReq("serial:lab/dut1", last, ptr(first)), dto.CodeBadRequest},
+		{"missing stream", logReq("serial:lab/nope", first, nil), dto.CodeNotFound},
+		{"message stream", logReq("chan:lab/general", first, nil), dto.CodeBadRequest},
+		{"bad grep", dto.LogRequest{Stream: "serial:lab/dut1", FromSeq: first, Grep: "("}, dto.CodeInvalidPattern},
+		{"bad severity", dto.LogRequest{Stream: "serial:lab/dut1", FromSeq: first, MinSeverity: ptr(9)}, dto.CodeBadRequest},
 		{"unknown channel", dto.LogRequest{Channel: "nope", FromSeq: first}, dto.CodeUnknownChannel},
 		{"unbound channel", dto.LogRequest{Channel: "general", FromSeq: first}, dto.CodeBadRequest},
 	}
@@ -65,7 +65,7 @@ func TestLogAttachmentValidation(t *testing.T) {
 	}
 	six := make([]dto.LogRequest, 6)
 	for i := range six {
-		six[i] = logReq("serial:dut1", first, nil)
+		six[i] = logReq("serial:lab/dut1", first, nil)
 	}
 	if _, err := e.svc.SendMessage(e.ctx, a, SendInput{SendRequest: dto.SendRequest{Text: "x", Logs: six}}); code(err) != dto.CodeBadRequest {
 		t.Errorf("6 attachments: %v", err)
@@ -77,12 +77,12 @@ func TestLogAttachmentRangeLimit(t *testing.T) {
 	MaxRangeLines = 3000
 	e := newEnv(t)
 	a := e.agent("agent-a")
-	first, _ := e.lines("serial:big", MaxRangeLines+1, info)
-	if _, err := e.svc.SendMessage(e.ctx, a, SendInput{SendRequest: dto.SendRequest{Text: "x", Logs: []dto.LogRequest{logReq("serial:big", first, nil)}}}); code(err) != dto.CodeTooLarge {
+	first, _ := e.lines("serial:lab/big", MaxRangeLines+1, info)
+	if _, err := e.svc.SendMessage(e.ctx, a, SendInput{SendRequest: dto.SendRequest{Text: "x", Logs: []dto.LogRequest{logReq("serial:lab/big", first, nil)}}}); code(err) != dto.CodeTooLarge {
 		t.Errorf("one line over the limit: %v", err)
 	}
 	if _, err := e.svc.SendMessage(e.ctx, a, SendInput{SendRequest: dto.SendRequest{Text: "x", Logs: []dto.LogRequest{
-		{Stream: "serial:big", FromSeq: first, Grep: "^line 1$"}}}}); err != nil {
+		{Stream: "serial:lab/big", FromSeq: first, Grep: "^line 1$"}}}}); err != nil {
 		t.Errorf("grep narrows the range: %v", err)
 	}
 }
@@ -90,15 +90,15 @@ func TestLogAttachmentRangeLimit(t *testing.T) {
 func TestLogAttachmentSnapshotThresholdAndExpiry(t *testing.T) {
 	e := newEnv(t)
 	a, b := e.agent("agent-a"), e.agent("agent-b")
-	f73, l73 := e.lines("serial:dut1", 73, info)
-	fbig, lbig := e.lines("serial:dut1", SnapshotMaxLines+1, info)
+	f73, l73 := e.lines("serial:lab/dut1", 73, info)
+	fbig, lbig := e.lines("serial:lab/dut1", SnapshotMaxLines+1, info)
 	m := e.send(a, SendInput{SendRequest: dto.SendRequest{Text: "look", To: "agent-b", Logs: []dto.LogRequest{
-		logReq("serial:dut1", f73, ptr(l73)),
-		logReq("serial:dut1", fbig, ptr(lbig)),
-		logReq("serial:dut1", f73, nil),
+		logReq("serial:lab/dut1", f73, ptr(l73)),
+		logReq("serial:lab/dut1", fbig, ptr(lbig)),
+		logReq("serial:lab/dut1", f73, nil),
 	}}})
 	small, big, open := m.Attachments[0], m.Attachments[1], m.Attachments[2]
-	if small.Lines != 73 || small.SnapshotSHA256 == "" || !slices.Equal(small.Streams, []string{"serial:dut1"}) || small.FirstTS == 0 {
+	if small.Lines != 73 || small.SnapshotSHA256 == "" || !slices.Equal(small.Streams, []string{"serial:lab/dut1"}) || small.FirstTS == 0 {
 		t.Errorf("small = %+v", small)
 	}
 	if big.Lines != SnapshotMaxLines+1 || big.SnapshotSHA256 != "" {
@@ -119,10 +119,10 @@ func TestLogAttachmentSnapshotThresholdAndExpiry(t *testing.T) {
 	// A big snapshot by bytes: few lines but over 256 KiB.
 	long := make([]store.Entry, 200)
 	for i := range long {
-		long[i] = store.Entry{Stream: "serial:wide", Text: fmt.Sprintf("%d %s", i, strings.Repeat("x", 1900)), Severity: 6}
+		long[i] = store.Entry{Stream: "serial:lab/wide", Text: fmt.Sprintf("%d %s", i, strings.Repeat("x", 1900)), Severity: 6}
 	}
 	lw, _ := e.w.CommitBatch(e.ctx, long)
-	wide := e.send(a, SendInput{SendRequest: dto.SendRequest{Text: "wide", Logs: []dto.LogRequest{logReq("serial:wide", lw-199, ptr(lw))}}})
+	wide := e.send(a, SendInput{SendRequest: dto.SendRequest{Text: "wide", Logs: []dto.LogRequest{logReq("serial:lab/wide", lw-199, ptr(lw))}}})
 	if wide.Attachments[0].SnapshotSHA256 != "" {
 		t.Error("a 380 KB range was snapshotted")
 	}
@@ -133,7 +133,7 @@ func TestLogAttachmentSnapshotThresholdAndExpiry(t *testing.T) {
 	if err := e.jan.Pass(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	if res, _ := e.st.Read(e.ctx, store.Query{Streams: []string{"serial:dut1"}}); len(res.Entries) != 0 {
+	if res, _ := e.st.Read(e.ctx, store.Query{Streams: []string{"serial:lab/dut1"}}); len(res.Entries) != 0 {
 		t.Fatalf("retention left %d lines", len(res.Entries))
 	}
 	page, _, err := e.svc.AttachmentLines(e.ctx, b, m.Seq, 0, 0, 1000)
@@ -187,24 +187,24 @@ func TestLogAttachmentChannelFormGrepAndSeverity(t *testing.T) {
 		}
 		return 6
 	}
-	first, last := e.lines("serial:dut1", 50, sev)
-	e.lines("netconsole:dut1", 5, info)
-	if _, err := e.svc.CreateChannel(e.ctx, a, dto.ChannelCreate{Name: "dut1", Patterns: []string{"serial:dut1"}}); err != nil {
+	first, last := e.lines("serial:lab/dut1", 50, sev)
+	e.lines("netconsole:lab/dut1", 5, info)
+	if _, err := e.svc.CreateChannel(e.ctx, a, dto.ChannelCreate{Name: "dut1", Patterns: []string{"serial:lab/dut1"}}); err != nil {
 		t.Fatal(err)
 	}
 	m := e.send(a, SendInput{SendRequest: dto.SendRequest{Text: "errors", Logs: []dto.LogRequest{
 		{Channel: "dut1", FromSeq: first, ToSeq: ptr(last + 5), MinSeverity: ptr(3), Grep: "line [0-9]1$", Title: "errs"},
 	}}})
 	att := m.Attachments[0]
-	if att.Channel != "dut1" || !slices.Equal(att.Streams, []string{"serial:dut1"}) || att.Lines != 4 || att.Grep == "" || *att.MinSeverity != 3 {
+	if att.Channel != "lab/dut1" || !slices.Equal(att.Streams, []string{"serial:lab/dut1"}) || att.Lines != 4 || att.Grep == "" || *att.MinSeverity != 3 {
 		t.Fatalf("attachment = %+v", att)
 	}
 	// A later binding change does not alter what was attached.
-	if _, err := e.svc.UpdateChannel(e.ctx, a, "dut1", dto.ChannelUpdate{AddPatterns: []string{"netconsole:dut1"}}); err != nil {
+	if _, err := e.svc.UpdateChannel(e.ctx, a, "dut1", dto.ChannelUpdate{AddPatterns: []string{"netconsole:lab/dut1"}}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := e.st.Get(e.ctx, m.Seq)
-	if !slices.Equal(got.Attachments[0].Streams, []string{"serial:dut1"}) {
+	if !slices.Equal(got.Attachments[0].Streams, []string{"serial:lab/dut1"}) {
 		t.Errorf("streams changed: %v", got.Attachments[0].Streams)
 	}
 	page, _, err := e.svc.AttachmentLines(e.ctx, a, m.Seq, 0, 0, 100)
@@ -233,13 +233,13 @@ func TestLogAttachmentChannelFormGrepAndSeverity(t *testing.T) {
 func TestOpenEndedAttachmentContinuesLive(t *testing.T) {
 	e := newEnv(t)
 	a, b := e.agent("agent-a"), e.agent("agent-b")
-	first, _ := e.lines("serial:dut1", 3, info)
-	m := e.send(a, SendInput{SendRequest: dto.SendRequest{Text: "watch this", To: "agent-b", Logs: []dto.LogRequest{logReq("serial:dut1", first, nil)}}})
+	first, _ := e.lines("serial:lab/dut1", 3, info)
+	m := e.send(a, SendInput{SendRequest: dto.SendRequest{Text: "watch this", To: "agent-b", Logs: []dto.LogRequest{logReq("serial:lab/dut1", first, nil)}}})
 	text, out, err := e.svc.toolGetLog(e.ctx, call(b), getLogIn{Seq: m.Seq})
 	if err != nil || out.Shown != 3 || out.HasMore {
 		t.Fatalf("first page = %q %+v %v", text, out, err)
 	}
-	e.lines("serial:dut1", 2, info)
+	e.lines("serial:lab/dut1", 2, info)
 	text, out2, err := e.svc.toolGetLog(e.ctx, call(b), getLogIn{Seq: m.Seq, SinceSeq: out.NextSeq})
 	if err != nil || out2.Shown != 2 || !strings.Contains(text, "line 2") {
 		t.Errorf("continued = %q %+v %v", text, out2, err)

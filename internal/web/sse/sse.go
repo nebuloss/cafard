@@ -60,7 +60,7 @@ func (h *Handler) selection(ctx context.Context, r *http.Request, p auth.Princip
 		if h.d.Messaging == nil {
 			return nil, nil
 		}
-		f := messageFilter(&p)
+		f := h.messageFilter(ctx, &p)
 		return &f, nil
 	case "", "live":
 	default:
@@ -70,9 +70,13 @@ func (h *Handler) selection(ctx context.Context, r *http.Request, p auth.Princip
 	if apiErr != nil {
 		return nil, apiErr
 	}
-	patterns, apiErr := f.Patterns(ctx, h.d)
+	patterns, apiErr := f.Patterns(ctx, h.d, p)
 	if apiErr != nil {
 		return nil, apiErr
+	}
+	a := h.d.Projects.Access(ctx, p)
+	if patterns == nil && !a.All() {
+		patterns = a.LogPatterns()
 	}
 	filter := &hub.Filter{Streams: patterns, Kinds: slices.Clone(f.Kinds), MinSeverity: 7, Pattern: f.Re, Viewer: &p}
 	if f.MinSev != nil {
@@ -80,12 +84,15 @@ func (h *Handler) selection(ctx context.Context, r *http.Request, p auth.Princip
 	}
 	if f.Messages && h.d.Messaging != nil {
 		if filter.Streams == nil {
-			// Every log stream is "*" once message globs join the list.
-			// Ids with a "/" in their name are missed by "*"; none of
-			// cafard's sources make such ids.
-			filter.Streams = []string{"*"}
+			// The admin's every log stream, once message globs join the
+			// list: those of projects, and any without one.
+			filter.Streams = []string{"*:*/*", "*"}
 		}
-		filter.Streams = append(filter.Streams, view.MessagePatterns(f)...)
+		msgs, err := view.MessagePatterns(ctx, h.d, p, f)
+		if err != nil {
+			return nil, dto.Errorf(dto.CodeUnknownChannel, "There is no channel %q you can read.", f.Channel)
+		}
+		filter.Streams = append(filter.Streams, msgs...)
 		filter.Kinds = append(filter.Kinds, store.KindMessage)
 	}
 	if filter.Streams != nil && len(filter.Streams) == 0 {
@@ -101,12 +108,12 @@ func (h *Handler) chatSelection(ctx context.Context, chat string, p auth.Princip
 	if h.d.Messaging == nil {
 		return nil, dto.Errorf(dto.CodeNotFound, "There is no chat %q: there are no chats yet.", chat)
 	}
-	if name, ok := strings.CutPrefix(chat, "chan:"); ok {
-		bound, err := h.d.Messaging.ResolveChannel(ctx, name)
+	if name, ok := strings.CutPrefix(chat, "chan:"); ok && strings.Contains(name, "/") {
+		stream, bound, err := h.d.Messaging.ResolveChannel(ctx, p, name)
 		if err != nil {
 			return nil, dto.Errorf(dto.CodeNotFound, "There is no chat %q.", chat)
 		}
-		streams := []string{chat}
+		streams := []string{stream}
 		for _, b := range bound {
 			if !store.IsMessageStream(b) {
 				streams = append(streams, b)
@@ -120,12 +127,12 @@ func (h *Handler) chatSelection(ctx context.Context, chat string, p auth.Princip
 		}
 		return &hub.Filter{Streams: []string{messaging.DMStream(p.Name, peer)}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}, nil
 	}
-	return nil, dto.Errorf(dto.CodeBadRequest, "chat is chan:<name> or dm:<peer>, not %q.", chat)
+	return nil, dto.Errorf(dto.CodeBadRequest, "chat is chan:<project>/<name> or dm:<peer>, not %q.", chat)
 }
 
 // messageFilter is every message p may see, in any chat.
-func messageFilter(p *auth.Principal) hub.Filter {
-	return hub.Filter{Streams: []string{"chan:*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: p}
+func (h *Handler) messageFilter(ctx context.Context, p *auth.Principal) hub.Filter {
+	return hub.Filter{Streams: h.d.Projects.Access(ctx, *p).MessagePatterns(), Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: p}
 }
 
 // chatWatcher is what messaging offers for the seen, answered and chat
@@ -285,7 +292,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var countsSub hub.Subscription
 	if _, ok := h.d.Messaging.(view.Counter); ok {
 		// Any message the viewer can see may change the badges.
-		countsSub = h.d.Hub.Subscribe(messageFilter(&p), 256)
+		countsSub = h.d.Hub.Subscribe(h.messageFilter(ctx, &p), 256)
 		defer countsSub.Close()
 	}
 
@@ -351,7 +358,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_ = s.event("reset", "", dto.Reset{Reason: "lagged"})
 			return
 		case st := <-statusCh:
-			if store.IsMessageStream(st.ID) {
+			if store.IsMessageStream(st.ID) || !h.d.Projects.Access(ctx, p).Can(st.ID, auth.ScopeRead) {
 				continue
 			}
 			dirty = true
@@ -382,11 +389,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// visible: a message reaches a browser only through Messaging.Visible,
-// whatever the hub let through. Without messaging there are no messages.
+// visible: an entry reaches a browser only when p may read it, whatever
+// the hub let through: a message through Messaging.Visible, a log line
+// through p's grants. Without messaging there are no messages.
 func (h *Handler) visible(ctx context.Context, p auth.Principal, e store.Entry) bool {
 	if e.Kind != store.KindMessage && !store.IsMessageStream(e.Stream) {
-		return true
+		return h.d.Projects.Access(ctx, p).Can(e.Stream, auth.ScopeRead)
 	}
 	return h.d.Messaging != nil && h.d.Messaging.Visible(ctx, p, e)
 }

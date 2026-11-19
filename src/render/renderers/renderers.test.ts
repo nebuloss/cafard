@@ -21,7 +21,7 @@ describe('renderers on the page the Go template test wrote', () => {
     expect(row.className).toBe('line');
     expect(row.dataset['seq']).toBe('48213');
     expect(row.dataset['sev']).toBe('3');
-    expect(row.dataset['tone']).toBe('5');
+    expect(row.dataset['tone']).toBe('1');
     expect(row.querySelector('[data-slot="time"]')?.textContent).toBe('09:41:02.512');
     expect(row.querySelector('[data-slot="sev"]')?.textContent).toBe('E');
     expect(row.querySelector('[data-slot="sev"]')?.getAttribute('title')).toBe('ERR');
@@ -43,7 +43,7 @@ describe('renderers on the page the Go template test wrote', () => {
   it('builds a marker row', () => {
     const row = markers.render(fixture('entry_marker') as Entry);
     expect(row.className).toBe('marker');
-    expect(row.querySelector('[data-slot="text"]')?.textContent).toBe('serial:dut1: flashed linux-6.18-rc3 to dut1');
+    expect(row.querySelector('[data-slot="text"]')?.textContent).toBe('serial:lab/dut1: flashed linux-6.18-rc3 to dut1');
   });
 
   it('refuses attributes outside the contract list', () => {

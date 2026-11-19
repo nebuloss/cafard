@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/nebuloss/cafard/internal/auth"
@@ -95,8 +96,8 @@ func (s *Service) noteReply(ctx context.Context, e store.Entry) {
 
 // ChatOfStream is the Chat DTO of a chat stream from viewer's side.
 func (s *Service) ChatOfStream(ctx context.Context, viewer auth.Principal, stream string) (dto.Chat, error) {
-	if name, ok := cutChan(stream); ok {
-		ch, err := s.Channel(ctx, name)
+	if name, ok := cutChan(stream); ok && strings.Contains(name, "/") {
+		ch, err := s.Channel(ctx, viewer, name)
 		if err != nil {
 			return dto.Chat{}, err
 		}

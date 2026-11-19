@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/store"
 )
 
@@ -41,6 +42,7 @@ func (c *Config) Validate() error {
 
 // ChannelConfig is one entry of the `channels:` list.
 type ChannelConfig struct {
+	// Name is "project/name", or a bare name in the project imported.
 	Name    string      `yaml:"name"`
 	Title   string      `yaml:"title,omitempty"`
 	Topic   string      `yaml:"topic,omitempty"`
@@ -86,21 +88,23 @@ func (c Channels) MarshalYAML() (any, error) {
 func (c *Channels) Validate() error {
 	seen := map[string]bool{}
 	for i, ch := range c.List {
-		if ch.Name != General {
-			if err := ValidateChannelName(ch.Name); err != nil {
+		project, local := configName(ch.Name)
+		if err := projects.ValidateName(project); err != nil {
+			return fmt.Errorf("[%d]: %w", i, err)
+		}
+		if local != General {
+			if err := ValidateChannelName(local); err != nil {
 				return fmt.Errorf("[%d]: %w", i, err)
 			}
 		} else if len(ch.Streams) > 0 || ch.Surface != "" {
 			return fmt.Errorf("[%d]: general may only set title and topic", i)
 		}
-		if seen[ch.Name] {
+		if seen[project+"/"+local] {
 			return fmt.Errorf("[%d]: channel %s is listed twice", i, ch.Name)
 		}
-		seen[ch.Name] = true
-		for _, p := range ch.Streams {
-			if err := validateBinding(p); err != nil {
-				return fmt.Errorf("[%d] %s: %w", i, ch.Name, err)
-			}
+		seen[project+"/"+local] = true
+		if _, err := qualifyPatterns(project, ch.Streams); err != nil {
+			return fmt.Errorf("[%d] %s: %w", i, ch.Name, err)
 		}
 		if ch.Surface != "" && !validSurface(ch.Surface) {
 			return fmt.Errorf("[%d] %s: surface %q is not none, markers or errors", i, ch.Name, ch.Surface)

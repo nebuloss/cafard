@@ -104,7 +104,11 @@
       <span>Or a new person's name</span>
       <input name="new_name" placeholder="guillaume-phone" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9._\-]{0,39}">
     </label>
-    <p class="help">The phone gets read, message and ingest. Scan the code with its camera within 5 minutes.</p>
+    <label class="ofield">
+      <span>Grants</span>
+      <textarea name="grants" rows="2" placeholder="lab=read,message" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+    </label>
+    <p class="help">One per line: a project (lab=read,message) or a channel (lab:dut1=read). The phone reaches only what it is granted, with read, message and ingest at most. Scan the code with its camera within 5 minutes.</p>
     <button class="btn filled" type="submit"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Show a code</button>
   </form>
 

@@ -95,8 +95,9 @@ func Counts(ctx context.Context, d deps.Deps, viewer auth.Principal) dto.Counts 
 	}
 	c.SourcesDown = 0
 	if d.Status != nil {
+		a := d.Projects.Access(ctx, viewer)
 		for _, s := range d.Status.Snapshot() {
-			if s.Status == dto.StreamDown && !store.IsMessageStream(s.ID) {
+			if s.Status == dto.StreamDown && !store.IsMessageStream(s.ID) && a.Can(s.ID, auth.ScopeRead) {
 				c.SourcesDown++
 			}
 		}

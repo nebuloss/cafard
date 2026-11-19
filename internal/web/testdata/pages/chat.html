@@ -68,7 +68,7 @@
       <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
       
       <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
-        <input type="hidden" name="next" value="/c/dut1">
+        <input type="hidden" name="next" value="/c/lab/dut1">
         <span class="menu-caption">Theme</span>
         <span class="segmented">
           <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
@@ -87,7 +87,7 @@
 <main id="main">
 
 
-<div class="chat-layout" data-view="chat" data-bound data-chat="chan:dut1" data-surface="markers" data-viewer="admin" data-viewer-kind="human">
+<div class="chat-layout" data-view="chat" data-bound data-chat="chan:lab/dut1" data-surface="markers" data-viewer="admin" data-viewer-kind="human">
   <div class="pane-list">
 <nav class="chat-list" data-component="ChatList" aria-label="Chats">
   
@@ -95,10 +95,10 @@
 <section class="needs-you" data-component="NeedsYou" aria-labelledby="needs-you-title">
   <h2 class="list-heading" id="needs-you-title">Needs you</h2>
   <div class="needs-you-questions" data-slot="questions"><article class="question" id="m7" data-seq="7" data-open tabindex="-1">
-<header class="msg-head"><svg class="q-icon" aria-hidden="true"><use href="/static/icons.svg#help"></use></svg><span class="msg-sender" data-slot="sender">claude-laptop</span><a class="q-chat" data-slot="chat" href="/c/dut1#m7">in #dut1</a><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
+<header class="msg-head"><svg class="q-icon" aria-hidden="true"><use href="/static/icons.svg#help"></use></svg><span class="msg-sender" data-slot="sender">claude-laptop</span><a class="q-chat" data-slot="chat" href="/c/lab/dut1#m7">in #lab/dut1</a><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
 <div class="msg-body" data-slot="body">Power-cycle dut1?</div>
 <form class="q-form" method="post" action="/api/messages" enctype="multipart/form-data">
-<input type="hidden" name="chat" value="chan:dut1" data-field="chat"><input type="hidden" name="reply_to" value="7" data-field="reply_to"><input type="hidden" name="back" value="/" data-field="back"><input type="hidden" name="next" value="/" data-field="next">
+<input type="hidden" name="chat" value="chan:lab/dut1" data-field="chat"><input type="hidden" name="reply_to" value="7" data-field="reply_to"><input type="hidden" name="back" value="/" data-field="back"><input type="hidden" name="next" value="/" data-field="next">
 <div class="q-choices" data-slot="choices"><button class="btn tonal choice" type="submit" name="choice" value="done" data-choice="done"><span data-slot="label">done</span></button><button class="btn tonal choice" type="submit" name="choice" value="can&#39;t" data-choice="can&#39;t"><span data-slot="label">can&#39;t</span></button></div>
 <div class="q-reply" data-slot="reply-form"><input class="q-text" name="text" placeholder="Reply..." aria-label="Reply to the question" autocomplete="off" maxlength="32768"><button class="btn text" type="submit">Reply</button></div>
 </form>
@@ -110,10 +110,10 @@
 </section>
 
   <h2 class="list-heading">Channels</h2>
-  <div class="chat-rows" data-section="channels"><a class="chat-row" href="/c/dut1" data-chat="chan:dut1" aria-current="page"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#dut1</span><span class="chat-dots" data-slot="dots">
-<span class="stream-dot" data-status="connected" title="serial:dut1: connected"></span>
+  <div class="chat-rows" data-section="channels"><a class="chat-row" href="/c/lab/dut1" data-chat="chan:lab/dut1" aria-current="page"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#dut1</span><span class="chat-dots" data-slot="dots">
+<span class="stream-dot" data-status="connected" title="serial:lab/dut1: connected"></span>
 </span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: Power-cycle dut1?</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">2</span></span></span></a>
-<a class="chat-row" href="/c/general" data-chat="chan:general"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#general</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+<a class="chat-row" href="/c/lab/general" data-chat="chan:lab/general"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#general</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
 </div>
   
   
@@ -129,47 +129,47 @@
 </div>
   <div class="pane-head">
     
-<header class="channel-header" data-component="ChannelHeader" data-chat="chan:dut1">
+<header class="channel-header" data-component="ChannelHeader" data-chat="chan:lab/dut1">
   <div class="ch-title">
     <h2>#dut1 <span class="ch-subtitle">DUT 1 (x86 board)</span></h2>
     
   </div>
   
   <nav class="segmented ch-toggle" aria-label="View">
-    <a class="seg" href="/c/dut1" aria-current="page" data-view="chat">Chat</a>
-    <a class="seg" href="/c/dut1?view=logs" data-view="logs">Logs<span class="new-error-dot" data-slot="error-dot" hidden></span></a>
+    <a class="seg" href="/c/lab/dut1" aria-current="page" data-view="chat">Chat</a>
+    <a class="seg" href="/c/lab/dut1?view=logs" data-view="logs">Logs<span class="new-error-dot" data-slot="error-dot" hidden></span></a>
   </nav>
   
   <button class="icon-btn only-scripted" type="button" data-action="settings" aria-label="Channel settings" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#settings"></use></svg></button>
   
   <div class="ch-streams" data-slot="streams">
-    <a class="chip stream-chip mono" href="/live?streams=serial%3Adut1" data-stream="serial:dut1" data-status="connected"><span class="stream-dot" aria-hidden="true"></span>serial:dut1</a>
+    <a class="chip stream-chip mono" href="/live?streams=serial%3Alab%2Fdut1" data-stream="serial:lab/dut1" data-status="connected"><span class="stream-dot" aria-hidden="true"></span>serial:lab/dut1</a>
   </div>
   
   
 </header>
 
     <a class="banner warn q-banner" href="#m7" data-slot="banner">1 question waiting for you</a>
-    <nav class="filter-chips" aria-label="Show"><a class="chip filter" href="/c/dut1" data-filter="all" aria-current="true">All</a><a class="chip filter" href="/c/dut1?f=questions" data-filter="questions">Questions</a><a class="chip filter" href="/c/dut1?f=events" data-filter="events">Events</a><a class="chip filter" href="/c/dut1?f=mine" data-filter="mine">Mine</a><a class="chip filter" href="/c/dut1?f=images" data-filter="images">With images</a></nav>
+    <nav class="filter-chips" aria-label="Show"><a class="chip filter" href="/c/lab/dut1" data-filter="all" aria-current="true">All</a><a class="chip filter" href="/c/lab/dut1?f=questions" data-filter="questions">Questions</a><a class="chip filter" href="/c/lab/dut1?f=events" data-filter="events">Events</a><a class="chip filter" href="/c/lab/dut1?f=mine" data-filter="mine">Mine</a><a class="chip filter" href="/c/lab/dut1?f=images" data-filter="images">With images</a></nav>
   </div>
   <div class="pane-conv">
     
-    <div class="conversation timeline" data-component="ConversationView" role="log" aria-live="polite" aria-label="Messages" data-chat="chan:dut1" data-next-seq="9" data-follow="true" data-filter="">
-      <div class="event-row" data-seq="3" data-severity="6" data-kind="marker"><time class="event-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="event-stream" data-slot="stream">serial:dut1</span><span class="event-text" data-slot="text">codex-build: flashed linux-6.18-rc3</span><a class="event-open" data-slot="open" href="/live?streams=serial%3Adut1&amp;to_seq=3">logs</a></div>
-<div class="event-row" data-seq="5" data-severity="6" data-kind="marker"><time class="event-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="event-stream" data-slot="stream">chan:dut1</span><span class="event-text" data-slot="text">admin bound serial:dut1</span><a class="event-open" data-slot="open">logs</a></div>
+    <div class="conversation timeline" data-component="ConversationView" role="log" aria-live="polite" aria-label="Messages" data-chat="chan:lab/dut1" data-next-seq="9" data-follow="true" data-filter="">
+      <div class="event-row" data-seq="3" data-severity="6" data-kind="marker"><time class="event-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="event-stream" data-slot="stream">serial:lab/dut1</span><span class="event-text" data-slot="text">codex-build: flashed linux-6.18-rc3</span><a class="event-open" data-slot="open" href="/live?streams=serial%3Alab%2Fdut1&amp;to_seq=3">logs</a></div>
+<div class="event-row" data-seq="5" data-severity="6" data-kind="marker"><time class="event-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="event-stream" data-slot="stream">chan:lab/dut1</span><span class="event-text" data-slot="text">admin bound serial:lab/dut1</span><a class="event-open" data-slot="open">logs</a></div>
 <article class="message" id="m6" data-seq="6" data-sender-kind="agent">
 <header class="msg-head"><span class="sender-chip"><svg class="kind-icon kind-agent" aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg><svg class="kind-icon kind-human" aria-hidden="true"><use href="/static/icons.svg#person"></use></svg><svg class="kind-icon kind-device" aria-hidden="true"><use href="/static/icons.svg#memory"></use></svg><span class="msg-sender" data-slot="sender">codex-build</span><span class="visually-hidden" data-slot="sender-kind">agent</span></span><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
 <div class="msg-body" data-slot="body">image v42 ready, <code>dwc3</code> fails, see <a href="https://git.example.com/k/4a1f" rel="noopener noreferrer" target="_blank">https://git.example.com/k/4a1f</a></div>
 <div class="msg-attachments" data-slot="attachments"><div class="images" data-count="1"><a class="image" href="/blob/50941b0434a57d6e64c9a7dc8f0e7600610119850c8c5ba97cbc6a869e881ee8" data-sha="50941b0434a57d6e64c9a7dc8f0e7600610119850c8c5ba97cbc6a869e881ee8"><img data-slot="img" src="/blob/50941b0434a57d6e64c9a7dc8f0e7600610119850c8c5ba97cbc6a869e881ee8?v=thumb" alt="Photo" width="64" height="48" loading="lazy" decoding="async"><span class="image-more" data-slot="more"></span></a>
 </div><section class="log-card" data-snapshot>
-<header class="log-card-head"><svg class="log-icon" aria-hidden="true"><use href="/static/icons.svg#description"></use></svg><span class="log-streams mono" data-slot="streams">serial:dut1</span><span class="log-title" data-slot="title">boot</span></header>
+<header class="log-card-head"><svg class="log-icon" aria-hidden="true"><use href="/static/icons.svg#description"></use></svg><span class="log-streams mono" data-slot="streams">serial:lab/dut1</span><span class="log-title" data-slot="title">boot</span></header>
 <p class="log-meta"><span data-slot="lines">2 lines</span><span class="log-span" data-slot="span">09:40:00.000 to 09:40:00.000</span><span class="log-state" data-slot="state">snapshot</span></p>
 <div class="log-preview log-list mono dense" role="list" aria-label="First lines" data-slot="preview">
-<div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
+<div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="1"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:lab/dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
 
-<div class="line" role="listitem" data-seq="2" data-sev="3" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="ERR">E</abbr><span class="line-text" data-slot="text">dwc3 fe800000.usb: failed to initialize core: -110</span></div>
+<div class="line" role="listitem" data-seq="2" data-sev="3" data-tone="1"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:lab/dut1</span><abbr class="line-sev" data-slot="sev" title="ERR">E</abbr><span class="line-text" data-slot="text">dwc3 fe800000.usb: failed to initialize core: -110</span></div>
 </div>
-<a class="btn text log-open" data-slot="open" href="/live?from_seq=1&amp;streams=serial%3Adut1&amp;to_seq=2">Open</a>
+<a class="btn text log-open" data-slot="open" href="/live?from_seq=1&amp;streams=serial%3Alab%2Fdut1&amp;to_seq=2">Open</a>
 </section>
 </div>
 <p class="reply-quote" data-slot="reply-quote"></p>
@@ -180,7 +180,7 @@
 <header class="msg-head"><svg class="q-icon" aria-hidden="true"><use href="/static/icons.svg#help"></use></svg><span class="msg-sender" data-slot="sender">claude-laptop</span><time class="msg-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></header>
 <div class="msg-body" data-slot="body">Power-cycle dut1?</div>
 <form class="q-form" method="post" action="/api/messages" enctype="multipart/form-data">
-<input type="hidden" name="chat" value="chan:dut1" data-field="chat"><input type="hidden" name="reply_to" value="7" data-field="reply_to"><input type="hidden" name="back" value="" data-field="back"><input type="hidden" name="next" value="" data-field="next">
+<input type="hidden" name="chat" value="chan:lab/dut1" data-field="chat"><input type="hidden" name="reply_to" value="7" data-field="reply_to"><input type="hidden" name="back" value="" data-field="back"><input type="hidden" name="next" value="" data-field="next">
 <div class="q-choices" data-slot="choices"><button class="btn tonal choice" type="submit" name="choice" value="done" data-choice="done"><span data-slot="label">done</span></button><button class="btn tonal choice" type="submit" name="choice" value="can&#39;t" data-choice="can&#39;t"><span data-slot="label">can&#39;t</span></button></div>
 <div class="q-reply" data-slot="reply-form"><input class="q-text" name="text" placeholder="Reply..." aria-label="Reply to the question" autocomplete="off" maxlength="32768"><button class="btn text" type="submit">Reply</button></div>
 </form>
@@ -196,7 +196,7 @@
   
 <aside class="logs-pane" data-component="LogsPane" aria-label="Logs of the bound streams">
   <div class="logs-resize only-scripted" data-slot="resize" role="separator" aria-orientation="vertical" aria-label="Resize the logs pane" tabindex="0"></div>
-  <form class="logs-filter" method="get" action="/c/dut1" role="search">
+  <form class="logs-filter" method="get" action="/c/lab/dut1" role="search">
     <input type="hidden" name="view" value="logs">
     <label class="ofield"><span>Severity</span><select name="sev"><option value="7" selected>All</option><option value="6">Info and worse</option><option value="5">Notice and worse</option><option value="4">Warning and worse</option><option value="3">Error and worse</option><option value="2">Critical and worse</option><option value="1">Alert and worse</option><option value="0">Emergency</option></select></label>
     <label class="ofield grow"><span>Regexp</span><input name="re" value="" placeholder="usb|dwc3" autocomplete="off" spellcheck="false"></label>
@@ -212,14 +212,14 @@
   <button class="btn text" type="button" data-action="cancel">Cancel</button>
 </div>
 
-  <div class="logview dense" data-component="LogView" data-next-seq="9" data-follow="true" data-query="channel=dut1">
+  <div class="logview dense" data-component="LogView" data-next-seq="9" data-follow="true" data-query="channel=lab%2Fdut1">
     <div class="log-list mono" role="list" aria-label="Log lines" data-slot="list">
     
-<div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
+<div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="1"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:lab/dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
 
-<div class="line" role="listitem" data-seq="2" data-sev="3" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="ERR">E</abbr><span class="line-text" data-slot="text"><span class="ansi-fg-1">dwc3 fe800000.usb: failed to initialize core: -110</span></span></div>
+<div class="line" role="listitem" data-seq="2" data-sev="3" data-tone="1"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:lab/dut1</span><abbr class="line-sev" data-slot="sev" title="ERR">E</abbr><span class="line-text" data-slot="text"><span class="ansi-fg-1">dwc3 fe800000.usb: failed to initialize core: -110</span></span></div>
 
-<div class="marker" role="listitem" data-seq="3"><time class="marker-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="marker-text" data-slot="text">serial:dut1: codex-build: flashed linux-6.18-rc3</span></div>
+<div class="marker" role="listitem" data-seq="3"><time class="marker-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="marker-text" data-slot="text">serial:lab/dut1: codex-build: flashed linux-6.18-rc3</span></div>
 
     </div>
     <button class="fab new-lines only-scripted" type="button" data-slot="new" hidden><svg aria-hidden="true"><use href="/static/icons.svg#arrow_downward"></use></svg><span data-slot="new-count">0 new</span></button>
@@ -241,8 +241,8 @@
 
   <div class="pane-composer">
 
-<form class="composer" data-component="Composer" method="post" action="/api/messages" enctype="multipart/form-data" data-chat="chan:dut1" data-max-files="10">
-  <input type="hidden" name="chat" value="chan:dut1">
+<form class="composer" data-component="Composer" method="post" action="/api/messages" enctype="multipart/form-data" data-chat="chan:lab/dut1" data-max-files="10">
+  <input type="hidden" name="chat" value="chan:lab/dut1">
   <input type="hidden" name="reply_to" value="" data-field="reply_to">
   <input type="hidden" name="logs" value="" data-field="logs">
   <div class="composer-reply only-scripted" data-slot="reply" hidden><span class="reply-text" data-slot="reply-text"></span><button class="icon-btn small" type="button" data-action="cancel-reply" aria-label="Cancel the reply"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></div>
@@ -253,8 +253,8 @@
       <summary class="icon-btn" aria-label="More: attach logs"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></summary>
       <div class="menu" role="menu">
         
-        <button class="menu-item" type="button" role="menuitem" data-action="attach-last" data-stream="serial:dut1"><svg aria-hidden="true"><use href="/static/icons.svg#description"></use></svg>Last 200 lines of serial:dut1</button>
-        <button class="menu-item" type="button" role="menuitem" data-action="attach-from-now" data-stream="serial:dut1"><svg aria-hidden="true"><use href="/static/icons.svg#schedule"></use></svg>serial:dut1 from now on</button>
+        <button class="menu-item" type="button" role="menuitem" data-action="attach-last" data-stream="serial:lab/dut1"><svg aria-hidden="true"><use href="/static/icons.svg#description"></use></svg>Last 200 lines of serial:lab/dut1</button>
+        <button class="menu-item" type="button" role="menuitem" data-action="attach-from-now" data-stream="serial:lab/dut1"><svg aria-hidden="true"><use href="/static/icons.svg#schedule"></use></svg>serial:lab/dut1 from now on</button>
         
       </div>
     </details>
@@ -269,16 +269,16 @@
 </div>
 </div>
 
-<dialog class="modal channel-dialog" data-component="ChannelDialog" data-channel="dut1" aria-labelledby="channel-dialog-title">
+<dialog class="modal channel-dialog" data-component="ChannelDialog" data-channel="lab/dut1" aria-labelledby="channel-dialog-title">
   <form class="panel stack" method="dialog">
-    <h2 id="channel-dialog-title">#dut1 settings</h2>
+    <h2 id="channel-dialog-title">#lab/dut1 settings</h2>
     <div class="banner error" data-slot="error" role="alert" hidden></div>
     <label class="ofield"><span>Title</span><input name="title" value="DUT 1 (x86 board)" maxlength="200"></label>
     <label class="ofield"><span>Topic</span><textarea name="topic" rows="2" maxlength="1000"></textarea></label>
     <fieldset class="bindings">
       <legend class="label">Bound streams</legend>
       <ul class="pattern-list" data-slot="patterns">
-        <li data-pattern="serial:dut1"><span class="mono">serial:dut1</span><button class="btn text danger-text" type="button" data-action="unbind" data-pattern="serial:dut1">Remove</button></li>
+        <li data-pattern="serial:lab/dut1"><span class="mono">serial:lab/dut1</span><button class="btn text danger-text" type="button" data-action="unbind" data-pattern="serial:lab/dut1">Remove</button></li>
       </ul>
       <label class="ofield"><span>Add a stream or a glob</span><input name="pattern" placeholder="serial:dut1, syslog:dut1*" autocomplete="off" spellcheck="false"></label>
       <ul class="pattern-preview mono body-small" data-slot="preview" aria-live="polite"></ul>
@@ -294,9 +294,9 @@
     
     <fieldset class="stack manage">
       <legend class="label">Manage</legend>
-      <label class="ofield"><span>Rename to</span><input name="rename" placeholder="dut1" pattern="[a-z0-9\-]{1,40}" autocomplete="off" spellcheck="false"></label>
+      <label class="ofield"><span>Rename to</span><input name="rename" placeholder="lab/dut1" pattern="[a-z0-9\-]{1,40}" autocomplete="off" spellcheck="false"></label>
       <label class="chip filter"><input type="checkbox" name="archived">Archived</label>
-      <button class="btn text danger-text" type="button" data-action="delete">Delete #dut1 and its messages</button>
+      <button class="btn text danger-text" type="button" data-action="delete">Delete #lab/dut1 and its messages</button>
     </fieldset>
     
     <div class="dialog-actions">

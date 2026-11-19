@@ -8,8 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/store"
 )
 
@@ -117,16 +119,16 @@ func seqParam(q url.Values, name string) (int64, *dto.APIError) {
 	return n, nil
 }
 
-// Patterns resolves the channel (through messaging) and drops message
-// streams: logs views never read chan:* or dm:*. nil means every log
-// stream, an empty list means nothing matches.
-func (f LogFilter) Patterns(ctx context.Context, d deps.Deps) ([]string, *dto.APIError) {
+// Patterns resolves the channel p names (through messaging) and drops
+// message streams: logs views never read chan:* or dm:*. nil means every
+// log stream p may read, an empty list means nothing matches.
+func (f LogFilter) Patterns(ctx context.Context, d deps.Deps, p auth.Principal) ([]string, *dto.APIError) {
 	var patterns []string
 	if f.Channel != "" {
 		if d.Messaging == nil {
 			return nil, dto.Errorf(dto.CodeUnknownChannel, "There is no channel %q: there are no channels yet.", f.Channel)
 		}
-		bound, err := d.Messaging.ResolveChannel(ctx, f.Channel)
+		_, bound, err := d.Messaging.ResolveChannel(ctx, p, f.Channel)
 		if err != nil {
 			if apiErr, ok := err.(*dto.APIError); ok {
 				return nil, apiErr
@@ -149,8 +151,12 @@ func (f LogFilter) Patterns(ctx context.Context, d deps.Deps) ([]string, *dto.AP
 	return patterns, nil
 }
 
-// StreamIDs resolves patterns to existing log stream ids; nil means all.
-func StreamIDs(ctx context.Context, st *store.Store, patterns []string) ([]string, error) {
+// StreamIDs resolves patterns to the existing log streams a may read; nil
+// patterns mean every one, and nil ids every one for the admin.
+func StreamIDs(ctx context.Context, st *store.Store, a *projects.Access, patterns []string) ([]string, error) {
+	if patterns == nil && !a.All() {
+		patterns = a.LogPatterns()
+	}
 	if patterns == nil {
 		return nil, nil
 	}
@@ -161,7 +167,7 @@ func StreamIDs(ctx context.Context, st *store.Store, patterns []string) ([]strin
 	if err != nil {
 		return nil, err
 	}
-	ids = slices.DeleteFunc(ids, store.IsMessageStream)
+	ids = slices.DeleteFunc(ids, func(id string) bool { return store.IsMessageStream(id) || !a.Can(id, auth.ScopeRead) })
 	if ids == nil {
 		ids = []string{}
 	}
@@ -205,12 +211,16 @@ func (f LogFilter) URL() string {
 	return v.Encode()
 }
 
-// MessagePatterns are the message streams of kinds=message: the channel's
-// with channel=, else every chat's. Callers still check visibility.
-func MessagePatterns(f LogFilter) []string {
-	if f.Channel != "" {
-		name := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(f.Channel), "#"), "chan:")
-		return []string{"chan:" + name}
+// MessagePatterns are the message streams of kinds=message for p: the
+// channel's with channel=, else every chat p may read. Callers still check
+// visibility, entry by entry.
+func MessagePatterns(ctx context.Context, d deps.Deps, p auth.Principal, f LogFilter) ([]string, error) {
+	if f.Channel != "" && d.Messaging != nil {
+		chat, _, err := d.Messaging.ResolveChannel(ctx, p, f.Channel)
+		if err != nil {
+			return nil, err
+		}
+		return []string{chat}, nil
 	}
-	return []string{"chan:*", "dm:*"}
+	return d.Projects.Access(ctx, p).MessagePatterns(), nil
 }

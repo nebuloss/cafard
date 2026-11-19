@@ -32,20 +32,20 @@ func TestChatsAreOrderedPinnedThenByActivity(t *testing.T) {
 		}
 		return out
 	}
-	if got := ids(); !slices.Equal(got, []string{"chan:beta", "chan:alpha", "chan:general", "dm:codex"}) {
+	if got := ids(); !slices.Equal(got, []string{"chan:lab/beta", "chan:lab/alpha", "chan:lab/general", "dm:codex"}) {
 		t.Errorf("order = %v", got)
 	}
 	pin := true
-	if err := e.svc.SetPrefs(e.ctx, h, "chan:general", &pin, nil); err != nil {
+	if err := e.svc.SetPrefs(e.ctx, h, "chan:lab/general", &pin, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := ids(); got[0] != "chan:general" {
+	if got := ids(); got[0] != "chan:lab/general" {
 		t.Errorf("pinned not first: %v", got)
 	}
 	if _, err := e.svc.SetFollow(e.ctx, h, "alpha", false); err != nil {
 		t.Fatal(err)
 	}
-	if got := ids(); slices.Contains(got, "chan:alpha") {
+	if got := ids(); slices.Contains(got, "chan:lab/alpha") {
 		t.Errorf("unfollowed listed: %v", got)
 	}
 	all, _ := e.svc.Chats(e.ctx, h, ChatsQuery{All: true})
@@ -75,11 +75,11 @@ func TestCountsAndNeedsYouRespectMute(t *testing.T) {
 	if c.OpenQuestions != 1 || c.UnreadDirect != 1 || len(c.Chats) != 2 {
 		t.Fatalf("counts = %+v", c)
 	}
-	if c.Chats[0] != (dto.ChatCount{ID: "chan:general", Unread: 2, OpenQuestions: 1}) {
+	if c.Chats[0] != (dto.ChatCount{ID: "chan:lab/general", Unread: 2, OpenQuestions: 1}) {
 		t.Errorf("general = %+v", c.Chats[0])
 	}
 	muted := true
-	if err := e.svc.SetPrefs(e.ctx, h, "chan:general", nil, &muted); err != nil {
+	if err := e.svc.SetPrefs(e.ctx, h, "chan:lab/general", nil, &muted); err != nil {
 		t.Fatal(err)
 	}
 	c, _ = e.svc.Counts(e.ctx, h)
@@ -123,7 +123,7 @@ func TestChatEventsTellAcksAnswersAndChanges(t *testing.T) {
 	if _, err := e.svc.Ack(e.ctx, h, []int64{res.Question.Seq}); err != nil {
 		t.Fatal(err)
 	}
-	if ev := next(); ev.Kind != EventSeen || ev.Seq != res.Question.Seq || ev.By != "guillaume" || ev.Stream != "chan:general" {
+	if ev := next(); ev.Kind != EventSeen || ev.Seq != res.Question.Seq || ev.By != "guillaume" || ev.Stream != "chan:lab/general" {
 		t.Errorf("seen = %+v", ev)
 	}
 	reply := e.send(h, SendInput{SendRequest: dto.SendRequest{ReplyTo: res.Question.Seq, Choice: "yes", Channel: "general"}})
@@ -133,7 +133,7 @@ func TestChatEventsTellAcksAnswersAndChanges(t *testing.T) {
 	// A second reply answers nothing new.
 	e.send(e.human("bob"), SendInput{SendRequest: dto.SendRequest{ReplyTo: res.Question.Seq, Choice: "no", Channel: "general"}})
 	pin := true
-	if err := e.svc.SetPrefs(e.ctx, h, "chan:general", &pin, nil); err != nil {
+	if err := e.svc.SetPrefs(e.ctx, h, "chan:lab/general", &pin, nil); err != nil {
 		t.Fatal(err)
 	}
 	if ev := next(); ev.Kind != EventChat || ev.Only != "guillaume" {
@@ -142,7 +142,7 @@ func TestChatEventsTellAcksAnswersAndChanges(t *testing.T) {
 	if _, err := e.svc.CreateChannel(e.ctx, a, dto.ChannelCreate{Name: "dut1"}); err != nil {
 		t.Fatal(err)
 	}
-	if ev := next(); ev.Kind != EventChat || ev.Stream != "chan:dut1" || ev.Only != "" {
+	if ev := next(); ev.Kind != EventChat || ev.Stream != "chan:lab/dut1" || ev.Only != "" {
 		t.Errorf("create = %+v", ev)
 	}
 }
@@ -164,14 +164,14 @@ func TestFilteredTimelineFillsItsPage(t *testing.T) {
 		e.send(a, text("chatter"))
 	}
 	last, _ := e.st.LastSeq(e.ctx)
-	page, err := e.svc.FilteredTimeline(e.ctx, e.human("guillaume"), "chan:general", TimelineQuery{BeforeSeq: last + 1, Limit: 2}, FilterQuestions)
+	page, err := e.svc.FilteredTimeline(e.ctx, e.human("guillaume"), "chan:lab/general", TimelineQuery{BeforeSeq: last + 1, Limit: 2}, FilterQuestions)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(page.Rows) != 2 || page.Rows[0].Seq != questions[1] || page.Rows[1].Seq != questions[2] || !page.HasMore {
 		t.Errorf("page = %v more=%v", seqsOfRows(page.Rows), page.HasMore)
 	}
-	page, _ = e.svc.FilteredTimeline(e.ctx, e.human("guillaume"), "chan:general", TimelineQuery{BeforeSeq: questions[1], Limit: 2}, FilterQuestions)
+	page, _ = e.svc.FilteredTimeline(e.ctx, e.human("guillaume"), "chan:lab/general", TimelineQuery{BeforeSeq: questions[1], Limit: 2}, FilterQuestions)
 	if len(page.Rows) != 1 || page.Rows[0].Seq != questions[0] || page.HasMore {
 		t.Errorf("older page = %v more=%v", seqsOfRows(page.Rows), page.HasMore)
 	}

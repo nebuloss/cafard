@@ -29,8 +29,8 @@ func (f *fakeClaims) Send(context.Context, auth.Principal, dto.SendRequest) (dto
 	return dto.Entry{}, errors.New("not here")
 }
 func (f *fakeClaims) Visible(context.Context, auth.Principal, store.Entry) bool { return false }
-func (f *fakeClaims) ResolveChannel(context.Context, string) ([]string, error) {
-	return nil, errors.New("not here")
+func (f *fakeClaims) ResolveChannel(context.Context, auth.Principal, string) (string, []string, error) {
+	return "", nil, errors.New("not here")
 }
 func (f *fakeClaims) ChatOf(store.Entry) string { return "" }
 
@@ -115,6 +115,7 @@ func TestToolsGateWriteAndControl(t *testing.T) {
 		{Name: "gone", Device: "/dev/ttyUSB9", Writable: true},
 	}, f)
 	tl := newTools(m)
+	tl.granted = func(context.Context, auth.Principal, string) bool { return true }
 	b := <-far
 	<-tcpFar
 	for _, s := range []string{"serial:dut1", "serial:dut3", "serial:ro"} {
@@ -132,9 +133,13 @@ func TestToolsGateWriteAndControl(t *testing.T) {
 	_, _, err := tl.write(ctx, a, writeIn{Stream: "serial:nope", Data: "x"})
 	wantCode(t, "unknown", err, dto.CodeNotFound, "serial:dut1")
 	_, _, err = tl.write(ctx, a, writeIn{Stream: "serial:ro", Data: "x"})
-	wantCode(t, "read-only", err, dto.CodeForbidden, "writable: true")
+	wantCode(t, "read-only", err, dto.CodeForbidden, "writable")
 	_, _, err = tl.control(ctx, a, controlIn{Stream: "serial:ro", DTR: &no})
-	wantCode(t, "read-only control", err, dto.CodeForbidden, "writable: true")
+	wantCode(t, "read-only control", err, dto.CodeForbidden, "writable")
+	tl.granted = func(_ context.Context, p auth.Principal, _ string) bool { return p.Name != "agent-a" }
+	_, _, err = tl.write(ctx, a, writeIn{Stream: "serial:dut1", Data: "x"})
+	wantCode(t, "no grant", err, dto.CodeForbidden, "serial_write grant")
+	tl.granted = func(context.Context, auth.Principal, string) bool { return true }
 	_, _, err = tl.write(ctx, a, writeIn{Stream: "serial:dut1", Data: "x"})
 	wantCode(t, "unclaimed", err, dto.CodeForbidden, "Claim serial:dut1 first")
 
@@ -216,6 +221,7 @@ func TestToolsWithoutClaimsRefuse(t *testing.T) {
 	o.pipe(nil)
 	m := startManager(t, e, []Port{{Name: "dut1", Device: "/dev/ttyUSB0", Writable: true}}, o.factory)
 	tl := newTools(m)
+	tl.granted = func(context.Context, auth.Principal, string) bool { return true }
 	a := &mcpserver.Call{Principal: auth.Principal{Name: "agent-a"}}
 	_, _, err := tl.write(context.Background(), a, writeIn{Stream: "serial:dut1", Data: "x"})
 	wantCode(t, "no messaging", err, dto.CodeForbidden, "no claims")

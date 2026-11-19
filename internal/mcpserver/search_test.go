@@ -69,10 +69,10 @@ func TestSearchFindsColouredLinesAndNeverMessages(t *testing.T) {
 	s, w, _ := newTestServer(t)
 	ctx := context.Background()
 	if _, err := w.CommitBatch(ctx, []store.Entry{
-		{Stream: "serial:dut1", Text: "\x1b[31mdwc3 fe800000.usb: error -110\x1b[0m", Severity: 3},
-		{Stream: "serial:dut1", Text: "login:", Severity: 6},
+		{Stream: "serial:lab/dut1", Text: "\x1b[31mdwc3 fe800000.usb: error -110\x1b[0m", Severity: 3},
+		{Stream: "serial:lab/dut1", Text: "login:", Severity: 6},
 		{Stream: "dm:a~b", Kind: store.KindMessage, Text: "the dwc3 password", Sender: "b", Severity: 6},
-		{Stream: "chan:general", Kind: store.KindMessage, Text: "dwc3 again", Sender: "b", Severity: 6},
+		{Stream: "chan:lab/general", Kind: store.KindMessage, Text: "dwc3 again", Sender: "b", Severity: 6},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestSearchFindsColouredLinesAndNeverMessages(t *testing.T) {
 	if page.Shown != 1 || !strings.Contains(text, "error -110") || strings.Contains(text, "\x1b") {
 		t.Errorf("search = %q %+v", text, page)
 	}
-	for _, streams := range [][]string{nil, {"*"}, {"dm:*"}, {"chan:*", "dm:a~b"}} {
+	for _, streams := range [][]string{nil, {"*"}, {"dm:*"}, {"chan:lab/*", "dm:a~b"}} {
 		text, _, err := s.search(ctx, agent, searchIn{Query: "dwc3", Streams: streams})
 		if err != nil {
 			t.Fatal(err)

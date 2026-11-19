@@ -12,11 +12,12 @@ import (
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/ratelimit"
 	"github.com/nebuloss/cafard/internal/store"
 )
 
-// General is the channel that always exists.
+// General is the channel every project has.
 const General = "general"
 
 // systemName is created_by for channels cafard makes itself.
@@ -29,8 +30,8 @@ const (
 
 var channelNameRE = regexp.MustCompile(`^[a-z0-9-]{1,40}$`)
 
-// ValidateChannelName checks a new channel name: a lowercase slug of 1 to
-// 40 characters, not a reserved name.
+// ValidateChannelName checks a new channel's name inside its project: a
+// lowercase slug of 1 to 40 characters, not a reserved name.
 func ValidateChannelName(name string) error {
 	if !channelNameRE.MatchString(name) {
 		return fmt.Errorf("channel name %q must be 1 to 40 characters of a-z, 0-9 and '-'", name)
@@ -43,7 +44,7 @@ func ValidateChannelName(name string) error {
 
 // Channel is one row of channels with its bindings.
 type Channel struct {
-	Name         string
+	Name         string // "project/name"
 	Title, Topic string
 	Surface      dto.Surface
 	CreatedBy    string
@@ -56,15 +57,24 @@ type Channel struct {
 // Stream is the channel's message stream.
 func (c Channel) Stream() string { return "chan:" + c.Name }
 
+// Project is the project the channel belongs to.
+func (c Channel) Project() string { return store.ProjectOf(c.Stream()) }
+
+// Local is the channel's name inside its project.
+func (c Channel) Local() string { return store.LocalName(c.Stream()) }
+
 // Archived reports whether the channel is archived.
 func (c Channel) Archived() bool { return c.ArchivedAt != nil }
 
-// CanManage reports whether p may rename, archive or delete c.
-func (c Channel) CanManage(p auth.Principal) bool {
-	return c.Source == dto.SourceRuntime && (p.Name == c.CreatedBy || p.Has(auth.ScopeAdmin)) && p.Has(auth.ScopeMessage)
+// CanManage reports whether p, reaching a, may rename, archive or delete c:
+// its creator or the admin, with message on the whole project, on a
+// runtime channel.
+func (c Channel) CanManage(p auth.Principal, a *projects.Access) bool {
+	return c.Source == dto.SourceRuntime && (p.Name == c.CreatedBy || p.Has(auth.ScopeAdmin)) &&
+		a.ProjectScopes(c.Project()).Has(auth.ScopeMessage)
 }
 
-// normalizeChannel accepts "dut1", "#dut1" and "chan:dut1".
+// normalizeChannel accepts "dut1", "#dut1", "lab/dut1" and "chan:lab/dut1".
 func normalizeChannel(name string) string {
 	name = strings.TrimSpace(name)
 	name = strings.TrimPrefix(name, "#")
@@ -73,6 +83,7 @@ func normalizeChannel(name string) string {
 
 var errNoChannel = errors.New("no such channel")
 
+// channel looks up a channel by its full "project/name".
 func (s *Service) channel(ctx context.Context, name string) (Channel, error) {
 	chs, err := s.queryChannels(ctx, `WHERE name = ?`, normalizeChannel(name))
 	if err != nil {
@@ -84,18 +95,81 @@ func (s *Service) channel(ctx context.Context, name string) (Channel, error) {
 	return chs[0], nil
 }
 
-// Channel returns a channel, or an unknown_channel error listing the
-// existing ones.
-func (s *Service) Channel(ctx context.Context, name string) (Channel, error) {
-	ch, err := s.channel(ctx, name)
-	if errors.Is(err, errNoChannel) {
-		return Channel{}, s.unknownChannel(ctx, name)
-	}
-	return ch, err
+// Channel returns the channel p names and may read: "project/name", or a
+// bare name only one project p reaches has. Anything else is an
+// unknown_channel error listing the channels p can read.
+func (s *Service) Channel(ctx context.Context, p auth.Principal, name string) (Channel, error) {
+	return s.channelFor(ctx, p, name, auth.ScopeRead)
 }
 
-// Channels lists channels by name.
-func (s *Service) Channels(ctx context.Context, includeArchived bool) ([]Channel, error) {
+// channelFor is Channel for a use that needs scope on the channel: a bare
+// name in several projects picks the one where p has it, and a channel p
+// reads without it is forbidden.
+func (s *Service) channelFor(ctx context.Context, p auth.Principal, name string, scope auth.Scope) (Channel, error) {
+	name = normalizeChannel(name)
+	a := s.access(ctx, p)
+	var found []Channel
+	if strings.Contains(name, "/") {
+		ch, err := s.channel(ctx, name)
+		if err != nil && !errors.Is(err, errNoChannel) {
+			return Channel{}, err
+		}
+		if err == nil && a.CanChannel(ch.Name, auth.ScopeRead) {
+			found = []Channel{ch}
+		}
+	} else {
+		chs, err := s.queryChannels(ctx, `WHERE substr(name, instr(name, '/') + 1) = ?`, name)
+		if err != nil {
+			return Channel{}, err
+		}
+		for _, ch := range chs {
+			if a.CanChannel(ch.Name, auth.ScopeRead) {
+				found = append(found, ch)
+			}
+		}
+	}
+	if len(found) > 1 {
+		usable := slices.DeleteFunc(slices.Clone(found), func(ch Channel) bool { return !a.CanChannel(ch.Name, scope) })
+		if len(usable) == 1 {
+			return usable[0], nil
+		}
+		names := make([]string, len(found))
+		for i, ch := range found {
+			names[i] = ch.Name
+		}
+		return Channel{}, dto.Errorf(dto.CodeUnknownChannel, "Several projects have a channel %q: %s. Name one as project/%s.",
+			name, strings.Join(names, ", "), name)
+	}
+	if len(found) == 0 {
+		return Channel{}, s.unknownChannel(ctx, p, name)
+	}
+	if !a.CanChannel(found[0].Name, scope) {
+		return Channel{}, dto.Errorf(dto.CodeForbidden, "You may read #%s but not %s there; ask the admin for a grant.", found[0].Name, scopeVerb(scope))
+	}
+	return found[0], nil
+}
+
+func scopeVerb(scope auth.Scope) string {
+	switch scope {
+	case auth.ScopeMessage:
+		return "post"
+	case auth.ScopeSerialWrite:
+		return "drive serial ports"
+	}
+	return string(scope)
+}
+
+// Channels lists the channels p may read, by name.
+func (s *Service) Channels(ctx context.Context, p auth.Principal, includeArchived bool) ([]Channel, error) {
+	chs, err := s.allChannels(ctx, includeArchived)
+	if err != nil {
+		return nil, err
+	}
+	a := s.access(ctx, p)
+	return slices.DeleteFunc(chs, func(ch Channel) bool { return !a.CanChannel(ch.Name, auth.ScopeRead) }), nil
+}
+
+func (s *Service) allChannels(ctx context.Context, includeArchived bool) ([]Channel, error) {
 	if includeArchived {
 		return s.queryChannels(ctx, ``)
 	}
@@ -150,32 +224,36 @@ func (s *Service) patterns(ctx context.Context, name string) ([]string, error) {
 	return out, err
 }
 
-func (s *Service) unknownChannel(ctx context.Context, name string) *dto.APIError {
-	chs, err := s.queryChannels(ctx, ``)
+func (s *Service) unknownChannel(ctx context.Context, p auth.Principal, name string) *dto.APIError {
+	chs, err := s.Channels(ctx, p, true)
 	var names []string
 	if err == nil {
 		for _, c := range chs {
 			names = append(names, c.Name)
 		}
 	}
-	return dto.Errorf(dto.CodeUnknownChannel, "There is no channel %q. Existing channels: %s.", normalizeChannel(name), strings.Join(names, ", "))
+	if len(names) == 0 {
+		return dto.Errorf(dto.CodeUnknownChannel, "There is no channel %q you can read; you have no grant on any channel yet.", normalizeChannel(name))
+	}
+	return dto.Errorf(dto.CodeUnknownChannel, "There is no channel %q you can read. Channels you can read: %s.", normalizeChannel(name), strings.Join(names, ", "))
 }
 
-// ResolveChannel returns the channel's binding patterns: stream ids and
-// globs, which the log tools and the hub match themselves, so a stream
-// that appears during a wait_for is still seen. An agent that reads a
-// channel this way follows it.
-func (s *Service) ResolveChannel(ctx context.Context, name string) ([]string, error) {
-	ch, err := s.Channel(ctx, name)
+// ResolveChannel returns the binding patterns of the channel p names:
+// stream ids and globs, which the log tools and the hub match themselves,
+// so a stream that appears during a wait_for is still seen. Reading the
+// channel lets p read them. An agent that reads a channel this way
+// follows it.
+func (s *Service) ResolveChannel(ctx context.Context, p auth.Principal, name string) (string, []string, error) {
+	ch, err := s.Channel(ctx, p, name)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	if p, ok := auth.PrincipalFrom(ctx); ok && p.Kind == auth.KindAgent {
+	if p.Kind == auth.KindAgent {
 		if err := s.autoFollow(ctx, p.Name, ch.Stream()); err != nil {
-			return nil, err
+			return "", nil, err
 		}
 	}
-	return slices.Clone(ch.Patterns), nil
+	return ch.Stream(), slices.Clone(ch.Patterns), nil
 }
 
 // BoundStreams are the existing log streams a channel's bindings match.
@@ -194,29 +272,66 @@ func (s *Service) BoundStreams(ctx context.Context, ch Channel) ([]string, error
 	return ids, nil
 }
 
-// applyConfigChannels makes sure general exists and reapplies the
-// `channels:` list. A config channel that left the list becomes a
-// runtime one, which its creator may then delete.
+// ensureGeneral makes the #general of a project, which every project
+// has. It is a config channel: it cannot be renamed or deleted.
+func (s *Service) ensureGeneral(ctx context.Context, project string) error {
+	now := s.clock.Now().UnixNano()
+	_, err := s.db.ExecContext(ctx, `INSERT INTO channels(name, surface, created_by, created_at, last_activity, source)
+		VALUES (?, 'markers', ?, ?, ?, 'config') ON CONFLICT(name) DO NOTHING`, project+"/"+General, systemName, now, now)
+	return err
+}
+
+// configName is a config channel's "project/name": a bare name is in the
+// project imported.
+func configName(name string) (project, local string) {
+	if p, l, ok := strings.Cut(name, "/"); ok {
+		return p, l
+	}
+	return projects.Imported, name
+}
+
+// applyConfigChannels makes sure every project has its #general and
+// reapplies the `channels:` list, making the projects it names. A config
+// channel that left the list becomes a runtime one, which its creator may
+// then delete.
 func (s *Service) applyConfigChannels(ctx context.Context) error {
+	for _, c := range s.opts.Channels.List {
+		project, _ := configName(c.Name)
+		if _, err := s.projects.Ensure(ctx, project, ""); err != nil {
+			return err
+		}
+	}
+	all, err := s.projects.Projects(ctx)
+	if err != nil {
+		return err
+	}
+	listed := map[string]bool{}
+	for _, p := range all {
+		if err := s.ensureGeneral(ctx, p.Name); err != nil {
+			return err
+		}
+		listed[p.Name+"/"+General] = true
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	now := s.clock.Now().UnixNano()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO channels(name, surface, created_by, created_at, last_activity, source)
-		VALUES (?, 'markers', ?, ?, ?, 'config') ON CONFLICT(name) DO NOTHING`, General, systemName, now, now); err != nil {
-		return err
-	}
-	listed := map[string]bool{General: true}
 	for _, c := range s.opts.Channels.List {
-		listed[c.Name] = true
-		if c.Name == General {
+		project, local := configName(c.Name)
+		name := project + "/" + local
+		listed[name] = true
+		if local == General {
 			if _, err := tx.ExecContext(ctx, `UPDATE channels SET title = ?, topic = ? WHERE name = ?`,
-				nullStr(c.Title), nullStr(c.Topic), General); err != nil {
+				nullStr(c.Title), nullStr(c.Topic), name); err != nil {
 				return err
 			}
 			continue
+		}
+		patterns, err := qualifyPatterns(project, c.Streams)
+		if err != nil {
+			return fmt.Errorf("%s: %w", c.Name, err)
 		}
 		surface := c.Surface
 		if surface == "" {
@@ -226,14 +341,14 @@ func (s *Service) applyConfigChannels(ctx context.Context) error {
 			VALUES (?, ?, ?, ?, ?, ?, ?, 'config')
 			ON CONFLICT(name) DO UPDATE SET title = excluded.title, topic = excluded.topic, surface = excluded.surface,
 			source = 'config', archived_at = NULL`,
-			c.Name, nullStr(c.Title), nullStr(c.Topic), string(surface), systemName, now, now); err != nil {
+			name, nullStr(c.Title), nullStr(c.Topic), string(surface), systemName, now, now); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM channel_streams WHERE channel = ?`, c.Name); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM channel_streams WHERE channel = ?`, name); err != nil {
 			return err
 		}
-		for _, p := range c.Streams {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO channel_streams(channel, pattern) VALUES (?, ?) ON CONFLICT DO NOTHING`, c.Name, p); err != nil {
+		for _, p := range patterns {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO channel_streams(channel, pattern) VALUES (?, ?) ON CONFLICT DO NOTHING`, name, p); err != nil {
 				return err
 			}
 		}
@@ -266,13 +381,35 @@ func checkTexts(title, topic *string) error {
 	return nil
 }
 
-func checkPatterns(ps []string) error {
+// qualifyPatterns puts bindings inside project: serial:dut1 means
+// serial:<project>/dut1. A binding that names another project is refused,
+// so a channel never shows logs from outside its project.
+func qualifyPatterns(project string, ps []string) ([]string, error) {
+	out := make([]string, 0, len(ps))
 	for _, p := range ps {
 		if err := validateBinding(p); err != nil {
-			return dto.Errorf(dto.CodeInvalidPattern, "%v.", err)
+			return nil, err
 		}
+		kind, rest, ok := strings.Cut(p, ":")
+		if !ok {
+			return nil, fmt.Errorf("binding %q is not kind:name, such as serial:dut1", p)
+		}
+		if other, _, found := strings.Cut(rest, "/"); !found {
+			rest = project + "/" + rest
+		} else if other != project {
+			return nil, fmt.Errorf("binding %q names another project than %s; a channel binds streams of its own project", p, project)
+		}
+		out = append(out, kind+":"+rest)
 	}
-	return nil
+	return out, nil
+}
+
+func checkPatterns(project string, ps []string) ([]string, error) {
+	out, err := qualifyPatterns(project, ps)
+	if err != nil {
+		return nil, dto.Errorf(dto.CodeInvalidPattern, "%v.", err)
+	}
+	return out, nil
 }
 
 func needMessage(p auth.Principal) error {
@@ -282,19 +419,70 @@ func needMessage(p auth.Principal) error {
 	return nil
 }
 
+// needProjectMessage refuses unless p has message on the whole project:
+// making, binding, renaming and deleting channels need it, so a channel
+// grant cannot widen itself.
+func needProjectMessage(a *projects.Access, project string) error {
+	if a.ProjectScopes(project).Has(auth.ScopeMessage) {
+		return nil
+	}
+	return dto.Errorf(dto.CodeForbidden, "Making, binding, renaming and deleting channels of %s needs message on the whole project; ask the admin for a grant.", project)
+}
+
+// newChannelProject is the project a new channel goes in: the one named,
+// or the only one where p may make channels.
+func (s *Service) newChannelProject(ctx context.Context, p auth.Principal, a *projects.Access, project, name string) (string, string, error) {
+	if pr, local, ok := strings.Cut(name, "/"); ok {
+		if project != "" && project != pr {
+			return "", "", dto.Errorf(dto.CodeBadRequest, "The channel %s is not in project %s.", name, project)
+		}
+		project, name = pr, local
+	}
+	if project != "" {
+		if _, err := s.projects.Project(ctx, project); err != nil || !a.Sees(project) {
+			return "", "", dto.Errorf(dto.CodeNotFound, "There is no project %s you can reach.", project)
+		}
+		return project, name, needProjectMessage(a, project)
+	}
+	candidates := a.Projects()
+	if a.All() {
+		all, err := s.projects.Projects(ctx)
+		if err != nil {
+			return "", "", err
+		}
+		for _, pr := range all {
+			candidates = append(candidates, pr.Name)
+		}
+	}
+	candidates = slices.DeleteFunc(candidates, func(pr string) bool { return !a.ProjectScopes(pr).Has(auth.ScopeMessage) })
+	switch len(candidates) {
+	case 0:
+		return "", "", dto.Errorf(dto.CodeForbidden, "You may make channels in no project: that needs message on a whole project; ask the admin for a grant.")
+	case 1:
+		return candidates[0], name, nil
+	}
+	return "", "", dto.Errorf(dto.CodeBadRequest, "Name the project of the new channel (project/%s): you may make channels in %s.", name, strings.Join(candidates, ", "))
+}
+
 // CreateChannel creates a runtime channel; its creator follows it.
 func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.ChannelCreate) (Channel, error) {
 	if err := needMessage(p); err != nil {
 		return Channel{}, err
 	}
-	name := normalizeChannel(req.Name)
-	if err := ValidateChannelName(name); err != nil {
+	a := s.access(ctx, p)
+	project, local, err := s.newChannelProject(ctx, p, a, req.Project, normalizeChannel(req.Name))
+	if err != nil {
+		return Channel{}, err
+	}
+	if err := ValidateChannelName(local); err != nil {
 		return Channel{}, dto.Errorf(dto.CodeBadRequest, "%v.", err)
 	}
+	name := project + "/" + local
 	if err := checkTexts(&req.Title, &req.Topic); err != nil {
 		return Channel{}, err
 	}
-	if err := checkPatterns(req.Patterns); err != nil {
+	patterns, err := checkPatterns(project, req.Patterns)
+	if err != nil {
 		return Channel{}, err
 	}
 	surface := req.Surface
@@ -326,7 +514,7 @@ func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.C
 	if n, _ := res.RowsAffected(); n == 0 {
 		return Channel{}, dto.Errorf(dto.CodeConflict, "There is already a channel %q.", name)
 	}
-	added := uniq(req.Patterns)
+	added := uniq(patterns)
 	for _, pat := range added {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO channel_streams(channel, pattern) VALUES (?, ?)`, name, pat); err != nil {
 			return Channel{}, err
@@ -344,7 +532,8 @@ func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.C
 		}
 	}
 	s.emitChat("chan:"+name, "")
-	return s.Channel(ctx, name)
+	s.projects.Invalidate()
+	return s.Channel(ctx, p, name)
 }
 
 func uniq(in []string) []string {
@@ -357,18 +546,25 @@ func uniq(in []string) []string {
 	return out
 }
 
-// UpdateChannel changes a channel. Bindings, title, topic and surface are
-// for anyone with the message scope; renaming and archiving for the
-// creator or an admin, on runtime channels.
+// UpdateChannel changes a channel. Title, topic and surface are for
+// anyone who may post in it; bindings need message on the whole project;
+// renaming and archiving are for the creator or the admin besides, on
+// runtime channels.
 func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name string, u dto.ChannelUpdate) (Channel, error) {
 	if err := needMessage(p); err != nil {
 		return Channel{}, err
 	}
-	ch, err := s.Channel(ctx, name)
+	ch, err := s.channelFor(ctx, p, name, auth.ScopeMessage)
 	if err != nil {
 		return Channel{}, err
 	}
-	if (u.Rename != "" || u.Archived != nil) && !ch.CanManage(p) {
+	a := s.access(ctx, p)
+	if len(u.AddPatterns)+len(u.RemovePatterns) > 0 || u.Rename != "" || u.Archived != nil {
+		if err := needProjectMessage(a, ch.Project()); err != nil {
+			return Channel{}, err
+		}
+	}
+	if (u.Rename != "" || u.Archived != nil) && !ch.CanManage(p, a) {
 		if ch.Source != dto.SourceRuntime {
 			return Channel{}, dto.Errorf(dto.CodeForbidden, "#%s comes from the configuration; it cannot be renamed or archived.", ch.Name)
 		}
@@ -377,10 +573,15 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 	if err := checkTexts(u.Title, u.Topic); err != nil {
 		return Channel{}, err
 	}
-	if err := checkPatterns(append(slices.Clone(u.AddPatterns), u.RemovePatterns...)); err != nil {
+	addPatterns, err := checkPatterns(ch.Project(), u.AddPatterns)
+	if err != nil {
 		return Channel{}, err
 	}
-	if ch.Name == General && len(u.AddPatterns) > 0 {
+	removePatterns, err := checkPatterns(ch.Project(), u.RemovePatterns)
+	if err != nil {
+		return Channel{}, err
+	}
+	if ch.Local() == General && len(addPatterns) > 0 {
 		return Channel{}, dto.Errorf(dto.CodeBadRequest, "#general has no bindings; create a channel for a device.")
 	}
 	if u.Surface != "" && !validSurface(u.Surface) {
@@ -388,10 +589,17 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 	}
 	newName := ""
 	if u.Rename != "" {
-		newName = normalizeChannel(u.Rename)
-		if err := ValidateChannelName(newName); err != nil {
+		local := normalizeChannel(u.Rename)
+		if pr, l, ok := strings.Cut(local, "/"); ok {
+			if pr != ch.Project() {
+				return Channel{}, dto.Errorf(dto.CodeBadRequest, "A channel stays in its project; rename it to a name inside %s.", ch.Project())
+			}
+			local = l
+		}
+		if err := ValidateChannelName(local); err != nil {
 			return Channel{}, dto.Errorf(dto.CodeBadRequest, "%v.", err)
 		}
+		newName = ch.Project() + "/" + local
 		if newName == ch.Name {
 			newName = ""
 		} else if _, err := s.channel(ctx, newName); err == nil {
@@ -420,7 +628,7 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 			return Channel{}, err
 		}
 	}
-	for _, pat := range uniq(u.RemovePatterns) {
+	for _, pat := range uniq(removePatterns) {
 		r, err := tx.ExecContext(ctx, `DELETE FROM channel_streams WHERE channel = ? AND pattern = ?`, ch.Name, pat)
 		if err != nil {
 			return Channel{}, err
@@ -429,7 +637,7 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 			removed = append(removed, pat)
 		}
 	}
-	for _, pat := range uniq(u.AddPatterns) {
+	for _, pat := range uniq(addPatterns) {
 		r, err := tx.ExecContext(ctx, `INSERT INTO channel_streams(channel, pattern) VALUES (?, ?) ON CONFLICT DO NOTHING`, ch.Name, pat)
 		if err != nil {
 			return Channel{}, err
@@ -478,7 +686,8 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 		s.emit(ChatEvent{Kind: EventChat, Stream: ch.Stream(), Gone: true})
 	}
 	s.emitChat("chan:"+final, "")
-	return s.Channel(ctx, final)
+	s.projects.Invalidate()
+	return s.Channel(ctx, p, final)
 }
 
 // rename moves a channel and its messages to a new name, in the writer
@@ -498,6 +707,9 @@ func (s *Service) rename(ctx context.Context, from, to string) error {
 			{`DELETE FROM streams WHERE id = ?`, []any{"chan:" + from}},
 			{`DELETE FROM channels WHERE name = ?`, []any{from}},
 			{`UPDATE follows SET chat = ? WHERE chat = ?`, []any{"chan:" + to, "chan:" + from}},
+			// Grants on the channel follow it (the projects package owns the
+			// table; this has to be in the same transaction).
+			{`UPDATE grants SET channel = ? WHERE project = ? AND channel = ?`, []any{store.LocalName("chan:" + to), store.ProjectOf("chan:" + from), store.LocalName("chan:" + from)}},
 		}
 		for _, st := range stmts {
 			if _, err := tx.ExecContext(ctx, st.q, st.args...); err != nil {
@@ -508,16 +720,21 @@ func (s *Service) rename(ctx context.Context, from, to string) error {
 	})
 }
 
-// DeleteChannel deletes a runtime channel and its messages.
+// DeleteChannel deletes a runtime channel, its messages and the grants on
+// it.
 func (s *Service) DeleteChannel(ctx context.Context, p auth.Principal, name string) error {
 	if err := needMessage(p); err != nil {
 		return err
 	}
-	ch, err := s.Channel(ctx, name)
+	ch, err := s.channelFor(ctx, p, name, auth.ScopeMessage)
 	if err != nil {
 		return err
 	}
-	if !ch.CanManage(p) {
+	a := s.access(ctx, p)
+	if err := needProjectMessage(a, ch.Project()); err != nil {
+		return err
+	}
+	if !ch.CanManage(p, a) {
 		if ch.Source != dto.SourceRuntime {
 			return dto.Errorf(dto.CodeForbidden, "#%s comes from the configuration; it cannot be deleted.", ch.Name)
 		}
@@ -525,17 +742,19 @@ func (s *Service) DeleteChannel(ctx context.Context, p auth.Principal, name stri
 	}
 	stream := ch.Stream()
 	defer s.emit(ChatEvent{Kind: EventChat, Stream: stream, Gone: true})
+	defer s.projects.Invalidate()
 	return s.exec.Exec(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		for _, q := range []struct {
-			q   string
-			arg string
+			q    string
+			args []any
 		}{
-			{`DELETE FROM entries WHERE stream = ?`, stream},
-			{`DELETE FROM streams WHERE id = ?`, stream},
-			{`DELETE FROM channels WHERE name = ?`, ch.Name},
-			{`DELETE FROM follows WHERE chat = ?`, stream},
+			{`DELETE FROM entries WHERE stream = ?`, []any{stream}},
+			{`DELETE FROM streams WHERE id = ?`, []any{stream}},
+			{`DELETE FROM channels WHERE name = ?`, []any{ch.Name}},
+			{`DELETE FROM follows WHERE chat = ?`, []any{stream}},
+			{`DELETE FROM grants WHERE project = ? AND channel = ?`, []any{ch.Project(), ch.Local()}},
 		} {
-			if _, err := tx.ExecContext(ctx, q.q, q.arg); err != nil {
+			if _, err := tx.ExecContext(ctx, q.q, q.args...); err != nil {
 				return err
 			}
 		}

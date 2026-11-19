@@ -19,6 +19,7 @@ var t0 = time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
 
 type env struct {
 	t      *testing.T
+	stack  *writertest.Stack
 	ctx    context.Context
 	dir    string
 	st     *store.Store
@@ -47,7 +48,8 @@ func newEnv(t *testing.T, tweak ...func(*Options)) *env {
 	var ret store.Retention
 	ret.SetDefaults()
 	jan := store.NewJanitor(st, w.Exec, ret, clk, log)
-	d := deps.Deps{Server: deps.Server{DataDir: dir}, Store: st, Writer: w, Hub: h, Status: stat, Tokens: tokens, Janitor: jan, Clock: clk, Log: log}
+	d := deps.Deps{Server: deps.Server{DataDir: dir}, Store: st, Writer: w, Hub: h, Status: stat, Tokens: tokens, Janitor: jan,
+		Projects: s.Projects, Clock: clk, Log: log}
 	o := defaultOptions()
 	for _, f := range tweak {
 		f(&o)
@@ -60,18 +62,19 @@ func newEnv(t *testing.T, tweak ...func(*Options)) *env {
 	for _, task := range svc.JanitorTasks() {
 		jan.Add(task)
 	}
-	return &env{t: t, ctx: context.Background(), dir: dir, st: st, w: w, hub: h, clk: clk, tokens: tokens, svc: svc, jan: jan, d: d}
+	return &env{t: t, stack: s, ctx: context.Background(), dir: dir, st: st, w: w, hub: h, clk: clk, tokens: tokens, svc: svc, jan: jan, d: d}
 }
 
+// principal is a member of the whole project lab with scopes (read and
+// message when none), as most tests need.
 func (e *env) principal(name, kind string, scopes ...auth.Scope) auth.Principal {
 	e.t.Helper()
-	if _, err := e.tokens.EnsurePrincipal(e.ctx, name, kind); err != nil {
-		e.t.Fatal(err)
-	}
-	if len(scopes) == 0 {
-		scopes = []auth.Scope{auth.ScopeRead, auth.ScopeMessage}
-	}
-	return auth.Principal{Name: name, Kind: kind, Scopes: auth.NewScopeSet(scopes...), TokenID: 1}
+	return e.stack.Member(e.t, name, kind, scopes...)
+}
+
+// admin is the admin session, who reaches every project.
+func (e *env) admin() auth.Principal {
+	return auth.Principal{Name: auth.AdminName, Kind: auth.KindHuman, Scopes: auth.AdminScopes}
 }
 
 func (e *env) agent(name string) auth.Principal { return e.principal(name, auth.KindAgent) }
@@ -132,5 +135,5 @@ func (h *hookHub) Subscribe(f hub.Filter, buffer int) hub.Subscription {
 }
 
 func hubFilterFor(p auth.Principal) hub.Filter {
-	return hub.Filter{Streams: []string{"chan:*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}
+	return hub.Filter{Streams: []string{"chan:lab/*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7, Viewer: &p}
 }

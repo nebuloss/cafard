@@ -2,8 +2,8 @@
   "type": "log",
   "channel": "dut1",
   "streams": [
-    "serial:dut1",
-    "syslog:dut1"
+    "serial:lab/dut1",
+    "syslog:lab/dut1"
   ],
   "from_seq": 48391,
   "to_seq": null,
@@ -19,7 +19,7 @@
     {
       "seq": 48402,
       "ts": "2026-11-16T09:42:15.00441712Z",
-      "stream": "serial:dut1",
+      "stream": "serial:lab/dut1",
       "kind": "line",
       "severity": 3,
       "host": "bench-pi",
@@ -28,7 +28,7 @@
     {
       "seq": 48405,
       "ts": "2026-11-16T09:42:16.331952087Z",
-      "stream": "serial:dut1",
+      "stream": "serial:lab/dut1",
       "kind": "line",
       "severity": 4,
       "host": "bench-pi",

@@ -33,7 +33,7 @@ func lineEntry(seq int64, at, text string, sev int) Entry {
 	return Entry{
 		Seq:      seq,
 		TS:       ts(at),
-		Stream:   "serial:dut1",
+		Stream:   "serial:lab/dut1",
 		Kind:     EntryLine,
 		Severity: sev,
 		Host:     "bench-pi",
@@ -63,8 +63,8 @@ func logPreview() []Entry {
 
 func closedLog() LogAttachment {
 	return LogAttachment{
-		Stream:   "serial:dut1",
-		Streams:  []string{"serial:dut1"},
+		Stream:   "serial:lab/dut1",
+		Streams:  []string{"serial:lab/dut1"},
 		FromSeq:  48211,
 		ToSeq:    ptr(int64(48390)),
 		Title:    "boot with the new kernel",
@@ -79,7 +79,7 @@ func closedLog() LogAttachment {
 func openLog() LogAttachment {
 	return LogAttachment{
 		Channel:     "dut1",
-		Streams:     []string{"serial:dut1", "syslog:dut1"},
+		Streams:     []string{"serial:lab/dut1", "syslog:lab/dut1"},
 		FromSeq:     48391,
 		ToSeq:       nil,
 		Grep:        "usb|dwc3",
@@ -101,12 +101,12 @@ func messageEntry() Entry {
 	return Entry{
 		Seq:       48395,
 		TS:        ts("2026-11-16T09:42:30.551209874Z"),
-		Stream:    "chan:dut1",
+		Stream:    "chan:lab/dut1",
 		Kind:      EntryMessage,
 		Severity:  6,
 		Text:      "The new kernel boots but `dwc3` fails to init, see the log. Photo of the board attached. Patch at https://git.example.com/kernel/commit/4a1f",
 		Meta:      json.RawMessage(`{"client":"claude-code"}`),
-		Chat:      "chan:dut1",
+		Chat:      "chan:lab/dut1",
 		Sender:    &Sender{Name: "claude-laptop", Kind: KindAgent},
 		Recipient: RecipientHumans,
 		ReplyTo:   48390,
@@ -125,11 +125,11 @@ func questionEntry() Entry {
 	return Entry{
 		Seq:       48410,
 		TS:        ts("2026-11-16T09:43:05.120004561Z"),
-		Stream:    "chan:dut1",
+		Stream:    "chan:lab/dut1",
 		Kind:      EntryMessage,
 		Severity:  6,
 		Text:      "Should I flash the board with the patched kernel?\n```sh\nflashtool --port /dev/ttyUSB0 write boot.img\n```",
-		Chat:      "chan:dut1",
+		Chat:      "chan:lab/dut1",
 		Sender:    &Sender{Name: "claude-laptop", Kind: KindAgent},
 		Recipient: RecipientHumans,
 		Segments: []Segment{
@@ -149,26 +149,28 @@ func markerEntry() Entry {
 		Seq:      48390,
 		TS:       ts("2026-11-16T09:41:00.000312998Z"),
 		SrcTS:    tsp("2026-11-16T09:40:59.998001200Z"),
-		Stream:   "serial:dut1",
+		Stream:   "serial:lab/dut1",
 		Kind:     EntryMarker,
 		Severity: 5,
 		App:      "flashtool",
 		Text:     "flashed linux-6.18-rc3 to dut1",
 		Sender:   &Sender{Name: "codex-build", Kind: KindAgent},
-		Chat:     "chan:dut1",
+		Chat:     "chan:lab/dut1",
 		Event:    true,
 	}
 }
 
 func channelChat() Chat {
 	return Chat{
-		ID:            "chan:dut1",
+		ID:            "chan:lab/dut1",
 		Kind:          ChatChannel,
+		Project:       "lab",
+		ProjectTitle:  "Lab bench",
 		Name:          "dut1",
 		Title:         "DUT 1 (RK3588 board)",
 		Topic:         "Bring-up of the 6.18 kernel",
-		Patterns:      []string{"serial:dut1", "syslog:dut1*"},
-		Streams:       []StreamRef{{ID: "serial:dut1", Status: StreamConnected}, {ID: "syslog:dut1", Status: StreamIdle}},
+		Patterns:      []string{"serial:lab/dut1", "syslog:lab/dut1*"},
+		Streams:       []StreamRef{{ID: "serial:lab/dut1", Status: StreamConnected}, {ID: "syslog:lab/dut1", Status: StreamIdle}},
 		Surface:       SurfaceMarkers,
 		Followed:      true,
 		Pinned:        true,
@@ -236,8 +238,10 @@ func fixtures() []fixture {
 		{"chat_channel", channelChat()},
 		{"chat_direct", directChat()},
 		{"stream", Stream{
-			ID:           "serial:dut1",
+			ID:           "serial:lab/dut1",
 			Kind:         "serial",
+			Project:      "lab",
+			Sink:         "dut1",
 			Transport:    "rfc2217",
 			Labels:       map[string]string{"board": "rk3588", "bench": "desk-left"},
 			Status:       StreamConnected,
@@ -259,16 +263,16 @@ func fixtures() []fixture {
 			UnreadDirect:  1,
 			SourcesDown:   0,
 			Chats: []ChatCount{
-				{ID: "chan:dut1", Unread: 3, OpenQuestions: 1},
+				{ID: "chan:lab/dut1", Unread: 3, OpenQuestions: 1},
 				{ID: "dm:codex-build", Unread: 1, OpenQuestions: 0},
 			},
 		}},
-		{"channel_create", ChannelCreate{Name: "dut2", Title: "DUT 2 (i.MX8M)", Topic: "U-Boot work", Patterns: []string{"serial:dut2", "netconsole:dut2"}, Surface: SurfaceErrors}},
+		{"channel_create", ChannelCreate{Name: "dut2", Project: "lab", Title: "DUT 2 (i.MX8M)", Topic: "U-Boot work", Patterns: []string{"serial:lab/dut2", "netconsole:lab/dut2"}, Surface: SurfaceErrors}},
 		{"channel_update", ChannelUpdate{
 			Rename:         "dut2-imx",
 			Topic:          ptr("U-Boot 2026.10 bring-up"),
-			AddPatterns:    []string{"syslog:dut2"},
-			RemovePatterns: []string{"netconsole:dut2"},
+			AddPatterns:    []string{"syslog:lab/dut2"},
+			RemovePatterns: []string{"netconsole:lab/dut2"},
 			Surface:        SurfaceMarkers,
 			Archived:       ptr(false),
 		}},
@@ -298,6 +302,7 @@ func fixtures() []fixture {
 			ExpiresAt: ts("2026-11-16T09:55:00Z"),
 			Principal: "guillaume",
 			NewName:   "guillaume-phone",
+			Grants:    []string{"lab=read,message", "rig:dut1=read"},
 		}},
 		{"share", Share{
 			ID:        "shr_b81c40e2",
@@ -322,14 +327,23 @@ func fixtures() []fixture {
 			ReplyTo: 48390,
 			Images:  []ImageUpload{{Data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", Mime: "image/png"}},
 			Logs: []LogRequest{
-				{Stream: "serial:dut1", FromSeq: 48211, ToSeq: ptr(int64(48390)), Title: "boot with the new kernel"},
+				{Stream: "serial:lab/dut1", FromSeq: 48211, ToSeq: ptr(int64(48390)), Title: "boot with the new kernel"},
 				{Channel: "dut1", FromSeq: 48391, Grep: "usb|dwc3", MinSeverity: ptr(4)},
 			},
 		}},
-		{"log_accepted", LogAccepted{Accepted: 1000, LastSeq: 49211}},
+		{"log_accepted", LogAccepted{Accepted: 1000, LastSeq: 49211, Dropped: 12}},
+		{"project", Project{
+			Name:      "lab",
+			Title:     "Lab bench",
+			CreatedAt: ts("2026-11-16T08:00:00Z"),
+			Scopes:    []Scope{ScopeRead, ScopeMessage},
+			Channels:  []string{"chan:lab/dut1", "chan:lab/general"},
+			Sinks:     []string{"bench-pi", "dut1"},
+			Retention: ProjectRetention{LinesMaxAgeS: 1209600, LinesMaxBytes: 2e9, MessagesMaxAgeS: 7776000, BlobsMaxBytes: 5e9},
+		}},
 		{"token_create", TokenCreate{Principal: "claude-laptop", Kind: KindAgent, Label: "laptop MCP", Scopes: []Scope{ScopeRead, ScopeMessage}}},
 		{"pairing_create", PairingCreate{NewName: "guillaume-phone", Scopes: []Scope{ScopeRead, ScopeMessage, ScopeIngest}}},
-		{"mark_create", MarkCreate{Stream: "serial:dut1", Label: "test 42 starts"}},
+		{"mark_create", MarkCreate{Stream: "serial:lab/dut1", Label: "test 42 starts"}},
 		{"mark_created", MarkCreated{Seq: 48230}},
 		{"chat_prefs", ChatPrefs{Pinned: ptr(true), Muted: ptr(false)}},
 		{"chat_read", ChatRead{UpToSeq: 48420}},
@@ -350,7 +364,7 @@ func errorExample(code string) ErrorBody {
 	case CodeInvalidPattern:
 		b.Message = "The pattern \"serial:[dut\" is not a valid glob: missing ']'."
 	case CodeUnknownChannel:
-		b.Message = "There is no channel \"dut3\". Existing channels: dut1, dut2, general."
+		b.Message = "There is no channel \"dut3\" you can read. Channels you can read: lab/dut1, lab/dut2, lab/general."
 	case CodeTooLarge:
 		b.Message = "The message text is 40 KiB; the limit is 32 KiB."
 	case CodeUnauthenticated:
@@ -362,7 +376,7 @@ func errorExample(code string) ErrorBody {
 	case CodeNotFound:
 		b.Message = "Message 48500 does not exist."
 	case CodeConflict:
-		b.Message = "serial:dut1 is claimed by claude-laptop until 10:12 UTC."
+		b.Message = "serial:lab/dut1 is claimed by claude-laptop until 10:12 UTC."
 	case CodeRateLimited:
 		b.Message = "You sent 30 messages in the last minute; wait 12 s."
 		b.RetryAfterS = 12

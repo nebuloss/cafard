@@ -40,11 +40,18 @@ func (c *Config) SetDefaults() {
 }
 
 // Validate checks every port and that names are unique.
-func (c *Config) Validate() error {
+func (c *Config) Validate() error { return c.validate(false) }
+
+// validate also takes "project/sink" names when inProject.
+func (c *Config) validate(inProject bool) error {
 	seen := map[string]bool{}
 	for i := range c.Ports {
 		p := &c.Ports[i]
-		if !nameRE.MatchString(p.Name) {
+		name := p.Name
+		if project, sink, ok := projects.SplitRef(name); ok && inProject && projects.ValidateName(project) == nil {
+			name = sink
+		}
+		if !nameRE.MatchString(name) {
 			return fmt.Errorf("name %q must be 1 to 63 lowercase letters, digits, '.', '_' or '-', starting with a letter or digit", p.Name)
 		}
 		if err := p.Validate(); err != nil {

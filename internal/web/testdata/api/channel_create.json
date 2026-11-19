@@ -1,10 +1,11 @@
 {
   "name": "dut2",
+  "project": "lab",
   "title": "DUT 2 (i.MX8M)",
   "topic": "U-Boot work",
   "patterns": [
-    "serial:dut2",
-    "netconsole:dut2"
+    "serial:lab/dut2",
+    "netconsole:lab/dut2"
   ],
   "surface": "errors"
 }

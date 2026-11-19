@@ -11,7 +11,7 @@
   ],
   "logs": [
     {
-      "stream": "serial:dut1",
+      "stream": "serial:lab/dut1",
       "from_seq": 48211,
       "to_seq": 48390,
       "title": "boot with the new kernel"

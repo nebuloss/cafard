@@ -16,6 +16,7 @@ import (
 
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/mcpserver"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/textclean"
@@ -45,7 +46,17 @@ func Register(_ *http.ServeMux, s *mcpserver.Server, d deps.Deps, cfg *Config) (
 	if cfg == nil || len(cfg.Ports) == 0 {
 		return nil, nil
 	}
-	m, err := New(d, cfg, Options{})
+	c := Config{Ports: append([]Port(nil), cfg.Ports...)}
+	c.SetDefaults()
+	if err := c.Validate(); err != nil {
+		return nil, fmt.Errorf("serial: %w", err)
+	}
+	// The listed ports are the ones the import makes sinks of in the
+	// project imported, so their streams are already named there.
+	for i := range c.Ports {
+		c.Ports[i].Name = projects.Imported + "/" + c.Ports[i].Name
+	}
+	m, err := New(d, &c, Options{})
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +70,7 @@ func Register(_ *http.ServeMux, s *mcpserver.Server, d deps.Deps, cfg *Config) (
 func New(d deps.Deps, cfg *Config, opts Options) (*Manager, error) {
 	c := Config{Ports: append([]Port(nil), cfg.Ports...)}
 	c.SetDefaults()
-	if err := c.Validate(); err != nil {
+	if err := c.validate(true); err != nil {
 		return nil, fmt.Errorf("serial: %w", err)
 	}
 	if opts.Factory == nil {

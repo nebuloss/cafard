@@ -14,6 +14,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/hub"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/textclean"
@@ -36,6 +37,7 @@ type whoamiOut struct {
 type listStreamsIn struct {
 	Kind    string `json:"kind,omitempty" jsonschema:"only streams of this kind, e.g. serial, syslog, push"`
 	Channel string `json:"channel,omitempty" jsonschema:"only the streams bound to this channel"`
+	Project string `json:"project,omitempty" jsonschema:"only the streams of this project"`
 }
 
 type listStreamsOut struct {
@@ -44,7 +46,7 @@ type listStreamsOut struct {
 
 type selectIn struct {
 	Channel string   `json:"channel,omitempty" jsonschema:"read the streams bound to this channel"`
-	Streams []string `json:"streams,omitempty" jsonschema:"stream ids or globs such as serial:dut1 or syslog:dut1*; default every log stream"`
+	Streams []string `json:"streams,omitempty" jsonschema:"stream ids or globs such as serial:lab/dut1 or syslog:lab/*; default every log stream you may read"`
 }
 
 type readIn struct {
@@ -83,7 +85,7 @@ type contextIn struct {
 }
 
 type markIn struct {
-	Stream string `json:"stream" jsonschema:"the stream to mark, e.g. serial:dut1"`
+	Stream string `json:"stream" jsonschema:"the stream to mark, e.g. serial:lab/dut1"`
 	Label  string `json:"label" jsonschema:"what happens from here, e.g. test 42 starts"`
 }
 
@@ -113,15 +115,21 @@ func (s *Server) whoami(_ context.Context, c *Call, _ struct{}) (string, whoamiO
 	return fmt.Sprintf("You are %s (%s), with scopes: %s.", p.Name, p.Kind, strings.Join(out.Scopes, ", ")), out, nil
 }
 
+// access is what p may reach in the projects.
+func (s *Server) access(ctx context.Context, p auth.Principal) *projects.Access {
+	return s.deps.Projects.Access(ctx, p)
+}
+
 // resolve turns channel= and streams= into stream patterns. Message streams
-// are dropped: log tools never return messages.
-func (s *Server) resolve(ctx context.Context, in selectIn) ([]string, error) {
+// are dropped: log tools never return messages. nil means every log stream
+// p may read; the caller narrows to them (streamIDs, or the hub filter).
+func (s *Server) resolve(ctx context.Context, p auth.Principal, in selectIn) ([]string, error) {
 	var patterns []string
 	if in.Channel != "" {
 		if s.deps.Messaging == nil {
 			return nil, dto.Errorf(dto.CodeUnknownChannel, "There is no channel %q: there are no channels yet.", in.Channel)
 		}
-		bound, err := s.deps.Messaging.ResolveChannel(ctx, in.Channel)
+		_, bound, err := s.deps.Messaging.ResolveChannel(ctx, p, in.Channel)
 		if err != nil {
 			return nil, err
 		}
@@ -144,8 +152,19 @@ func (s *Server) resolve(ctx context.Context, in selectIn) ([]string, error) {
 	return patterns, nil
 }
 
-// streamIDs resolves patterns to existing log stream ids; nil means all.
-func (s *Server) streamIDs(ctx context.Context, patterns []string) ([]string, error) {
+// visiblePatterns is patterns, or for nil the log streams a may read.
+// nil comes back only for the admin: every log stream.
+func visiblePatterns(a *projects.Access, patterns []string) []string {
+	if patterns == nil && !a.All() {
+		return a.LogPatterns()
+	}
+	return patterns
+}
+
+// streamIDs resolves patterns to the existing log streams a may read; nil
+// patterns mean every one, and nil ids every one for the admin.
+func (s *Server) streamIDs(ctx context.Context, a *projects.Access, patterns []string) ([]string, error) {
+	patterns = visiblePatterns(a, patterns)
 	if patterns == nil {
 		return nil, nil
 	}
@@ -156,21 +175,21 @@ func (s *Server) streamIDs(ctx context.Context, patterns []string) ([]string, er
 	if err != nil {
 		return nil, err
 	}
-	ids = slices.DeleteFunc(ids, store.IsMessageStream)
+	ids = slices.DeleteFunc(ids, func(id string) bool { return store.IsMessageStream(id) || !a.Can(id, auth.ScopeRead) })
 	if ids == nil {
 		ids = []string{}
 	}
 	return ids, nil
 }
 
-// selectIDs resolves channel= and streams= to existing log stream ids;
-// nil means all.
-func (s *Server) selectIDs(ctx context.Context, in selectIn) ([]string, error) {
-	patterns, err := s.resolve(ctx, in)
+// selectIDs resolves channel= and streams= to the existing log streams p
+// may read; nil means all, for the admin.
+func (s *Server) selectIDs(ctx context.Context, p auth.Principal, in selectIn) ([]string, error) {
+	patterns, err := s.resolve(ctx, p, in)
 	if err != nil {
 		return nil, err
 	}
-	return s.streamIDs(ctx, patterns)
+	return s.streamIDs(ctx, s.access(ctx, p), patterns)
 }
 
 func compile(pattern, what string) (*regexp.Regexp, error) {
@@ -184,10 +203,10 @@ func compile(pattern, what string) (*regexp.Regexp, error) {
 	return re, nil
 }
 
-func (s *Server) listStreams(ctx context.Context, _ *Call, in listStreamsIn) (string, listStreamsOut, error) {
+func (s *Server) listStreams(ctx context.Context, c *Call, in listStreamsIn) (string, listStreamsOut, error) {
 	var keep map[string]bool
 	if in.Channel != "" {
-		ids, err := s.selectIDs(ctx, selectIn{Channel: in.Channel})
+		ids, err := s.selectIDs(ctx, c.Principal, selectIn{Channel: in.Channel})
 		if err != nil {
 			return "", listStreamsOut{}, err
 		}
@@ -196,13 +215,13 @@ func (s *Server) listStreams(ctx context.Context, _ *Call, in listStreamsIn) (st
 			keep[id] = true
 		}
 	}
-	streams, err := s.streams(ctx)
+	streams, err := s.Streams(ctx, c.Principal)
 	if err != nil {
 		return "", listStreamsOut{}, err
 	}
 	out := listStreamsOut{Streams: []dto.Stream{}}
 	for _, st := range streams {
-		if (in.Kind != "" && st.Kind != in.Kind) || (keep != nil && !keep[st.ID]) {
+		if (in.Kind != "" && st.Kind != in.Kind) || (keep != nil && !keep[st.ID]) || (in.Project != "" && st.Project != in.Project) {
 			continue
 		}
 		out.Streams = append(out.Streams, st)
@@ -226,13 +245,15 @@ func (s *Server) listStreams(ctx context.Context, _ *Call, in listStreamsIn) (st
 	return b.String(), out, nil
 }
 
-// streams merges the store's streams with the live status. Message
-// streams are left out.
-func (s *Server) streams(ctx context.Context) ([]dto.Stream, error) {
+// Streams merges the store's streams p may read with the live status.
+// Message streams are left out.
+func (s *Server) Streams(ctx context.Context, p auth.Principal) ([]dto.Stream, error) {
 	out, err := status.Streams(ctx, s.deps.Store, s.deps.Status)
 	if err != nil {
 		return nil, err
 	}
+	a := s.access(ctx, p)
+	out = slices.DeleteFunc(out, func(st dto.Stream) bool { return !a.Can(st.ID, auth.ScopeRead) })
 	if cs, ok := s.deps.Messaging.(ClaimSource); ok {
 		claims, err := cs.ActiveClaims(ctx)
 		if err != nil {
@@ -275,8 +296,8 @@ func formatPage(entries []store.Entry, more bool, next int64) (string, Page) {
 	return text, page
 }
 
-func (s *Server) read(ctx context.Context, _ *Call, in readIn) (string, Page, error) {
-	ids, err := s.selectIDs(ctx, in.selectIn)
+func (s *Server) read(ctx context.Context, c *Call, in readIn) (string, Page, error) {
+	ids, err := s.selectIDs(ctx, c.Principal, in.selectIn)
 	if err != nil {
 		return "", Page{}, err
 	}
@@ -313,8 +334,8 @@ func (s *Server) read(ctx context.Context, _ *Call, in readIn) (string, Page, er
 	return text, page, nil
 }
 
-func (s *Server) tail(ctx context.Context, _ *Call, in tailIn) (string, Page, error) {
-	ids, err := s.selectIDs(ctx, in.selectIn)
+func (s *Server) tail(ctx context.Context, c *Call, in tailIn) (string, Page, error) {
+	ids, err := s.selectIDs(ctx, c.Principal, in.selectIn)
 	if err != nil {
 		return "", Page{}, err
 	}
@@ -353,10 +374,12 @@ func (s *Server) waitFor(ctx context.Context, c *Call, in waitIn) (string, waitO
 	if re == nil {
 		return "", waitOut{}, dto.Errorf(dto.CodeBadRequest, "wait_for needs a pattern.")
 	}
-	patterns, err := s.resolve(ctx, in.selectIn)
+	patterns, err := s.resolve(ctx, c.Principal, in.selectIn)
 	if err != nil {
 		return "", waitOut{}, err
 	}
+	a := s.access(ctx, c.Principal)
+	patterns = visiblePatterns(a, patterns)
 	timeout := waitDefault
 	if in.TimeoutS > 0 {
 		timeout = min(time.Duration(in.TimeoutS)*time.Second, waitMax)
@@ -366,7 +389,7 @@ func (s *Server) waitFor(ctx context.Context, c *Call, in waitIn) (string, waitO
 		contextN = max(0, min(*in.ContextLines, 200))
 	}
 
-	w := &waiter{s: s, re: re, patterns: patterns, kinds: logKinds}
+	w := &waiter{s: s, access: a, re: re, patterns: patterns, kinds: logKinds}
 	if patterns != nil && len(patterns) == 0 {
 		return "No stream matches, so nothing can arrive.", waitOut{TimedOut: true}, nil
 	}
@@ -417,6 +440,7 @@ func (s *Server) waitFor(ctx context.Context, c *Call, in waitIn) (string, waitO
 
 type waiter struct {
 	s         *Server
+	access    *projects.Access
 	re        *regexp.Regexp
 	patterns  []string
 	kinds     []store.Kind
@@ -426,7 +450,7 @@ type waiter struct {
 }
 
 func (w *waiter) consider(e store.Entry) *store.Entry {
-	if e.Seq < w.cursor || store.IsMessageStream(e.Stream) {
+	if e.Seq < w.cursor || store.IsMessageStream(e.Stream) || !w.access.Can(e.Stream, auth.ScopeRead) {
 		return nil
 	}
 	w.cursor = e.Seq + 1
@@ -444,7 +468,7 @@ func (w *waiter) consider(e store.Entry) *store.Entry {
 // catchUp reads the store from the cursor to its end.
 func (w *waiter) catchUp(ctx context.Context) (*store.Entry, error) {
 	for {
-		ids, err := w.s.streamIDs(ctx, w.patterns)
+		ids, err := w.s.streamIDs(ctx, w.access, w.patterns)
 		if err != nil {
 			return nil, err
 		}
@@ -507,16 +531,20 @@ func (s *Server) context(ctx context.Context, c *Call, in contextIn) (string, Pa
 	if err != nil {
 		return "", Page{}, err
 	}
-	if store.IsMessageStream(focus.Stream) && (s.deps.Messaging == nil || !s.deps.Messaging.Visible(ctx, c.Principal, focus)) {
+	visible := func(e store.Entry) bool {
+		if store.IsMessageStream(e.Stream) {
+			return s.deps.Messaging != nil && s.deps.Messaging.Visible(ctx, c.Principal, e)
+		}
+		return s.access(ctx, c.Principal).Can(e.Stream, auth.ScopeRead)
+	}
+	if !visible(focus) {
 		return "", Page{}, dto.Errorf(dto.CodeNotFound, "There is no entry %d; retention may have removed it.", in.Seq)
 	}
 	entries, err := s.deps.Store.Around(ctx, in.Seq, before, after)
 	if err != nil {
 		return "", Page{}, err
 	}
-	if store.IsMessageStream(focus.Stream) && s.deps.Messaging != nil {
-		entries = slices.DeleteFunc(entries, func(e store.Entry) bool { return !s.deps.Messaging.Visible(ctx, c.Principal, e) })
-	}
+	entries = slices.DeleteFunc(entries, func(e store.Entry) bool { return !visible(e) })
 	f := textclean.Format(entries, textclean.AgentDefaults, time.UTC)
 	next := entries[len(entries)-1].Seq + 1
 	return f.Text, Page{NextSeq: next, Shown: f.Shown, Streams: []string{focus.Stream}}, nil
@@ -537,8 +565,12 @@ func (s *Server) mark(ctx context.Context, c *Call, in markIn) (string, markOut,
 	if err != nil {
 		return "", markOut{}, err
 	}
-	if !slices.Contains(ids, in.Stream) {
-		return "", markOut{}, dto.Errorf(dto.CodeNotFound, "There is no stream %q; list_streams shows the existing ones.", in.Stream)
+	a := s.access(ctx, c.Principal)
+	if !slices.Contains(ids, in.Stream) || !a.Can(in.Stream, auth.ScopeRead) {
+		return "", markOut{}, dto.Errorf(dto.CodeNotFound, "There is no stream %q you can read; list_streams shows them.", in.Stream)
+	}
+	if !a.Can(in.Stream, auth.ScopeMessage) {
+		return "", markOut{}, dto.Errorf(dto.CodeForbidden, "Marking %s needs message on it; ask the admin for a grant.", in.Stream)
 	}
 	seq, err := s.deps.Writer.Commit(ctx, store.Entry{
 		Stream: in.Stream, Kind: store.KindMarker, Severity: store.DefaultSeverity,

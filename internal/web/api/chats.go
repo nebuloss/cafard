@@ -44,7 +44,8 @@ func flag(r *http.Request, name string) bool {
 }
 
 func (c *chatsAPI) list(w http.ResponseWriter, r *http.Request, p auth.Principal) {
-	chats, err := c.svc.Chats(r.Context(), p, messaging.ChatsQuery{All: flag(r, "all"), Archived: flag(r, "archived")})
+	chats, err := c.svc.Chats(r.Context(), p, messaging.ChatsQuery{All: flag(r, "all"), Archived: flag(r, "archived"),
+		Project: r.URL.Query().Get("project")})
 	if err != nil {
 		c.Fail(w, r, err)
 		return

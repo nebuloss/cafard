@@ -60,15 +60,19 @@ func (s *Service) target(ctx context.Context, from auth.Principal, to, channel s
 		if to == from.Name {
 			return target{}, dto.Errorf(dto.CodeBadRequest, "You cannot send a direct message to yourself.")
 		}
-		if !s.principalExists(ctx, to) {
-			return target{}, dto.Errorf(dto.CodeNotFound, "There is no principal %q; list_principals shows who can be messaged.", to)
+		share, err := s.projects.Share(ctx, from.Name, to)
+		if err != nil {
+			return target{}, err
+		}
+		if !s.principalExists(ctx, to) || !share {
+			return target{}, dto.Errorf(dto.CodeNotFound, "There is no principal %q you share a project with; list_principals shows who can be messaged.", to)
 		}
 		return target{stream: DMStream(from.Name, to), recipient: to}, nil
 	default:
 		if channel == "" {
 			channel = General
 		}
-		ch, err := s.Channel(ctx, channel)
+		ch, err := s.channelFor(ctx, from, channel, auth.ScopeMessage)
 		if err != nil {
 			return target{}, err
 		}
@@ -187,7 +191,7 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 		atts = append(atts, store.Attachment{Type: dto.AttachmentImage, SHA256: b.SHA256, Mime: b.Mime, Width: b.Width, Height: b.Height})
 	}
 	for i, lr := range m.Logs {
-		a, err := s.buildLogAttachment(ctx, i, lr)
+		a, err := s.buildLogAttachment(ctx, from, i, lr)
 		if err != nil {
 			return store.Entry{}, err
 		}

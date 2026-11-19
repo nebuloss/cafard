@@ -1,11 +1,13 @@
 {
-  "id": "serial:dut1",
+  "id": "serial:lab/dut1",
   "kind": "serial",
   "transport": "rfc2217",
   "labels": {
     "bench": "desk-left",
     "board": "rk3588"
   },
+  "project": "lab",
+  "sink": "dut1",
   "status": "connected",
   "last_seq": 48405,
   "last_activity": "2026-11-16T09:42:16.331952087Z",

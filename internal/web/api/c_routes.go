@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"slices"
@@ -17,6 +18,7 @@ import (
 // public, and the token and pairing routes on admin, the admin interface.
 func (a *API) Mount(public, admin *http.ServeMux) {
 	public.Handle("GET /api/me", a.Read(auth.ScopeRead, a.me))
+	public.Handle("GET /api/projects", a.Read(auth.ScopeRead, a.projects))
 	public.Handle("GET /api/principals", a.Read(auth.ScopeRead, a.principals))
 	public.Handle("GET /api/streams", a.Read(auth.ScopeRead, a.streams))
 	public.Handle("GET /api/streams/match", a.Read(auth.ScopeRead, a.streamsMatch))
@@ -36,13 +38,33 @@ func (a *API) me(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		SessionID: p.SessionID, Theme: view.ThemeOf(r)})
 }
 
-func (a *API) principals(w http.ResponseWriter, r *http.Request, _ auth.Principal) {
+// projectLister is what messaging offers for GET /api/projects.
+type projectLister interface {
+	Projects(ctx context.Context, p auth.Principal) ([]dto.Project, error)
+}
+
+func (a *API) projects(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	out := []dto.Project{}
+	if lister, ok := a.d.Messaging.(projectLister); ok {
+		var err error
+		if out, err = lister.Projects(r.Context(), p); err != nil {
+			a.Fail(w, r, err)
+			return
+		}
+	}
+	dto.WriteJSON(w, http.StatusOK, map[string][]dto.Project{"projects": out})
+}
+
+func (a *API) principals(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	kind := r.URL.Query().Get("kind")
 	if kind != "" && !auth.ValidKind(kind) {
 		dto.WriteError(w, dto.Errorf(dto.CodeBadRequest, "kind is agent, human or device, not %q.", kind))
 		return
 	}
 	rows, err := a.d.Tokens.Principals(r.Context(), kind)
+	if err == nil {
+		rows, err = a.d.Projects.Reachable(r.Context(), p, rows)
+	}
 	if err != nil {
 		a.Fail(w, r, err)
 		return
@@ -54,31 +76,34 @@ func (a *API) principals(w http.ResponseWriter, r *http.Request, _ auth.Principa
 	dto.WriteJSON(w, http.StatusOK, map[string][]dto.Principal{"principals": out})
 }
 
-func (a *API) streams(w http.ResponseWriter, r *http.Request, _ auth.Principal) {
-	list, err := view.Streams(r.Context(), a.d.Store, a.d.Status)
+func (a *API) streams(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	list, err := view.VisibleStreams(r.Context(), a.d, p)
 	if err != nil {
 		a.Fail(w, r, err)
 		return
 	}
 	if ch := r.URL.Query().Get("channel"); ch != "" {
-		patterns, apiErr := view.LogFilter{Channel: ch}.Patterns(r.Context(), a.d)
+		patterns, apiErr := view.LogFilter{Channel: ch}.Patterns(r.Context(), a.d, p)
 		if apiErr != nil {
 			dto.WriteError(w, apiErr)
 			return
 		}
 		list = slices.DeleteFunc(list, func(s dto.Stream) bool { return !store.StreamMatches(s.ID, patterns) || len(patterns) == 0 })
 	}
+	if project := r.URL.Query().Get("project"); project != "" {
+		list = slices.DeleteFunc(list, func(s dto.Stream) bool { return s.Project != project })
+	}
 	dto.WriteJSON(w, http.StatusOK, map[string][]dto.Stream{"streams": nonNil(list)})
 }
 
 // streamsMatch previews a glob: which streams a binding would show now.
-func (a *API) streamsMatch(w http.ResponseWriter, r *http.Request, _ auth.Principal) {
+func (a *API) streamsMatch(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	pattern := strings.TrimSpace(r.URL.Query().Get("pattern"))
 	if err := store.ValidatePattern(pattern); err != nil {
 		dto.WriteError(w, dto.Errorf(dto.CodeInvalidPattern, "%v.", err))
 		return
 	}
-	list, err := view.Streams(r.Context(), a.d.Store, a.d.Status)
+	list, err := view.VisibleStreams(r.Context(), a.d, p)
 	if err != nil {
 		a.Fail(w, r, err)
 		return
@@ -101,7 +126,7 @@ const (
 
 // entries reads log lines and markers. Never messages: chan:* and dm:*
 // patterns are dropped, and kinds=message is refused.
-func (a *API) entries(w http.ResponseWriter, r *http.Request, _ auth.Principal) {
+func (a *API) entries(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	f, apiErr := view.ParseLogFilter(r.URL.Query())
 	if apiErr == nil && f.Messages {
 		apiErr = dto.Errorf(dto.CodeBadRequest, "/api/entries returns lines and markers; read messages through the chat API.")
@@ -110,12 +135,12 @@ func (a *API) entries(w http.ResponseWriter, r *http.Request, _ auth.Principal) 
 		dto.WriteError(w, apiErr)
 		return
 	}
-	patterns, apiErr := f.Patterns(r.Context(), a.d)
+	patterns, apiErr := f.Patterns(r.Context(), a.d, p)
 	if apiErr != nil {
 		dto.WriteError(w, apiErr)
 		return
 	}
-	ids, err := view.StreamIDs(r.Context(), a.d.Store, patterns)
+	ids, err := view.StreamIDs(r.Context(), a.d.Store, a.d.Projects.Access(r.Context(), p), patterns)
 	if err != nil {
 		a.Fail(w, r, err)
 		return
@@ -145,7 +170,7 @@ func intParam(r *http.Request, name string, def, limit int) (int, *dto.APIError)
 	return min(n, limit), nil
 }
 
-func (a *API) context(w http.ResponseWriter, r *http.Request, _ auth.Principal) {
+func (a *API) context(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	seq, err := strconv.ParseInt(r.PathValue("seq"), 10, 64)
 	notFound := dto.Errorf(dto.CodeNotFound, "There is no entry %s; retention may have removed it.", r.PathValue("seq"))
 	if err != nil {
@@ -162,8 +187,9 @@ func (a *API) context(w http.ResponseWriter, r *http.Request, _ auth.Principal) 
 		dto.WriteError(w, apiErr)
 		return
 	}
+	acc := a.d.Projects.Access(r.Context(), p)
 	focus, err := a.d.Store.Get(r.Context(), seq)
-	if errors.Is(err, store.ErrNotFound) || (err == nil && store.IsMessageStream(focus.Stream)) {
+	if errors.Is(err, store.ErrNotFound) || (err == nil && (store.IsMessageStream(focus.Stream) || !acc.Can(focus.Stream, auth.ScopeRead))) {
 		dto.WriteError(w, notFound)
 		return
 	}
@@ -211,8 +237,13 @@ func (a *API) mark(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		a.Fail(w, r, err)
 		return
 	}
-	if !slices.Contains(ids, req.Stream) {
+	acc := a.d.Projects.Access(r.Context(), p)
+	if !slices.Contains(ids, req.Stream) || !acc.Can(req.Stream, auth.ScopeRead) {
 		dto.WriteError(w, dto.Errorf(dto.CodeNotFound, "There is no stream %q.", req.Stream))
+		return
+	}
+	if !acc.Can(req.Stream, auth.ScopeMessage) {
+		dto.WriteError(w, dto.Errorf(dto.CodeForbidden, "Marking %s needs message on it; ask the admin for a grant.", req.Stream))
 		return
 	}
 	seq, err := a.d.Writer.Commit(r.Context(), store.Entry{Stream: req.Stream, Kind: store.KindMarker, Severity: store.DefaultSeverity,
@@ -329,7 +360,8 @@ func (a *API) createPairing(w http.ResponseWriter, r *http.Request, p auth.Princ
 			return
 		}
 	}
-	row, code, err := a.pairings.Create(r.Context(), strings.TrimSpace(req.Principal), strings.TrimSpace(req.NewName), scopes, p.Name, 0)
+	row, code, err := a.pairings.Create(r.Context(), strings.TrimSpace(req.Principal), strings.TrimSpace(req.NewName), scopes,
+		strings.Join(req.Grants, " "), p.Name, 0)
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrNotFound):

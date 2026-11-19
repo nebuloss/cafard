@@ -253,8 +253,18 @@ func (s *Service) Share(ctx context.Context, a, b string) (bool, error) {
 	return n > 0, err
 }
 
-// Peers are the principals sharing a project with name, by name.
-func (s *Service) Peers(ctx context.Context, name string) ([]string, error) {
-	return store.QueryColumn[string](ctx, s.db, `SELECT DISTINCT g2.principal FROM grants g1 JOIN grants g2 ON g1.project = g2.project
-		WHERE g1.principal = ? AND g2.principal <> ? ORDER BY g2.principal`, name, name)
+// Reachable keeps of rows the principals p may message: those sharing a
+// project with p, and the admin; every one for the admin.
+func (s *Service) Reachable(ctx context.Context, p auth.Principal, rows []auth.PrincipalRow) ([]auth.PrincipalRow, error) {
+	if s.Access(ctx, p).All() {
+		return rows, nil
+	}
+	peers, err := store.QueryColumn[string](ctx, s.db, `SELECT DISTINCT g2.principal FROM grants g1 JOIN grants g2 ON g1.project = g2.project
+		WHERE g1.principal = ? AND g2.principal <> ?`, p.Name, p.Name)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(rows, func(r auth.PrincipalRow) bool {
+		return r.Name != auth.AdminName && !slices.Contains(peers, r.Name)
+	}), nil
 }

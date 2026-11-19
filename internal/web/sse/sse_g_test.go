@@ -17,12 +17,12 @@ func TestStreamStatusCarriesTheLastLine(t *testing.T) {
 	tok := e.Principal("alice", auth.KindHuman, auth.ScopeRead)
 	c, _ := connect(t, srv, "/api/events?scope=status", tok)
 	c.next(t, "counts")
-	e.Commit(webtest.Line("serial:dut1", "\x1b[1mU-Boot\x1b[0m 2024.04"))
+	e.Commit(webtest.Line("serial:lab/dut1", "\x1b[1mU-Boot\x1b[0m 2024.04"))
 	deadline := time.After(5 * time.Second)
 	for {
 		var st dto.Stream
 		_ = json.Unmarshal([]byte(c.next(t, "stream_status").Data), &st)
-		if st.ID == "serial:dut1" && st.LastLine == "U-Boot 2024.04" && st.LastSeq > 0 {
+		if st.ID == "serial:lab/dut1" && st.LastLine == "U-Boot 2024.04" && st.LastSeq > 0 {
 			return
 		}
 		select {
@@ -40,10 +40,10 @@ func TestLiveMessagesFollowTheChannel(t *testing.T) {
 	c, _ := connect(t, srv, "/api/events?channel=dut1&kinds=line,message", tok)
 	c.next(t, "counts")
 	e.Commit(
-		store.Entry{Stream: "chan:general", Kind: store.KindMessage, Severity: 6, Text: "elsewhere", Sender: "codex"},
+		store.Entry{Stream: "chan:lab/general", Kind: store.KindMessage, Severity: 6, Text: "elsewhere", Sender: "codex"},
 		store.Entry{Stream: "dm:alice~carol", Kind: store.KindMessage, Severity: 6, Text: "a direct one", Sender: "alice"},
-		store.Entry{Stream: "chan:dut1", Kind: store.KindMessage, Severity: 6, Text: "in dut1", Sender: "codex"},
-		webtest.Line("serial:dut1", "bound line"),
+		store.Entry{Stream: "chan:lab/dut1", Kind: store.KindMessage, Severity: 6, Text: "in dut1", Sender: "codex"},
+		webtest.Line("serial:lab/dut1", "bound line"),
 	)
 	if got := entryOf(t, c.next(t, "entry")); got.Text != "in dut1" {
 		t.Errorf("first entry %q, want the channel's message", got.Text)

@@ -69,6 +69,9 @@ type tools struct {
 	m      *Manager
 	claims ClaimChecker          // nil without messaging: every write is refused
 	owners mcpserver.ClaimSource // optional, to name the holder
+	// granted reports whether p has serial_write on the stream through a
+	// grant; without the projects service nobody has.
+	granted func(ctx context.Context, p auth.Principal, stream string) bool
 }
 
 func registerTools(s *mcpserver.Server, m *Manager) {
@@ -82,14 +85,19 @@ func registerTools(s *mcpserver.Server, m *Manager) {
 }
 
 func newTools(m *Manager) *tools {
-	t := &tools{m: m}
+	t := &tools{m: m, granted: func(context.Context, auth.Principal, string) bool { return false }}
 	t.claims, _ = m.d.Messaging.(ClaimChecker)
 	t.owners, _ = m.d.Messaging.(mcpserver.ClaimSource)
+	if pr := m.d.Projects; pr != nil {
+		t.granted = func(ctx context.Context, p auth.Principal, stream string) bool {
+			return pr.Access(ctx, p).Can(stream, auth.ScopeSerialWrite)
+		}
+	}
 	return t
 }
 
-// gate runs the three checks (the scope is the tool's own) and returns the
-// port.
+// gate runs the checks besides the tool's scope (the port is writable, a
+// serial_write grant, the claim) and returns the port.
 func (t *tools) gate(ctx context.Context, p auth.Principal, stream string) (*Handle, error) {
 	h, err := t.m.Lookup(stream)
 	if err != nil {
@@ -100,8 +108,11 @@ func (t *tools) gate(ctx context.Context, p auth.Principal, stream string) (*Han
 		return nil, dto.Errorf(dto.CodeNotFound, "There is no serial port with stream %q; the configured ones are %s.", stream, strings.Join(names, ", "))
 	}
 	if !h.Writable() {
-		return nil, dto.Errorf(dto.CodeForbidden, "%s is read-only: the operator must set writable: true on port %s in cafard.yaml before agents may drive it.",
+		return nil, dto.Errorf(dto.CodeForbidden, "%s is read-only: the admin must make the serial port of sink %s writable before agents may drive it.",
 			stream, h.port.Name)
+	}
+	if !t.granted(ctx, p, stream) {
+		return nil, dto.Errorf(dto.CodeForbidden, "Driving %s needs a serial_write grant on its project or on a channel bound to it; ask the admin.", stream)
 	}
 	if t.claims == nil {
 		return nil, dto.Errorf(dto.CodeForbidden, "Writing to %s needs a claim, and this server has no claims.", stream)

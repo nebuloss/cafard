@@ -18,7 +18,7 @@ import (
 func newEnv(t *testing.T) *webtest.Env {
 	t.Helper()
 	e := webtest.New(t, webtest.Options{})
-	pairings := auth.NewPairings(e.Store.DB(), e.Clock, e.Sessions)
+	pairings := auth.NewPairings(e.Store.DB(), e.Clock, e.Sessions, e.Deps.Projects)
 	api.New(e.Deps, e.Sessions, pairings, view.NewKinds(e.Tokens)).Mount(e.Mux, e.AdminMux)
 	return e
 }
@@ -42,10 +42,10 @@ func TestEntriesNeverReturnMessages(t *testing.T) {
 	e := newEnv(t)
 	tok := e.Principal("codex", auth.KindAgent, auth.ScopeRead)
 	e.Commit(
-		webtest.Line("serial:dut1", "boot"),
-		store.Entry{Stream: "chan:general", Kind: store.KindMessage, Severity: 6, Text: "secret plans", Sender: "alice"},
+		webtest.Line("serial:lab/dut1", "boot"),
+		store.Entry{Stream: "chan:lab/general", Kind: store.KindMessage, Severity: 6, Text: "secret plans", Sender: "alice"},
 		store.Entry{Stream: "dm:alice~bob", Kind: store.KindMessage, Severity: 6, Text: "private", Sender: "alice", Recipient: "bob"},
-		webtest.Line("serial:dut1", "login:"),
+		webtest.Line("serial:lab/dut1", "login:"),
 	)
 	for _, q := range []string{"", "?streams=*", "?streams=chan:*", "?streams=dm:*,chan:general", "?streams=chan:general,serial:dut1", "?since_seq=1"} {
 		code, page := get[dto.Page[dto.Entry]](t, e, "/api/entries"+q, tok)
@@ -58,7 +58,7 @@ func TestEntriesNeverReturnMessages(t *testing.T) {
 			}
 		}
 	}
-	code, page := get[dto.Page[dto.Entry]](t, e, "/api/entries?streams=serial:dut1", tok)
+	code, page := get[dto.Page[dto.Entry]](t, e, "/api/entries?streams=serial:lab/dut1", tok)
 	if code != 200 || len(page.Items) != 2 || page.Items[1].Text != "login:" || page.NextSeq != 5 {
 		t.Errorf("serial page: %d %+v", code, page)
 	}
@@ -89,7 +89,7 @@ func TestRangesAndPaging(t *testing.T) {
 		if i%10 == 0 {
 			sev = 3
 		}
-		e.Commit(store.Entry{Stream: "push:a", Kind: store.KindLine, Severity: sev, Text: "line " + strconv.Itoa(i+1)})
+		e.Commit(store.Entry{Stream: "push:lab/a", Kind: store.KindLine, Severity: sev, Text: "line " + strconv.Itoa(i+1)})
 	}
 	_, page := get[dto.Page[dto.Entry]](t, e, "/api/entries?limit=10", tok)
 	if len(page.Items) != 10 || page.Items[0].Seq != 21 || page.NextSeq != 31 || page.NextBeforeSeq != 21 {
@@ -112,12 +112,12 @@ func TestRangesAndPaging(t *testing.T) {
 func TestMeMarksAndPrincipals(t *testing.T) {
 	e := newEnv(t)
 	tok := e.Principal("codex", auth.KindAgent, auth.ScopeRead, auth.ScopeMessage)
-	e.Commit(webtest.Line("serial:dut1", "x"))
+	e.Commit(webtest.Line("serial:lab/dut1", "x"))
 	_, me := get[dto.Me](t, e, "/api/me", tok)
 	if me.Name != "codex" || me.SessionID != 0 || me.Theme != dto.ThemeSystem || len(me.Scopes) != 2 {
 		t.Errorf("me = %+v", me)
 	}
-	rec := e.Do("POST", "/api/marks", nil, `{"stream":"serial:dut1","label":"test 42 starts"}`, "Authorization", "Bearer "+tok)
+	rec := e.Do("POST", "/api/marks", nil, `{"stream":"serial:lab/dut1","label":"test 42 starts"}`, "Authorization", "Bearer "+tok)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("mark: %d %s", rec.Code, rec.Body)
 	}
@@ -126,10 +126,10 @@ func TestMeMarksAndPrincipals(t *testing.T) {
 	if err != nil || m.Kind != store.KindMarker || m.Sender != "codex" || m.Text != "codex: test 42 starts" {
 		t.Errorf("marker %+v %v", m, err)
 	}
-	if rec := e.Do("POST", "/api/marks", nil, `{"stream":"chan:general","label":"x"}`, "Authorization", "Bearer "+tok); rec.Code != 400 {
+	if rec := e.Do("POST", "/api/marks", nil, `{"stream":"chan:lab/general","label":"x"}`, "Authorization", "Bearer "+tok); rec.Code != 400 {
 		t.Errorf("mark in a chat: %d", rec.Code)
 	}
-	if rec := e.Do("POST", "/api/marks", nil, `{"stream":"serial:nope","label":"x"}`, "Authorization", "Bearer "+tok); rec.Code != 404 {
+	if rec := e.Do("POST", "/api/marks", nil, `{"stream":"serial:lab/nope","label":"x"}`, "Authorization", "Bearer "+tok); rec.Code != 404 {
 		t.Errorf("mark in an unknown stream: %d", rec.Code)
 	}
 	e.Principal("alice", auth.KindHuman, auth.ScopeRead)
@@ -137,8 +137,8 @@ func TestMeMarksAndPrincipals(t *testing.T) {
 	if len(ps["principals"]) != 1 || ps["principals"][0].Name != "alice" {
 		t.Errorf("principals = %+v", ps)
 	}
-	_, match := get[map[string][]dto.Stream](t, e, "/api/streams/match?pattern=serial:*", tok)
-	if len(match["streams"]) != 1 || match["streams"][0].ID != "serial:dut1" {
+	_, match := get[map[string][]dto.Stream](t, e, "/api/streams/match?pattern=serial:lab/*", tok)
+	if len(match["streams"]) != 1 || match["streams"][0].ID != "serial:lab/dut1" {
 		t.Errorf("match = %+v", match)
 	}
 	if rec := e.Do("GET", "/api/me", nil, nil); rec.Code != 401 {

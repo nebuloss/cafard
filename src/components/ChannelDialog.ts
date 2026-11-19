@@ -6,6 +6,7 @@ import type { CafardApi } from '@/net/CafardApi.ts';
 import { ApiError } from '@/net/ApiError.ts';
 import { Component } from '@/components/Component.ts';
 import { closeDialog, openDialog } from '@/components/ImageViewer.ts';
+import { chatHref } from '@/render/format.ts';
 
 /** The update a settings form asks for, against what the chat has. */
 export function channelUpdate(
@@ -152,7 +153,7 @@ export class ChannelDialog extends Component<HTMLDialogElement> {
       if (Object.keys(prefs).length > 0) next = await this.api.setPrefs(next.id, prefs);
       this.chat = next;
       closeDialog(this.root);
-      if (next.name !== this.name) this.go(`/c/${encodeURIComponent(next.name)}`);
+      if (next.id !== `chan:${this.name}`) this.go(chatHref(next.id));
       else this.changed(next);
     } catch (error) {
       this.error(error instanceof ApiError ? error.message : 'The settings were not saved.');

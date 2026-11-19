@@ -17,18 +17,23 @@ import (
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/config"
 	"github.com/nebuloss/cafard/internal/ingest/serial"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/push"
+	"github.com/nebuloss/cafard/internal/store"
 )
 
 const tokenUsage = `Usage:
-  cafard token create --name NAME --kind agent|human|device --scopes read,message [--label TEXT]
+  cafard token create --name NAME --kind agent|human|device --scopes read,message
+                      [--grant PROJECT[:CHANNEL]=SCOPES ...] [--label TEXT]
   cafard token list [--name NAME]
   cafard token revoke ID
 
 The token is printed once; only its hash is stored. Scopes: ingest, read,
 message, serial_write. No token carries admin: the admin signs in with the
-password (cafard passwd). The configuration flags (-data-dir, -config) are
-accepted too.
+password (cafard passwd). The scopes are a cap: the token reaches only what
+its principal is granted, and --grant (repeatable) adds such grants, on a
+whole project (lab=read,message) or on one channel (lab:dut1=read). The
+configuration flags (-data-dir, -config) are accepted too.
 `
 
 func cmdToken(ctx context.Context, e env, args []string) error {
@@ -46,6 +51,12 @@ func cmdToken(ctx context.Context, e env, args []string) error {
 	kind := set.String("kind", "agent", "principal kind: agent, human or device")
 	scopes := set.String("scopes", "", "comma separated scopes")
 	label := set.String("label", "", "what the token is for")
+	var grants []projects.Grant
+	set.Func("grant", "PROJECT[:CHANNEL]=SCOPES given to the principal (repeatable)", func(v string) error {
+		g, err := projects.ParseGrant(v)
+		grants = append(grants, g)
+		return err
+	})
 	set.SetOutput(e.stderr)
 	if err := set.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -80,11 +91,23 @@ func cmdToken(ctx context.Context, e env, args []string) error {
 		if _, err := tokens.EnsurePrincipal(ctx, *name, *kind); err != nil {
 			return err
 		}
+		if len(grants) > 0 {
+			projs, err := cliProjects(ctx, cfg, st)
+			if err != nil {
+				return err
+			}
+			for i := range grants {
+				grants[i].Principal = *name
+			}
+			if err := projs.AddGrants(ctx, grants...); err != nil {
+				return err
+			}
+		}
 		tr, secret, err := tokens.CreateToken(ctx, *name, *label, set)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(e.stderr, "token %d for %s (%s), scopes %s. It is shown once:\n", tr.ID, tr.Principal, tr.Kind, set.String())
+		fmt.Fprintf(e.stderr, "token %d for %s (%s), scopes %s%s. It is shown once:\n", tr.ID, tr.Principal, tr.Kind, set.String(), grantsNote(grants))
 		fmt.Fprintln(e.stdout, secret)
 		return nil
 	case "list":
@@ -271,4 +294,17 @@ func openSpool(e env, log *slog.Logger, path, server, stream string) (*push.Spoo
 		return nil, fmt.Errorf("spool: %w (pass --spool PATH or --spool off)", err)
 	}
 	return sp, nil
+}
+
+// cliProjects is the projects service of a command that only writes grants.
+func cliProjects(ctx context.Context, cfg *config.Config, st *store.Store) (*projects.Service, error) {
+	return projects.New(ctx, st.DB(), clock.System{}, cfg.Retention.Limits(), slog.New(slog.DiscardHandler))
+}
+
+// grantsNote is ", grants a, b" for the confirmation line.
+func grantsNote(gs []projects.Grant) string {
+	if len(gs) == 0 {
+		return ""
+	}
+	return ", grants " + strings.ReplaceAll(projects.FormatGrants(gs), " ", ", ")
 }

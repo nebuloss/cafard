@@ -8,5 +8,6 @@
   {{else}}
   <p class="muted">This page cannot show this code: cafard pair made it and printed its link, or the server restarted since.</p>
   {{end}}
+  {{if .Grants}}<p class="muted">Grants <span class="mono">{{.Grants}}</span></p>{{end}}
   <p class="muted">Valid once. <span class="countdown" data-slot="countdown">Expires at {{.ExpiresText}} UTC.</span></p>
 </article>

@@ -10,8 +10,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/hub"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
@@ -27,15 +29,19 @@ type Options struct {
 	Writer  writer.Options
 }
 
+// Project is the project a Stack makes, where Member grants.
+const Project = "lab"
+
 // Stack is a running writer over its store. It stops at the end of the test.
 type Stack struct {
-	Dir    string
-	Store  *store.Store
-	Hub    *hub.Memory
-	Status *status.Memory
-	Writer *writer.W
-	Clock  clock.Clock
-	Log    *slog.Logger
+	Dir      string
+	Store    *store.Store
+	Hub      *hub.Memory
+	Status   *status.Memory
+	Writer   *writer.W
+	Projects *projects.Service // with Project made
+	Clock    clock.Clock
+	Log      *slog.Logger
 
 	cancel context.CancelFunc
 	done   chan error
@@ -63,6 +69,12 @@ func New(t testing.TB, o Options) *Stack {
 		seer = o.Seer
 	}
 	s.Writer = writer.New(st, s.Hub, seer, o.Clock, s.Log, o.Writer)
+	if s.Projects, err = projects.New(context.Background(), st.DB(), o.Clock, store.Limits{}, s.Log); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Projects.Create(context.Background(), Project, "Lab"); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 	go func() { s.done <- s.Writer.Run(ctx) }()
@@ -71,6 +83,30 @@ func New(t testing.TB, o Options) *Stack {
 		st.Close()
 	})
 	return s
+}
+
+// Member makes the principal name of kind if needed, grants it scopes
+// (read and message when none) on the whole of Project, and returns it
+// holding those scopes, as a token would.
+func (s *Stack) Member(t testing.TB, name, kind string, scopes ...auth.Scope) auth.Principal {
+	t.Helper()
+	if len(scopes) == 0 {
+		scopes = []auth.Scope{auth.ScopeRead, auth.ScopeMessage}
+	}
+	if _, err := auth.NewTokens(s.Store.DB(), s.Clock).EnsurePrincipal(context.Background(), name, kind); err != nil {
+		t.Fatal(err)
+	}
+	var granted []auth.Scope
+	for _, sc := range scopes {
+		if projects.GrantScopes.Has(sc) {
+			granted = append(granted, sc)
+		}
+	}
+	g := projects.Grant{Principal: name, Project: Project, Scopes: auth.NewScopeSet(granted...)}
+	if err := s.Projects.AddGrants(context.Background(), g); err != nil {
+		t.Fatal(err)
+	}
+	return auth.Principal{Name: name, Kind: kind, Scopes: auth.NewScopeSet(scopes...), TokenID: 1}
 }
 
 // Stop stops the writer, after it commits what is queued, and returns what

@@ -26,13 +26,13 @@ afterEach(() => {
 
 describe('routing on a chat page', () => {
   it('sends messages to the conversation and stream entries to the logs, markers to both', () => {
-    expect(route(message, 'chan:dut1', 'chan:dut1', 'markers')).toEqual({ conversation: true, logs: false, event: false });
-    expect(route({ ...message, chat: 'chan:other' }, 'chan:dut1', 'chan:dut1', 'markers').conversation).toBe(false);
-    expect(route(marker, 'chan:dut1', 'chan:dut1', 'markers')).toEqual({ conversation: true, logs: true, event: true });
-    expect(route(line, 'chan:dut1', 'chan:dut1', 'markers')).toEqual({ conversation: false, logs: true, event: false });
-    expect(route(line, 'chan:dut1', 'chan:dut1', 'errors')).toEqual({ conversation: true, logs: true, event: true });
-    expect(route(marker, 'chan:dut1', 'chan:dut1', 'none').conversation).toBe(false);
-    expect(route({ ...marker, stream: 'chan:dut1' }, 'chan:dut1', 'chan:dut1', 'none')).toEqual({ conversation: true, logs: false, event: false });
+    expect(route(message, 'chan:lab/dut1', 'chan:lab/dut1', 'markers')).toEqual({ conversation: true, logs: false, event: false });
+    expect(route({ ...message, chat: 'chan:other' }, 'chan:lab/dut1', 'chan:lab/dut1', 'markers').conversation).toBe(false);
+    expect(route(marker, 'chan:lab/dut1', 'chan:lab/dut1', 'markers')).toEqual({ conversation: true, logs: true, event: true });
+    expect(route(line, 'chan:lab/dut1', 'chan:lab/dut1', 'markers')).toEqual({ conversation: false, logs: true, event: false });
+    expect(route(line, 'chan:lab/dut1', 'chan:lab/dut1', 'errors')).toEqual({ conversation: true, logs: true, event: true });
+    expect(route(marker, 'chan:lab/dut1', 'chan:lab/dut1', 'none').conversation).toBe(false);
+    expect(route({ ...marker, stream: 'chan:lab/dut1' }, 'chan:lab/dut1', 'chan:lab/dut1', 'none')).toEqual({ conversation: true, logs: false, event: false });
     expect(streamOf('dm:codex', 'alice')).toBe('dm:alice~codex');
     expect(streamOf('dm:alice', 'zed')).toBe('dm:alice~zed');
   });
@@ -54,7 +54,7 @@ describe('ChatPage', () => {
     const frames = new FakeFrames();
     running = new ChatPage(document, services, frames).start();
     const feed = sources[0];
-    expect(feed?.url).toMatch(/^\/api\/events\?chat=chan%3Adut1&since_seq=\d+$/);
+    expect(feed?.url).toMatch(/^\/api\/events\?chat=chan%3Alab%2Fdut1&since_seq=\d+$/);
     feed?.emit('entry', { ...marker, seq: 500, text: 'test 42 starts' });
     feed?.emit('entry', { ...line, seq: 501, text: 'a line after it' });
     frames.run();
@@ -64,8 +64,8 @@ describe('ChatPage', () => {
     expect(conv?.lastElementChild?.querySelector('[data-slot="text"]')?.textContent).toBe('test 42 starts');
     expect(Array.from(logs?.children ?? []).slice(-2).map((r) => r.className)).toEqual(['marker', 'line']);
     // A message of this chat joins the conversation once.
-    feed?.emit('entry', { ...message, seq: 502, chat: 'chan:dut1' });
-    feed?.emit('entry', { ...message, seq: 502, chat: 'chan:dut1' });
+    feed?.emit('entry', { ...message, seq: 502, chat: 'chan:lab/dut1' });
+    feed?.emit('entry', { ...message, seq: 502, chat: 'chan:lab/dut1' });
     expect(conv?.querySelectorAll('[data-seq="502"]')).toHaveLength(1);
     // The composer sends through the queue.
     const text = document.querySelector<HTMLTextAreaElement>('form.composer textarea');
@@ -95,7 +95,7 @@ describe('ChatPage', () => {
     form?.dispatchEvent(submit);
     await flush();
     expect(submit.defaultPrevented).toBe(true);
-    expect(uploads.sent[0]).toMatchObject({ chat: 'chan:dut1', choice: 'done', replyTo: Number(card?.dataset['seq']) });
+    expect(uploads.sent[0]).toMatchObject({ chat: 'chan:lab/dut1', choice: 'done', replyTo: Number(card?.dataset['seq']) });
   });
 });
 
@@ -111,14 +111,14 @@ describe('HomePage', () => {
     const needs = document.querySelector<HTMLElement>('[data-component="NeedsYou"]');
     expect(needs?.hidden).toBe(false);
     expect(needs?.querySelector('[data-slot="questions"] .question')?.getAttribute('data-seq')).toBe('777');
-    feed?.emit('counts', { open_questions: 3, unread_direct: 1, sources_down: 0, chats: [{ id: 'chan:dut1', unread: 5, open_questions: 2 }] });
+    feed?.emit('counts', { open_questions: 3, unread_direct: 1, sources_down: 0, chats: [{ id: 'chan:lab/dut1', unread: 5, open_questions: 2 }] });
     expect(document.title.startsWith('(4) ')).toBe(true);
-    const row = document.querySelector('.chat-rows a.chat-row[data-chat="chan:dut1"]');
+    const row = document.querySelector('.chat-rows a.chat-row[data-chat="chan:lab/dut1"]');
     expect(row?.querySelector('[data-slot="unread"]')?.textContent).toBe('5');
     expect(row?.querySelector('[data-slot="questions"]')?.textContent).toBe('2');
     feed?.emit('answered', { seq: 777, answer: { by: 'admin', seq: 778 } });
     expect(needs?.querySelector('[data-seq="777"]')).toBeNull();
-    feed?.emit('chat', { ...(fixture('chat_channel') as Chat), id: 'chan:dut1', name: 'dut1', muted: true });
+    feed?.emit('chat', { ...(fixture('chat_channel') as Chat), id: 'chan:lab/dut1', name: 'dut1', muted: true });
     expect(row?.hasAttribute('data-muted')).toBe(true);
   });
 });
@@ -154,18 +154,18 @@ describe('needs you, read state, logs, settings', () => {
 
   it('carries the logs filters into an attached range', () => {
     const f = filtersOf('channel=dut1&sev=3&re=usb');
-    expect(rangeRequest(20, 10, ['serial:dut1', 'serial:dut1'], f)).toEqual({ stream: 'serial:dut1', from_seq: 10, to_seq: 20, grep: 'usb', min_severity: 3 });
-    expect(rangeRequest(10, 20, ['serial:dut1', 'netconsole:dut1'], f)).toEqual({ channel: 'dut1', from_seq: 10, to_seq: 20, grep: 'usb', min_severity: 3 });
+    expect(rangeRequest(20, 10, ['serial:lab/dut1', 'serial:lab/dut1'], f)).toEqual({ stream: 'serial:lab/dut1', from_seq: 10, to_seq: 20, grep: 'usb', min_severity: 3 });
+    expect(rangeRequest(10, 20, ['serial:lab/dut1', 'netconsole:lab/dut1'], f)).toEqual({ channel: 'dut1', from_seq: 10, to_seq: 20, grep: 'usb', min_severity: 3 });
     expect(filtersOf('channel=dut1')).toEqual({ channel: 'dut1' });
   });
 
   it('sends only what the settings form changed', () => {
     const chat = fixture('chat_channel') as Chat;
-    expect(channelUpdate(chat, { title: chat.title ?? '', topic: 'new', surface: 'errors', rename: '', archived: false }, ['serial:dut2'], ['syslog:dut1*'])).toEqual({
+    expect(channelUpdate(chat, { title: chat.title ?? '', topic: 'new', surface: 'errors', rename: '', archived: false }, ['serial:lab/dut2'], ['syslog:lab/dut1*'])).toEqual({
       topic: 'new',
       surface: 'errors',
-      add_patterns: ['serial:dut2'],
-      remove_patterns: ['syslog:dut1*'],
+      add_patterns: ['serial:lab/dut2'],
+      remove_patterns: ['syslog:lab/dut1*'],
     });
     expect(channelUpdate(chat, { title: chat.title ?? '', topic: chat.topic ?? '', surface: chat.surface, rename: ' run-43 ', archived: null }, [], [])).toEqual({ rename: 'run-43' });
   });

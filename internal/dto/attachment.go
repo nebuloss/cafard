@@ -83,16 +83,18 @@ type LogAttachment struct {
 	Streams []string `json:"streams"`
 	FromSeq int64    `json:"from_seq"`
 	// ToSeq is nil for an open-ended slice, and marshals as null.
-	ToSeq       *int64  `json:"to_seq"`
-	Grep        string  `json:"grep,omitempty"`
-	MinSeverity *int    `json:"min_severity,omitempty"`
-	Title       string  `json:"title,omitempty"`
-	Lines       int     `json:"lines"`
-	FirstTS     *Time   `json:"first_ts,omitempty"`
-	LastTS      *Time   `json:"last_ts,omitempty"`
-	Snapshot    bool    `json:"snapshot"`
-	Expired     bool    `json:"expired"`
-	Preview     []Entry `json:"preview"`
+	ToSeq       *int64 `json:"to_seq"`
+	Grep        string `json:"grep,omitempty"`
+	MinSeverity *int   `json:"min_severity,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Lines       int    `json:"lines"`
+	FirstTS     *Time  `json:"first_ts,omitempty"`
+	LastTS      *Time  `json:"last_ts,omitempty"`
+	Snapshot    bool   `json:"snapshot"`
+	Expired     bool   `json:"expired"`
+	// Hidden: the viewer may not read every stream, so no lines are shown.
+	Hidden  bool    `json:"hidden,omitempty"`
+	Preview []Entry `json:"preview"`
 }
 
 // MarshalJSON implements json.Marshaler, adding "type": "log".

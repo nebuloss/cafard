@@ -73,8 +73,9 @@ func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		s.Oops(w, r, &p, err)
 		return
 	}
+	acc := s.d.Projects.Access(ctx, p)
 	for _, st := range streams {
-		if !store.IsMessageStream(st.ID) {
+		if !store.IsMessageStream(st.ID) && acc.Can(st.ID, auth.ScopeRead) {
 			data.Filter.Known = append(data.Filter.Known, st.ID)
 		}
 	}
@@ -89,7 +90,8 @@ func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		}
 		for _, c := range chats {
 			if c.Kind == dto.ChatChannel && !c.Archived {
-				data.Filter.Channels = append(data.Filter.Channels, ChatOption{ID: c.Name, Label: ChatName(c), Selected: c.Name == f.Channel})
+				name := strings.TrimPrefix(c.ID, "chan:")
+				data.Filter.Channels = append(data.Filter.Channels, ChatOption{ID: name, Label: ChatName(c), Selected: name == f.Channel || c.Name == f.Channel})
 			}
 		}
 		if p.Has(auth.ScopeMessage) {
@@ -100,8 +102,8 @@ func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 
 	if apiErr == nil {
 		var patterns []string
-		if patterns, apiErr = f.Patterns(ctx, s.d); apiErr == nil {
-			ids, err := view.StreamIDs(ctx, s.d.Store, patterns)
+		if patterns, apiErr = f.Patterns(ctx, s.d, p); apiErr == nil {
+			ids, err := view.StreamIDs(ctx, s.d.Store, acc, patterns)
 			if err != nil {
 				s.Oops(w, r, &p, err)
 				return
@@ -213,7 +215,10 @@ func (s *Site) followFrom(ctx context.Context, f view.LogFilter) (int64, error) 
 // channel's with channel=, else every chat's. Each passes
 // Messaging.Visible, so a direct message shows to its two parties only.
 func (s *Site) liveMessages(ctx context.Context, p auth.Principal, f view.LogFilter) ([]store.Entry, error) {
-	patterns := view.MessagePatterns(f)
+	patterns, err := view.MessagePatterns(ctx, s.d, p, f)
+	if err != nil {
+		return nil, nil
+	}
 	ids, err := s.d.Store.MatchStreams(ctx, patterns)
 	if err != nil {
 		return nil, err

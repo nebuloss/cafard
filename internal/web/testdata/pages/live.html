@@ -96,12 +96,12 @@
       <span>Streams</span>
       <input name="streams" value="" placeholder="serial:dut1, syslog:*" list="known-streams" autocomplete="off" spellcheck="false">
     </label>
-    <datalist id="known-streams"><option value="serial:dut1"></option><option value="syslog:bench-pi"></option></datalist>
+    <datalist id="known-streams"><option value="serial:lab/dut1"></option><option value="syslog:lab/bench-pi"></option></datalist>
     <label class="ofield">
       <span>Channel</span>
       <select name="channel">
         <option value="" selected>None</option>
-        <option value="dut1">#dut1</option><option value="general">#general</option>
+        <option value="lab/dut1">#dut1</option><option value="lab/general">#general</option>
       </select>
     </label>
     <label class="ofield">
@@ -140,13 +140,13 @@
   <div class="logview dense" data-component="LogView" data-next-seq="9" data-follow="true" data-query="">
     <div class="log-list mono" role="list" aria-label="Log lines" data-slot="list">
     
-<div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
+<div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="1"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:lab/dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
 
-<div class="line" role="listitem" data-seq="2" data-sev="3" data-tone="5"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:dut1</span><abbr class="line-sev" data-slot="sev" title="ERR">E</abbr><span class="line-text" data-slot="text"><span class="ansi-fg-1">dwc3 fe800000.usb: failed to initialize core: -110</span></span></div>
+<div class="line" role="listitem" data-seq="2" data-sev="3" data-tone="1"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:lab/dut1</span><abbr class="line-sev" data-slot="sev" title="ERR">E</abbr><span class="line-text" data-slot="text"><span class="ansi-fg-1">dwc3 fe800000.usb: failed to initialize core: -110</span></span></div>
 
-<div class="marker" role="listitem" data-seq="3"><time class="marker-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="marker-text" data-slot="text">serial:dut1: codex-build: flashed linux-6.18-rc3</span></div>
+<div class="marker" role="listitem" data-seq="3"><time class="marker-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="marker-text" data-slot="text">serial:lab/dut1: codex-build: flashed linux-6.18-rc3</span></div>
 
-<div class="line" role="listitem" data-seq="4" data-sev="6" data-tone="4"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">syslog:bench-pi</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">systemd[1]: Started cafard push.</span></div>
+<div class="line" role="listitem" data-seq="4" data-sev="6" data-tone="4"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">syslog:lab/bench-pi</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">systemd[1]: Started cafard push.</span></div>
 
     </div>
     <button class="fab new-lines only-scripted" type="button" data-slot="new" hidden><svg aria-hidden="true"><use href="/static/icons.svg#arrow_downward"></use></svg><span data-slot="new-count">0 new</span></button>
@@ -174,7 +174,7 @@
 <form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="10">
   <input type="hidden" name="back" value="/live">
   
-  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><option value="chan:dut1">#dut1</option><option value="chan:general">#general</option><option value="dm:codex-build">@codex-build</option></select></label>
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><option value="chan:lab/dut1">#dut1</option><option value="chan:lab/general">#general</option><option value="dm:codex-build">@codex-build</option></select></label>
   
   <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
   <div class="upload-list" data-slot="uploads" aria-live="polite"></div>

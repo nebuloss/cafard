@@ -45,11 +45,11 @@ func TestSenderComesFromThePrincipalAndStreamsFromTo(t *testing.T) {
 		t.Errorf("dm = %+v", dm)
 	}
 	humans := e.send(b, SendInput{SendRequest: sendReq("need a hand", dto.RecipientHumans, "")})
-	if humans.Stream != "chan:general" || humans.Recipient != dto.RecipientHumans {
+	if humans.Stream != "chan:lab/general" || humans.Recipient != dto.RecipientHumans {
 		t.Errorf("@humans = %+v", humans)
 	}
 	bc := e.send(a, text("hello all"))
-	if bc.Stream != "chan:general" || bc.Recipient != "" {
+	if bc.Stream != "chan:lab/general" || bc.Recipient != "" {
 		t.Errorf("broadcast = %+v", bc)
 	}
 	if _, err := e.svc.SendMessage(e.ctx, a, SendInput{SendRequest: sendReq("x", "", "nope")}); code(err) != dto.CodeUnknownChannel {
@@ -209,24 +209,24 @@ func TestFollowsDecideBroadcastDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.send(c, SendInput{SendRequest: sendReq("hi", "", "dut1")})
-	if st, _ := e.svc.Follow(e.ctx, c, "chan:dut1"); !st.Followed {
+	if st, _ := e.svc.Follow(e.ctx, c, "chan:lab/dut1"); !st.Followed {
 		t.Error("sending did not follow")
 	}
 	d := e.agent("agent-d")
-	if _, err := e.svc.ResolveChannel(auth.WithPrincipal(e.ctx, d), "dut1"); err != nil {
+	if _, _, err := e.svc.ResolveChannel(e.ctx, d, "dut1"); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := e.svc.Follow(e.ctx, d, "chan:dut1"); !st.Followed {
+	if st, _ := e.svc.Follow(e.ctx, d, "chan:lab/dut1"); !st.Followed {
 		t.Error("channel= did not follow")
 	}
 	// An explicit unfollow sticks through later reads.
 	if _, err := e.svc.SetFollow(e.ctx, d, "dut1", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.svc.ResolveChannel(auth.WithPrincipal(e.ctx, d), "dut1"); err != nil {
+	if _, _, err := e.svc.ResolveChannel(e.ctx, d, "dut1"); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := e.svc.Follow(e.ctx, d, "chan:dut1"); st.Followed {
+	if st, _ := e.svc.Follow(e.ctx, d, "chan:lab/dut1"); st.Followed {
 		t.Error("reading re-followed after an explicit unfollow")
 	}
 }
@@ -315,7 +315,7 @@ func TestRepliesAreFlatAndQuestionsCloseOnTheFirstHumanReply(t *testing.T) {
 	if d.Question.Open || d.Question.Answer == nil || d.Question.Answer.By != "guillaume" || d.Question.Answer.Choice != "yes" || d.Question.Answer.Seq != ans.Seq {
 		t.Errorf("question = %+v answer %+v", d.Question, d.Question.Answer)
 	}
-	if n, _ := e.svc.openQuestions(e.ctx, "chan:general"); n != 0 {
+	if n, _ := e.svc.openQuestions(e.ctx, "chan:lab/general"); n != 0 {
 		t.Errorf("open questions = %d", n)
 	}
 }
@@ -417,32 +417,32 @@ func TestWaitMessageSeesWhatArrivesWhileSubscribing(t *testing.T) {
 func TestClaimContentionAndExpiry(t *testing.T) {
 	e := newEnv(t)
 	a, b := e.agent("agent-a"), e.agent("agent-b")
-	if _, _, err := e.svc.Claim(e.ctx, a, "serial:dut1", time.Minute, "flashing"); err != nil {
+	if _, _, err := e.svc.Claim(e.ctx, a, "serial:lab/dut1", time.Minute, "flashing"); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := e.svc.Claim(e.ctx, b, "serial:dut1", time.Minute, "")
+	_, _, err := e.svc.Claim(e.ctx, b, "serial:lab/dut1", time.Minute, "")
 	var apiErr *dto.APIError
 	if !errors.As(err, &apiErr) || apiErr.Code != dto.CodeConflict || !strings.Contains(apiErr.Message, "agent-a") {
 		t.Fatalf("second claim = %v", err)
 	}
-	if err := e.svc.Release(e.ctx, b, "serial:dut1"); code(err) != dto.CodeConflict {
+	if err := e.svc.Release(e.ctx, b, "serial:lab/dut1"); code(err) != dto.CodeConflict {
 		t.Errorf("b released a's claim: %v", err)
 	}
-	if _, renewed, err := e.svc.Claim(e.ctx, a, "serial:dut1", 2*time.Minute, ""); err != nil || !renewed {
+	if _, renewed, err := e.svc.Claim(e.ctx, a, "serial:lab/dut1", 2*time.Minute, ""); err != nil || !renewed {
 		t.Errorf("renew = %v %v", renewed, err)
 	}
-	if ok, _ := e.svc.Holds(e.ctx, a, "serial:dut1"); !ok {
+	if ok, _ := e.svc.Holds(e.ctx, a, "serial:lab/dut1"); !ok {
 		t.Error("a does not hold its claim")
 	}
-	if err := e.svc.Release(e.ctx, a, "serial:dut1"); err != nil {
+	if err := e.svc.Release(e.ctx, a, "serial:lab/dut1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := e.svc.Claim(e.ctx, b, "serial:dut1", time.Minute, ""); err != nil {
+	if _, _, err := e.svc.Claim(e.ctx, b, "serial:lab/dut1", time.Minute, ""); err != nil {
 		t.Fatalf("b after release: %v", err)
 	}
 	// Expiry through the janitor.
 	e.clk.Advance(61 * time.Second)
-	if ok, _ := e.svc.Holds(e.ctx, b, "serial:dut1"); ok {
+	if ok, _ := e.svc.Holds(e.ctx, b, "serial:lab/dut1"); ok {
 		t.Error("an expired claim still holds")
 	}
 	if err := e.jan.Pass(e.ctx); err != nil {
@@ -451,15 +451,15 @@ func TestClaimContentionAndExpiry(t *testing.T) {
 	if n, _ := e.svc.ExpireClaims(e.ctx); n != 0 {
 		t.Errorf("expired twice: %d", n)
 	}
-	if _, _, err := e.svc.Claim(e.ctx, a, "serial:dut1", time.Minute, ""); err != nil {
+	if _, _, err := e.svc.Claim(e.ctx, a, "serial:lab/dut1", time.Minute, ""); err != nil {
 		t.Fatalf("a after expiry: %v", err)
 	}
 	// Expiry found lazily by the next claim.
 	e.clk.Advance(61 * time.Second)
-	if _, _, err := e.svc.Claim(e.ctx, b, "serial:dut1", time.Minute, ""); err != nil {
+	if _, _, err := e.svc.Claim(e.ctx, b, "serial:lab/dut1", time.Minute, ""); err != nil {
 		t.Fatalf("b after lazy expiry: %v", err)
 	}
-	res, err := e.st.Read(e.ctx, store.Query{Streams: []string{"serial:dut1"}, Kinds: []store.Kind{store.KindMarker}})
+	res, err := e.st.Read(e.ctx, store.Query{Streams: []string{"serial:lab/dut1"}, Kinds: []store.Kind{store.KindMarker}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,23 +468,23 @@ func TestClaimContentionAndExpiry(t *testing.T) {
 		texts = append(texts, m.Text)
 	}
 	want := []string{
-		"agent-a claimed serial:dut1 for 1m0s (flashing)",
-		"agent-a renewed the claim on serial:dut1 for 2m0s",
-		"agent-a released serial:dut1",
-		"agent-b claimed serial:dut1 for 1m0s",
-		"claim of agent-b on serial:dut1 expired",
-		"agent-a claimed serial:dut1 for 1m0s",
-		"claim of agent-a on serial:dut1 expired",
-		"agent-b claimed serial:dut1 for 1m0s",
+		"agent-a claimed serial:lab/dut1 for 1m0s (flashing)",
+		"agent-a renewed the claim on serial:lab/dut1 for 2m0s",
+		"agent-a released serial:lab/dut1",
+		"agent-b claimed serial:lab/dut1 for 1m0s",
+		"claim of agent-b on serial:lab/dut1 expired",
+		"agent-a claimed serial:lab/dut1 for 1m0s",
+		"claim of agent-a on serial:lab/dut1 expired",
+		"agent-b claimed serial:lab/dut1 for 1m0s",
 	}
 	if !slices.Equal(texts, want) {
 		t.Errorf("markers:\n%s\nwant:\n%s", strings.Join(texts, "\n"), strings.Join(want, "\n"))
 	}
-	if _, _, err := e.svc.Claim(e.ctx, a, "chan:general", time.Minute, ""); code(err) != dto.CodeBadRequest {
+	if _, _, err := e.svc.Claim(e.ctx, a, "chan:lab/general", time.Minute, ""); code(err) != dto.CodeBadRequest {
 		t.Errorf("claim on a message stream: %v", err)
 	}
 	claims, _ := e.svc.ActiveClaims(e.ctx)
-	if claims["serial:dut1"].Principal != "agent-b" {
+	if claims["serial:lab/dut1"].Principal != "agent-b" {
 		t.Errorf("active claims = %v", claims)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
@@ -53,6 +54,9 @@ func PairQRURL(id int64) string { return "/pair/" + strconv.FormatInt(id, 10) + 
 // no longer holds it (after a restart); url is then empty too.
 func Pairing(base string, p auth.PairingRow, code string) dto.Pairing {
 	out := dto.Pairing{ID: p.ID, QRURL: PairQRURL(p.ID), ExpiresAt: dto.TimeOf(p.ExpiresAt), Principal: p.Principal, NewName: p.NewName}
+	if p.Grants != "" {
+		out.Grants = strings.Fields(p.Grants)
+	}
 	if code != "" {
 		out.URL = PairURL(base, code)
 	}

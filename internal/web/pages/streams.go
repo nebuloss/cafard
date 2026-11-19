@@ -18,7 +18,7 @@ type streamsData struct {
 }
 
 func (s *Site) streams(w http.ResponseWriter, r *http.Request, p auth.Principal) {
-	list, err := view.Streams(r.Context(), s.d.Store, s.d.Status)
+	list, err := view.VisibleStreams(r.Context(), s.d, p)
 	if err != nil {
 		s.Oops(w, r, &p, err)
 		return

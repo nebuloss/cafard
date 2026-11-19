@@ -23,6 +23,7 @@ func (s *Site) mountPair(mux *http.ServeMux) {
 type pendingView struct {
 	ID                                     int64
 	Name, URL, QR, ExpiresISO, ExpiresText string
+	Grants                                 string
 }
 
 type sessionView struct {
@@ -50,7 +51,8 @@ func (s *Site) renderPair(w http.ResponseWriter, r *http.Request, p auth.Princip
 		code, _, _ := s.pairings.Code(ctx, row.ID)
 		dp := view.Pairing(base, row, code)
 		data.Pending = append(data.Pending, pendingView{ID: row.ID, Name: row.Name(), URL: dp.URL, QR: dp.QRURL,
-			ExpiresISO: row.ExpiresAt.Format(time.RFC3339), ExpiresText: row.ExpiresAt.UTC().Format("15:04:05")})
+			ExpiresISO: row.ExpiresAt.Format(time.RFC3339), ExpiresText: row.ExpiresAt.UTC().Format("15:04:05"),
+			Grants: strings.Join(dp.Grants, ", ")})
 	}
 	humans, err := s.d.Tokens.Principals(ctx, auth.KindHuman)
 	if err != nil {
@@ -94,7 +96,7 @@ func (s *Site) createPairing(w http.ResponseWriter, r *http.Request, p auth.Prin
 		s.renderPair(w, r, p, http.StatusBadRequest, "Choose who the phone signs in as.")
 		return
 	}
-	if _, _, err := s.pairings.Create(r.Context(), principal, newName, nil, p.Name, 0); err != nil {
+	if _, _, err := s.pairings.Create(r.Context(), principal, newName, nil, r.PostFormValue("grants"), p.Name, 0); err != nil {
 		if errors.Is(err, auth.ErrConflict) || errors.Is(err, auth.ErrNotFound) || errors.Is(err, auth.ErrBadPairing) {
 			s.renderPair(w, r, p, http.StatusBadRequest, sentence(err.Error()))
 			return

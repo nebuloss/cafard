@@ -4,5 +4,9 @@
   "qr_url": "/api/pairings/3/qr.png",
   "expires_at": "2026-11-16T09:55:00Z",
   "principal": "guillaume",
-  "new_name": "guillaume-phone"
+  "new_name": "guillaume-phone",
+  "grants": [
+    "lab=read,message",
+    "rig:dut1=read"
+  ]
 }

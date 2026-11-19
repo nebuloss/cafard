@@ -46,7 +46,8 @@ func (s *Service) registerResources(m *mcpserver.Server) {
 	m.SetSubscriptions(s)
 }
 
-func (s *Service) resStreams(ctx context.Context, _ auth.Principal, uri string) (*mcp.ReadResourceResult, error) {
+func (s *Service) resStreams(ctx context.Context, p auth.Principal, uri string) (*mcp.ReadResourceResult, error) {
+	a := s.access(ctx, p)
 	rows, err := s.st.Streams(ctx)
 	if err != nil {
 		return nil, err
@@ -63,7 +64,7 @@ func (s *Service) resStreams(ctx context.Context, _ auth.Principal, uri string) 
 	}
 	var b strings.Builder
 	for _, r := range rows {
-		if store.IsMessageStream(r.ID) {
+		if store.IsMessageStream(r.ID) || !a.Can(r.ID, auth.ScopeRead) {
 			continue
 		}
 		st := dto.StreamIdle
@@ -83,9 +84,9 @@ func (s *Service) resStreams(ctx context.Context, _ auth.Principal, uri string) 
 	return textResource(uri, b.String()), nil
 }
 
-func (s *Service) resStream(ctx context.Context, _ auth.Principal, uri string) (*mcp.ReadResourceResult, error) {
+func (s *Service) resStream(ctx context.Context, p auth.Principal, uri string) (*mcp.ReadResourceResult, error) {
 	id, err := url.PathUnescape(strings.TrimPrefix(uri, uriStreamPrefix))
-	if err != nil || store.IsMessageStream(id) || store.ValidateStreamID(id) != nil {
+	if err != nil || store.IsMessageStream(id) || store.ValidateStreamID(id) != nil || !s.access(ctx, p).Can(id, auth.ScopeRead) {
 		return nil, dto.Errorf(dto.CodeNotFound, "no such stream")
 	}
 	res, err := s.st.Read(ctx, store.Query{Streams: []string{id}, Desc: true, Limit: streamLines, Kinds: logKinds})
@@ -138,7 +139,7 @@ func (s *Service) resChannel(ctx context.Context, p auth.Principal, uri string) 
 	if err != nil {
 		return nil, dto.Errorf(dto.CodeNotFound, "no such channel")
 	}
-	ch, err := s.channel(ctx, name)
+	ch, err := s.Channel(ctx, p, name)
 	if err != nil {
 		return nil, dto.Errorf(dto.CodeNotFound, "no such channel")
 	}
@@ -165,10 +166,13 @@ type subscription struct {
 }
 
 // Subscribe implements mcpserver.Subscriptions: cafard://inbox and
-// cafard://stream/{id} can be subscribed to.
-func (s *Service) Subscribe(_ context.Context, p auth.Principal, uri string) error {
+// cafard://stream/{id} of a stream p may read can be subscribed to.
+func (s *Service) Subscribe(ctx context.Context, p auth.Principal, uri string) error {
 	if uri != uriInbox && !strings.HasPrefix(uri, uriStreamPrefix) {
 		return fmt.Errorf("only %s and %s{id} can be subscribed to", uriInbox, uriStreamPrefix)
+	}
+	if id, ok := strings.CutPrefix(uri, uriStreamPrefix); ok && !s.access(ctx, p).Can(id, auth.ScopeRead) {
+		return fmt.Errorf("there is no stream %s you can read", id)
 	}
 	s.subsMu.Lock()
 	defer s.subsMu.Unlock()
@@ -236,7 +240,7 @@ func (s *Service) watchResources(ctx context.Context) error {
 	// Two subscriptions: an empty stream list is every log stream, and
 	// message streams are only matched by their own prefixes.
 	logs := hub.Filter{MinSeverity: 7}
-	msgs := hub.Filter{Streams: []string{"chan:*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7}
+	msgs := hub.Filter{Streams: []string{"chan:*/*", "dm:*"}, Kinds: []store.Kind{store.KindMessage}, MinSeverity: 7}
 	ls, ms := s.hub.Subscribe(logs, 4096), s.hub.Subscribe(msgs, 1024)
 	defer func() { ls.Close(); ms.Close() }()
 	for {
@@ -261,10 +265,19 @@ func (s *Service) notifyEntry(ctx context.Context, th *throttle, e store.Entry) 
 	if !store.IsMessageStream(e.Stream) {
 		uri := uriStreamPrefix + e.Stream
 		s.subsMu.Lock()
-		n := len(s.subs[uri])
+		var who []auth.Principal
+		for _, sub := range s.subs[uri] {
+			who = append(who, sub.p)
+		}
 		s.subsMu.Unlock()
-		if n > 0 {
-			th.do(uri, func() { s.mcp.ResourceUpdated(context.WithoutCancel(ctx), "", uri) })
+		// Per principal: a grant taken away since the subscription ends the
+		// notifications.
+		for _, p := range who {
+			if !s.access(ctx, p).Can(e.Stream, auth.ScopeRead) {
+				continue
+			}
+			name := p.Name
+			th.do(name+"\x00"+uri, func() { s.mcp.ResourceUpdated(context.WithoutCancel(ctx), name, uri) })
 		}
 		return
 	}

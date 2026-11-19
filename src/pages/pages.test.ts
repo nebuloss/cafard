@@ -15,7 +15,7 @@ describe('StreamsPage', () => {
     const cards = new StreamCards(rows, SlotTemplate.find(document, 'tpl-stream-card', STREAM_CARD_ATTRIBUTES)!, () => Date.parse('2026-11-16T12:00:00Z'));
     const base = fixture('stream') as Stream;
     const updated = cards.update({ ...base, status: 'down', dropped: 7 });
-    expect(updated.dataset['stream']).toBe('serial:dut1');
+    expect(updated.dataset['stream']).toBe('serial:lab/dut1');
     expect(updated.dataset['status']).toBe('down');
     expect(updated.querySelector('[data-slot="dropped"]')?.textContent).toBe('7');
     expect(updated.querySelector('[data-slot="line-state"]')?.textContent).toBe('DTR on, RTS off, CTS on, DCD off');

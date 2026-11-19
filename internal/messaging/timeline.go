@@ -3,6 +3,7 @@ package messaging
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/nebuloss/cafard/internal/auth"
@@ -49,7 +50,10 @@ func (s *Service) Timeline(ctx context.Context, viewer auth.Principal, stream st
 	}
 	queries := []store.Query{{Streams: []string{stream}}}
 	if name, ok := cutChan(stream); ok {
-		ch, err := s.Channel(ctx, name)
+		ch, err := s.channel(ctx, name)
+		if errors.Is(err, errNoChannel) {
+			return TimelinePage{}, dto.Errorf(dto.CodeNotFound, "There is no chat %s.", stream)
+		}
 		if err != nil {
 			return TimelinePage{}, err
 		}

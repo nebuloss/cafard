@@ -38,9 +38,10 @@ var logKinds = []store.Kind{store.KindLine, store.KindMarker}
 // snapshotLimits render a snapshot: every line, each cut as agents see it.
 var snapshotLimits = textclean.Limits{MaxLineLen: textclean.AgentDefaults.MaxLineLen}
 
-// buildLogAttachment validates a request, resolves its streams, counts its
-// lines and snapshots a small closed range.
-func (s *Service) buildLogAttachment(ctx context.Context, i int, r dto.LogRequest) (store.Attachment, error) {
+// buildLogAttachment validates a request, resolves its streams (which the
+// sender must be able to read), counts its lines and snapshots a small
+// closed range.
+func (s *Service) buildLogAttachment(ctx context.Context, from auth.Principal, i int, r dto.LogRequest) (store.Attachment, error) {
 	bad := func(format string, args ...any) error {
 		return dto.Errorf(dto.CodeBadRequest, "Log attachment %d: "+format, append([]any{i + 1}, args...)...)
 	}
@@ -79,12 +80,12 @@ func (s *Service) buildLogAttachment(ctx context.Context, i int, r dto.LogReques
 		if err != nil {
 			return store.Attachment{}, err
 		}
-		if !slices.Contains(ids, r.Stream) {
-			return store.Attachment{}, dto.Errorf(dto.CodeNotFound, "Log attachment %d: there is no stream %q; list_streams shows the existing ones.", i+1, r.Stream)
+		if !slices.Contains(ids, r.Stream) || !s.access(ctx, from).Can(r.Stream, auth.ScopeRead) {
+			return store.Attachment{}, dto.Errorf(dto.CodeNotFound, "Log attachment %d: there is no stream %q you can read; list_streams shows them.", i+1, r.Stream)
 		}
 		a.Streams = []string{r.Stream}
 	} else {
-		ch, err := s.Channel(ctx, r.Channel)
+		ch, err := s.Channel(ctx, from, r.Channel)
 		if err != nil {
 			return store.Attachment{}, err
 		}
@@ -160,9 +161,26 @@ func (s *Service) expired(ctx context.Context, a store.Attachment) (bool, error)
 	return n == 0, err
 }
 
-func (s *Service) logDTO(ctx context.Context, a store.Attachment) (dto.LogAttachment, error) {
+// CanReadAttachment reports whether viewer may read every stream a log
+// attachment covers: seeing the message is not enough, or a message would
+// carry lines of a sink the reader has no grant on.
+func (s *Service) CanReadAttachment(ctx context.Context, viewer auth.Principal, a store.Attachment) bool {
+	acc := s.access(ctx, viewer)
+	for _, st := range a.Streams {
+		if !acc.Can(st, auth.ScopeRead) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) logDTO(ctx context.Context, viewer auth.Principal, a store.Attachment) (dto.LogAttachment, error) {
 	la := dto.LogAttachment{Stream: a.Stream, Channel: a.Channel, Streams: a.Streams, FromSeq: a.FromSeq, ToSeq: a.ToSeq,
 		Grep: a.Grep, MinSeverity: a.MinSeverity, Title: a.Title, Lines: a.Lines, Snapshot: a.SnapshotSHA256 != ""}
+	if !s.CanReadAttachment(ctx, viewer, a) {
+		la.Hidden, la.Snapshot, la.Lines = true, false, 0
+		return la, nil
+	}
 	if a.FirstTS != 0 {
 		la.FirstTS = dto.TimePtr(time.Unix(0, a.FirstTS).UTC())
 		la.LastTS = dto.TimePtr(time.Unix(0, a.LastTS).UTC())
@@ -206,6 +224,10 @@ func (s *Service) AttachmentLines(ctx context.Context, viewer auth.Principal, se
 		return AttachmentPage{}, store.Attachment{}, dto.Errorf(dto.CodeNotFound, "Message %d has no log attachment %d.", seq, index)
 	}
 	a := e.Attachments[index]
+	if !s.CanReadAttachment(ctx, viewer, a) {
+		return AttachmentPage{}, store.Attachment{}, dto.Errorf(dto.CodeNotFound,
+			"Log attachment %d of message %d covers streams you cannot read; ask the admin for a grant.", index, seq)
+	}
 	since := max(sinceSeq, a.FromSeq)
 	page, err := s.attachmentPage(ctx, a, since, limit)
 	if err != nil {

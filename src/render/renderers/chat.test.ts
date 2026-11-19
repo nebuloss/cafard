@@ -42,7 +42,7 @@ describe('chat renderers on the pages the Go template test wrote', () => {
     expect(card?.hasAttribute('data-snapshot')).toBe(true);
     expect(card?.querySelector('[data-slot="lines"]')?.textContent).toBe('180 lines');
     expect(card?.querySelectorAll('[data-slot="preview"] .line')).toHaveLength(3);
-    expect(card?.querySelector('[data-slot="open"]')?.getAttribute('href')).toBe('/live?from_seq=48211&streams=serial%3Adut1&to_seq=48390');
+    expect(card?.querySelector('[data-slot="open"]')?.getAttribute('href')).toBe('/live?from_seq=48211&streams=serial%3Alab%2Fdut1&to_seq=48390');
     expect(row.querySelector('[data-slot="seen-by"]')?.textContent).toBe('seen by guillaume');
     // Same slots as the server's own message row.
     expect(slots(row)).toEqual(slots(document.querySelector('.conversation .message')));
@@ -57,7 +57,7 @@ describe('chat renderers on the pages the Go template test wrote', () => {
     const buttons = Array.from(card.querySelectorAll<HTMLButtonElement>('button[name="choice"]'));
     expect(buttons.map((b) => [b.value, b.disabled, b.textContent])).toEqual([['yes', false, 'yes'], ['no', false, 'no']]);
     expect(card.querySelector<HTMLInputElement>('input[name="reply_to"]')?.value).toBe(String(open.seq));
-    expect(card.querySelector<HTMLInputElement>('input[name="chat"]')?.value).toBe('chan:dut1');
+    expect(card.querySelector<HTMLInputElement>('input[name="chat"]')?.value).toBe('chan:lab/dut1');
     expect(card.querySelector('pre code')?.textContent).toBe('flashtool --port /dev/ttyUSB0 write boot.img');
     const answered = r.timeline.render(fixture('entry_question') as Entry);
     expect(answered.hasAttribute('data-open')).toBe(false);
@@ -72,7 +72,7 @@ describe('chat renderers on the pages the Go template test wrote', () => {
     const row = r.timeline.render(marker);
     expect(row.className).toBe('event-row');
     expect(row.dataset['kind']).toBe('marker');
-    expect(row.querySelector('[data-slot="open"]')?.getAttribute('href')).toBe(`/live?streams=serial%3Adut1&to_seq=${marker.seq}`);
+    expect(row.querySelector('[data-slot="open"]')?.getAttribute('href')).toBe(`/live?streams=serial%3Alab%2Fdut1&to_seq=${marker.seq}`);
     expect(slots(row)).toEqual(slots(document.querySelector('.conversation .event-row')));
     expect(r.logs?.render(fixture('entry_line') as Entry).className).toBe('line');
     expect(r.logs?.render(fixture('entry_marker') as Entry).className).toBe('marker');
@@ -81,7 +81,7 @@ describe('chat renderers on the pages the Go template test wrote', () => {
   it('builds chat rows like the list', () => {
     const r = chatRenderers(document, viewer, clock);
     const row = r.rows?.render(fixture('chat_channel') as Chat);
-    expect(row?.getAttribute('href')).toBe('/c/dut1');
+    expect(row?.getAttribute('href')).toBe('/c/lab/dut1');
     expect(row?.hasAttribute('data-pinned')).toBe(true);
     expect(row?.querySelector('[data-slot="name"]')?.textContent).toBe('#dut1');
     expect(row?.querySelector('[data-slot="unread"]')?.textContent).toBe('3');
@@ -111,8 +111,8 @@ describe('home renderers', () => {
     loadPage('home');
     const r = chatRenderers(document, viewer, clock, { back: '/', next: '/' });
     const card = r.needsYou?.render({ ...(fixture('entry_question') as Entry), question: { choices: ['yes'], open: true } });
-    expect(card?.querySelector('[data-slot="chat"]')?.getAttribute('href')).toBe('/c/dut1#m48410');
-    expect(card?.querySelector('[data-slot="chat"]')?.textContent).toBe('in #dut1');
+    expect(card?.querySelector('[data-slot="chat"]')?.getAttribute('href')).toBe('/c/lab/dut1#m48410');
+    expect(card?.querySelector('[data-slot="chat"]')?.textContent).toBe('in #lab/dut1');
     expect(card?.querySelector<HTMLInputElement>('input[name="next"]')?.value).toBe('/');
     expect(slots(card ?? null)).toEqual(slots(document.querySelector('.needs-you .question')));
   });
@@ -139,7 +139,7 @@ describe('formatting shared with Go', () => {
     const now = Date.parse('2026-11-16T12:00:00Z');
     expect(messageTime('2026-11-16T09:42:30.5Z', now)).toBe('09:42');
     expect(messageTime('2026-11-15T09:42:30Z', now)).toBe('Nov 15 09:42');
-    expect(logLink({ streams: ['serial:dut1', 'syslog:x'], from_seq: 3, to_seq: null, grep: 'usb', min_severity: 3 })).toBe('/live?from_seq=3&re=usb&sev=3&streams=serial%3Adut1%2Csyslog%3Ax');
+    expect(logLink({ streams: ['serial:lab/dut1', 'syslog:x'], from_seq: 3, to_seq: null, grep: 'usb', min_severity: 3 })).toBe('/live?from_seq=3&re=usb&sev=3&streams=serial%3Alab%2Fdut1%2Csyslog%3Ax');
   });
 
   it('renders segments without parsing HTML', () => {

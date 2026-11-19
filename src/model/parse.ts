@@ -21,6 +21,7 @@ import type {
   Pairing,
   Principal,
   PrincipalKind,
+  Project,
   Question,
   Reset,
   Scope,
@@ -192,6 +193,7 @@ export function parseAttachment(raw: unknown, path: string): Attachment {
     last_ts: optStr(o, 'last_ts', path),
     snapshot: bool(o, 'snapshot', path),
     expired: bool(o, 'expired', path),
+    hidden: optBool(o, 'hidden', path),
     preview: arr(o, 'preview', path, parseEntry),
   });
 }
@@ -261,6 +263,8 @@ export function parseStream(raw: unknown, path = 'stream'): Stream {
     kind: str(o, 'kind', path),
     transport: str(o, 'transport', path),
     labels,
+    project: optStr(o, 'project', path),
+    sink: optStr(o, 'sink', path),
     status: oneOf(o, 'status', path, STATES),
     last_seq: num(o, 'last_seq', path),
     last_activity: optStr(o, 'last_activity', path),
@@ -332,6 +336,7 @@ export function parsePairing(raw: unknown): Pairing {
     expires_at: str(o, 'expires_at', 'pairing'),
     principal: optStr(o, 'principal', 'pairing'),
     new_name: optStr(o, 'new_name', 'pairing'),
+    grants: optArr(o, 'grants', 'pairing', asString),
   });
 }
 
@@ -386,6 +391,8 @@ export function parseChat(raw: unknown, path = 'chat'): Chat {
   return compact({
     id: str(o, 'id', path),
     kind: oneOf(o, 'kind', path, ['channel', 'direct'] as const),
+    project: optStr(o, 'project', path),
+    project_title: optStr(o, 'project_title', path),
     name: str(o, 'name', path),
     title: optStr(o, 'title', path),
     topic: optStr(o, 'topic', path),
@@ -438,4 +445,24 @@ export function parseAnswered(raw: unknown): Answered {
 
 export function parseAcked(raw: unknown): Acked {
   return { acked: num(obj(raw, 'acked'), 'acked', 'acked') };
+}
+
+export function parseProject(raw: unknown, path = 'project'): Project {
+  const o = obj(raw, path);
+  const r = obj(o['retention'], `${path}.retention`);
+  const rp = `${path}.retention`;
+  return compact({
+    name: str(o, 'name', path),
+    title: optStr(o, 'title', path),
+    created_at: str(o, 'created_at', path),
+    scopes: arr(o, 'scopes', path, asScope),
+    channels: arr(o, 'channels', path, asString),
+    sinks: arr(o, 'sinks', path, asString),
+    retention: {
+      lines_max_age_s: num(r, 'lines_max_age_s', rp),
+      lines_max_bytes: num(r, 'lines_max_bytes', rp),
+      messages_max_age_s: num(r, 'messages_max_age_s', rp),
+      blobs_max_bytes: num(r, 'blobs_max_bytes', rp),
+    },
+  });
 }

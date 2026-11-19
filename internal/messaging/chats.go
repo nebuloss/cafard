@@ -20,19 +20,20 @@ import (
 // channels the viewer unfollowed, Archived the archived ones.
 type ChatsQuery struct {
 	All, Archived bool
+	Project       string // only the channels of this project, and no direct chat
 }
 
 // Chats is the chat list in its order: pinned channels, then channels by
 // last activity (messages and bound-stream events), then direct
 // conversations by last activity.
 func (s *Service) Chats(ctx context.Context, p auth.Principal, q ChatsQuery) ([]dto.Chat, error) {
-	chs, err := s.Channels(ctx, true)
+	chs, err := s.Channels(ctx, p, true)
 	if err != nil {
 		return nil, err
 	}
 	var channels, direct []dto.Chat
 	for _, ch := range chs {
-		if ch.Archived() && !q.Archived {
+		if (ch.Archived() && !q.Archived) || (q.Project != "" && ch.Project() != q.Project) {
 			continue
 		}
 		c, err := s.ChannelChat(ctx, p, ch)
@@ -50,6 +51,9 @@ func (s *Service) Chats(ctx context.Context, p auth.Principal, q ChatsQuery) ([]
 	peers, err := s.peers(ctx, p.Name)
 	if err != nil {
 		return nil, err
+	}
+	if q.Project != "" {
+		peers = nil
 	}
 	for _, peer := range peers {
 		c, err := s.DirectChat(ctx, p, peer)
@@ -274,7 +278,7 @@ func (s *Service) Counts(ctx context.Context, p auth.Principal) (dto.Counts, err
 	for _, q := range qs {
 		perChat[ChatID(p.Name, q.Stream)]++
 	}
-	chs, err := s.Channels(ctx, false)
+	chs, err := s.Channels(ctx, p, false)
 	if err != nil {
 		return c, err
 	}

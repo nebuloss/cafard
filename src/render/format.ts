@@ -83,7 +83,10 @@ export function eventLink(stream: string, seq: number): string {
 
 /** The page of a chat id, like pages.ChatHref. */
 export function chatHref(id: string): string {
-  if (id.startsWith('chan:')) return `/c/${encodeURIComponent(id.slice(5))}`;
+  if (id.startsWith('chan:')) {
+    const [project = '', name = ''] = id.slice(5).split('/', 2);
+    return `/c/${encodeURIComponent(project)}/${encodeURIComponent(name)}`;
+  }
   if (id.startsWith('dm:')) return `/dm/${encodeURIComponent(id.slice(3))}`;
   return '/';
 }

@@ -84,6 +84,6 @@ describe('LiveFeed', () => {
     sources[0]?.emit('counts', fixture('counts'));
     sources[0]?.emit('stream_status', fixture('stream'));
     expect(downs).toEqual([0]);
-    expect(ids).toEqual(['serial:dut1']);
+    expect(ids).toEqual(['serial:lab/dut1']);
   });
 });

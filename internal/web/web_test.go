@@ -53,12 +53,12 @@ func newEnv(t *testing.T, o webtest.Options) *env {
 // seed gives the pages something to show: two sources, lines, a marker,
 // and the chats of seedChats.
 func seed(e *env) {
-	e.Status.Declare(status.Source{Stream: "serial:dut1", Transport: "rfc2217"})
+	e.Status.Declare(status.Source{Stream: "serial:lab/dut1", Transport: "rfc2217"})
 	e.Commit(
-		webtest.Line("serial:dut1", "U-Boot 2024.04 (Nov 16 2026)"),
-		store.Entry{Stream: "serial:dut1", Kind: store.KindLine, Severity: 3, Text: "\x1b[31mdwc3 fe800000.usb: failed to initialize core: -110\x1b[0m"},
-		store.Entry{Stream: "serial:dut1", Kind: store.KindMarker, Severity: store.DefaultSeverity, Text: "codex-build: flashed linux-6.18-rc3", Sender: "codex-build"},
-		webtest.Line("syslog:bench-pi", "systemd[1]: Started cafard push."),
+		webtest.Line("serial:lab/dut1", "U-Boot 2024.04 (Nov 16 2026)"),
+		store.Entry{Stream: "serial:lab/dut1", Kind: store.KindLine, Severity: 3, Text: "\x1b[31mdwc3 fe800000.usb: failed to initialize core: -110\x1b[0m"},
+		store.Entry{Stream: "serial:lab/dut1", Kind: store.KindMarker, Severity: store.DefaultSeverity, Text: "codex-build: flashed linux-6.18-rc3", Sender: "codex-build"},
+		webtest.Line("syslog:lab/bench-pi", "systemd[1]: Started cafard push."),
 	)
 	seedChats(e)
 }
@@ -98,7 +98,7 @@ var pageTwins = map[string][]string{
 
 var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
-	"home": "/", "chat": "/c/dut1", "drop": "/drop",
+	"home": "/", "chat": "/c/lab/dut1", "drop": "/drop",
 }
 
 var templateRE = regexp.MustCompile(`(?s)<template id="(tpl-[a-z-]+)">(.*?)</template>`)
@@ -178,8 +178,8 @@ func TestEveryPageCarriesItsTwins(t *testing.T) {
 // adds the chat pages.
 var noBundle = map[string][]string{
 	"/streams": {
-		`data-stream="serial:dut1"`, "rfc2217", "flashed linux-6.18-rc3", `href="/live?streams=serial%3Adut1"`,
-		`data-stream="syslog:bench-pi"`, "systemd[1]: Started cafard push.",
+		`data-stream="serial:lab/dut1"`, "rfc2217", "flashed linux-6.18-rc3", `href="/live?streams=serial%3Alab%2Fdut1"`,
+		`data-stream="syslog:lab/bench-pi"`, "systemd[1]: Started cafard push.",
 	},
 	"/live": {
 		"U-Boot 2024.04", `class="marker"`, "flashed linux-6.18-rc3", `<form class="filter-bar" method="get" action="/live"`,
@@ -215,8 +215,8 @@ func TestPagesEscapeHostileLogLines(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	cookie := e.Admin()
 	e.Commit(
-		webtest.Line("push:evil", "<script>alert(1)</script>"),
-		webtest.Line("push:evil", "\x1b[31m<img src=x onerror=alert(2)>\x1b[0m\x1b]0;owned\x07"),
+		webtest.Line("push:lab/evil", "<script>alert(1)</script>"),
+		webtest.Line("push:lab/evil", "\x1b[31m<img src=x onerror=alert(2)>\x1b[0m\x1b]0;owned\x07"),
 	)
 	for _, path := range []string{"/live", "/streams"} {
 		body := e.Do("GET", path, cookie, nil).Body.String()

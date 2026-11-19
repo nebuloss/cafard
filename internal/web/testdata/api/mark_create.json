@@ -1,4 +1,4 @@
 {
-  "stream": "serial:dut1",
+  "stream": "serial:lab/dut1",
   "label": "test 42 starts"
 }

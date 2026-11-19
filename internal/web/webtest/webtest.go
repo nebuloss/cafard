@@ -36,6 +36,7 @@ type Env struct {
 	Hub      *hub.Memory
 	Status   *status.Memory
 	Writer   *writer.W
+	Stack    *writertest.Stack // Stack.Projects has the project lab
 	Clock    *clock.Fake
 	Deps     deps.Deps
 	Mux      *http.ServeMux
@@ -58,7 +59,7 @@ func New(t testing.TB, o Options) *Env {
 	tokens := auth.NewTokens(st.DB(), clk)
 	sessions := auth.NewSessions(st.DB(), clk)
 	account := auth.NewAdmin(st.DB(), clk)
-	e := &Env{T: t, Store: st, Tokens: tokens, Sessions: sessions, Account: account, Hub: h, Status: stat, Writer: w, Clock: clk,
+	e := &Env{T: t, Store: st, Tokens: tokens, Sessions: sessions, Account: account, Hub: h, Status: stat, Writer: w, Stack: s, Clock: clk,
 		Mux: http.NewServeMux(), AdminMux: http.NewServeMux()}
 	e.AdminMux.Handle("/", e.Mux)
 	e.Deps = deps.Deps{
@@ -71,6 +72,7 @@ func New(t testing.TB, o Options) *Env {
 		Tokens:    tokens,
 		Admin:     account,
 		Janitor:   store.NewJanitor(st, w.Exec, store.Retention{}, clk, log),
+		Projects:  s.Projects,
 		Messaging: o.Messaging,
 		Clock:     clk,
 		Log:       log,
@@ -79,22 +81,38 @@ func New(t testing.TB, o Options) *Env {
 	return e
 }
 
-// Principal makes a principal and a token for it.
+// Principal makes a principal, a member of the whole project lab with
+// scopes, and a token for it.
 func (e *Env) Principal(name, kind string, scopes ...auth.Scope) string {
 	e.T.Helper()
-	ctx := context.Background()
-	if _, err := e.Tokens.EnsurePrincipal(ctx, name, kind); err != nil {
-		e.T.Fatal(err)
-	}
-	_, secret, err := e.Tokens.CreateToken(ctx, name, "test", auth.NewScopeSet(scopes...))
+	e.Stack.Member(e.T, name, kind, scopes...)
+	return e.Token(name, scopes...)
+}
+
+// Token is a token for an existing principal, without any grant.
+func (e *Env) Token(name string, scopes ...auth.Scope) string {
+	e.T.Helper()
+	_, secret, err := e.Tokens.CreateToken(context.Background(), name, "test", auth.NewScopeSet(scopes...))
 	if err != nil {
 		e.T.Fatal(err)
 	}
 	return secret
 }
 
-// Session opens a session for a principal and returns its cookie.
+// Session opens a session for a principal, granting it scopes on the
+// whole project lab, and returns its cookie.
 func (e *Env) Session(name string, scopes ...auth.Scope) *http.Cookie {
+	e.T.Helper()
+	row, err := e.Tokens.Principal(context.Background(), name)
+	if err != nil {
+		e.T.Fatal(err)
+	}
+	e.Stack.Member(e.T, name, row.Kind, scopes...)
+	return e.SessionOnly(name, scopes...)
+}
+
+// SessionOnly opens a session for a principal without granting anything.
+func (e *Env) SessionOnly(name string, scopes ...auth.Scope) *http.Cookie {
 	e.T.Helper()
 	_, secret, err := e.Sessions.Create(context.Background(), name, auth.NewScopeSet(scopes...), "Firefox on Linux", "Mozilla/5.0 Firefox/140.0")
 	if err != nil {

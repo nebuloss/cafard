@@ -16,6 +16,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/config"
+	"github.com/nebuloss/cafard/internal/projects"
 )
 
 const passwdUsage = `Usage:
@@ -99,13 +100,17 @@ func readPassword(e env) (string, error) {
 }
 
 const pairUsage = `Usage:
-  cafard pair --name NAME [--scopes read,message,ingest] [--ttl 5m] [-config FILE]
+  cafard pair --name NAME [--scopes read,message,ingest] [--grant PROJECT[:CHANNEL]=SCOPES ...]
+              [--ttl 5m] [-config FILE]
 
 Prints a one-time sign-in link for a person, the same as a QR code on the
 Pair page. Opened in a browser, it signs that browser in as NAME (a human,
 created when new) for 30 days, renewed while used. It works once, within
 --ttl (24h at most). Scopes: ingest, read, message, serial_write; never
-admin. The link starts with public_url.
+admin. They are a cap: the person reaches only what they are granted, and
+--grant (repeatable) adds grants when the link is opened, on a whole
+project (lab=read,message) or one channel (lab:dut1=read). The link starts
+with public_url.
 `
 
 func cmdPair(ctx context.Context, e env, args []string) error {
@@ -114,6 +119,12 @@ func cmdPair(ctx context.Context, e env, args []string) error {
 	name := set.String("name", "", "the person's principal name")
 	scopes := set.String("scopes", "", "comma separated scopes (default read,message,ingest)")
 	ttl := set.Duration("ttl", auth.PairingTTL, "how long the link works, 24h at most")
+	var grants []projects.Grant
+	set.Func("grant", "PROJECT[:CHANNEL]=SCOPES given when the link is opened (repeatable)", func(v string) error {
+		g, err := projects.ParseGrant(v)
+		grants = append(grants, g)
+		return err
+	})
 	set.Usage = func() { fmt.Fprint(e.stderr, pairUsage) }
 	if help, err := parseFlags(set, e, args); help || err != nil {
 		return err
@@ -134,14 +145,18 @@ func cmdPair(ctx context.Context, e env, args []string) error {
 		return err
 	}
 	defer st.Close()
-	clk := clock.System{}
-	pairings := auth.NewPairings(st.DB(), clk, auth.NewSessions(st.DB(), clk))
-	row, code, err := pairings.Create(ctx, "", *name, sc, auth.AdminName, *ttl)
+	projs, err := cliProjects(ctx, cfg, st)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stderr, "Sign-in link for %s, scopes %s. It works once, until %s:\n", row.Name(), row.Scopes.String(),
-		row.ExpiresAt.Local().Format(time.DateTime+" MST"))
+	clk := clock.System{}
+	pairings := auth.NewPairings(st.DB(), clk, auth.NewSessions(st.DB(), clk), projs)
+	row, code, err := pairings.Create(ctx, "", *name, sc, projects.FormatGrants(grants), auth.AdminName, *ttl)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(e.stderr, "Sign-in link for %s, scopes %s%s. It works once, until %s:\n", row.Name(), row.Scopes.String(),
+		grantsNote(grants), row.ExpiresAt.Local().Format(time.DateTime+" MST"))
 	fmt.Fprintln(e.stdout, serverSettings(cfg).BaseURL()+"/p/"+code)
 	return nil
 }

@@ -3,6 +3,7 @@ package messaging
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,6 +57,7 @@ type sendOut struct {
 
 type inboxIn struct {
 	Channel      string `json:"channel,omitempty" jsonschema:"only this channel"`
+	Project      string `json:"project,omitempty" jsonschema:"only the channels of this project"`
 	Limit        int    `json:"limit,omitempty" jsonschema:"at most this many, default 20"`
 	IncludeAcked bool   `json:"include_acked,omitempty" jsonschema:"also show messages already acked (the latest ones)"`
 }
@@ -139,7 +141,8 @@ type listPrincipalsOut struct {
 }
 
 type listChannelsIn struct {
-	IncludeArchived bool `json:"include_archived,omitempty"`
+	IncludeArchived bool   `json:"include_archived,omitempty"`
+	Project         string `json:"project,omitempty" jsonschema:"only the channels of this project"`
 }
 
 type listChannelsOut struct {
@@ -147,10 +150,11 @@ type listChannelsOut struct {
 }
 
 type createChannelIn struct {
-	Name    string      `json:"name" jsonschema:"lowercase slug, e.g. run-42"`
+	Name    string      `json:"name" jsonschema:"lowercase slug, e.g. run-42, or project/run-42"`
+	Project string      `json:"project,omitempty" jsonschema:"the project, needed when you may make channels in several"`
 	Title   string      `json:"title,omitempty"`
 	Topic   string      `json:"topic,omitempty"`
-	Streams []string    `json:"streams,omitempty" jsonschema:"stream ids or globs to bind, e.g. serial:dut1, syslog:dut1*"`
+	Streams []string    `json:"streams,omitempty" jsonschema:"stream ids or globs of the channel's project to bind, e.g. serial:dut1, syslog:dut1*"`
 	Surface dto.Surface `json:"surface,omitempty" jsonschema:"none, markers (default) or errors: which entries of bound streams the chat shows"`
 }
 
@@ -234,7 +238,8 @@ func toClaimDTO(c ClaimRow) claimDTO {
 // resources.
 func (s *Service) RegisterTools(m *mcpserver.Server) {
 	r, w := auth.ScopeRead, auth.ScopeMessage
-	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_principals", Description: "Who can be messaged: name, kind (agent, human, device), last seen."}, s.toolListPrincipals)
+	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_projects", Description: "The projects you have a grant in: your scopes there, their channels and sinks. Name a channel project/name when several have it."}, s.toolListProjects)
+	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_principals", Description: "Who can be messaged (those you share a project with): name, kind (agent, human, device), last seen."}, s.toolListPrincipals)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "send", Description: "Send a message: to a principal (direct), to @humans in a channel, or to a whole channel (default general). Attach images and log slices. Do not send acknowledgements or thanks."}, s.toolSend)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "inbox", Description: "Your unread messages: direct ones, those to @humans if you are human, and broadcasts in channels you follow. Check it at the start of a task and whenever you wait."}, s.toolInbox)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "get_message", Description: "One message in full: text, its images, and the first lines of its log attachments. Marks it read unless ack=false."}, s.toolGetMessage)
@@ -255,8 +260,11 @@ func (s *Service) RegisterTools(m *mcpserver.Server) {
 	s.registerResources(m)
 }
 
-func (s *Service) toolListPrincipals(ctx context.Context, _ *mcpserver.Call, in listPrincipalsIn) (string, listPrincipalsOut, error) {
+func (s *Service) toolListPrincipals(ctx context.Context, c *mcpserver.Call, in listPrincipalsIn) (string, listPrincipalsOut, error) {
 	rows, err := s.tokens.Principals(ctx, in.Kind)
+	if err == nil {
+		rows, err = s.projects.Reachable(ctx, c.Principal, rows)
+	}
 	if err != nil {
 		return "", listPrincipalsOut{}, err
 	}
@@ -340,7 +348,7 @@ func (s *Service) summary(ctx context.Context, viewer auth.Principal, e store.En
 }
 
 func (s *Service) toolInbox(ctx context.Context, c *mcpserver.Call, in inboxIn) (string, entryPage, error) {
-	list, more, err := s.Inbox(ctx, c.Principal, InboxQuery{Channel: in.Channel, Limit: in.Limit, IncludeAcked: in.IncludeAcked})
+	list, more, err := s.Inbox(ctx, c.Principal, InboxQuery{Channel: in.Channel, Project: in.Project, Limit: in.Limit, IncludeAcked: in.IncludeAcked})
 	if err != nil {
 		return "", entryPage{}, err
 	}
@@ -435,6 +443,10 @@ func (s *Service) toolGetMessage(ctx context.Context, c *mcpserver.Call, in getM
 		}
 		li++
 		fmt.Fprintf(&b, "\nLog attachment %d (index %d): %s\n", li+1, idx, describeRange(a))
+		if !s.CanReadAttachment(ctx, c.Principal, a) {
+			b.WriteString("You cannot read every stream it covers, so its lines are not shown; ask the admin for a grant.\n")
+			continue
+		}
 		page, err := s.attachmentPage(ctx, a, a.FromSeq, getMessageLogLines)
 		if err != nil {
 			return "", getMessageOut{}, err
@@ -607,13 +619,16 @@ func (s *Service) toolAskHuman(ctx context.Context, c *mcpserver.Call, in askIn)
 }
 
 func (s *Service) toolListChannels(ctx context.Context, c *mcpserver.Call, in listChannelsIn) (string, listChannelsOut, error) {
-	chs, err := s.Channels(ctx, in.IncludeArchived)
+	chs, err := s.Channels(ctx, c.Principal, in.IncludeArchived)
 	if err != nil {
 		return "", listChannelsOut{}, err
 	}
 	out := listChannelsOut{Channels: []dto.Chat{}}
 	var b strings.Builder
 	for _, ch := range chs {
+		if in.Project != "" && ch.Project() != in.Project {
+			continue
+		}
 		chat, err := s.ChannelChat(ctx, c.Principal, ch)
 		if err != nil {
 			return "", listChannelsOut{}, err
@@ -622,12 +637,15 @@ func (s *Service) toolListChannels(ctx context.Context, c *mcpserver.Call, in li
 		b.WriteString(channelLine(chat))
 		b.WriteByte('\n')
 	}
+	if len(out.Channels) == 0 {
+		return "You can read no channel; list_projects shows your grants.", out, nil
+	}
 	return b.String(), out, nil
 }
 
 func channelLine(c dto.Chat) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "#%s", c.Name)
+	fmt.Fprintf(&b, "#%s", strings.TrimPrefix(c.ID, "chan:"))
 	if c.Title != "" {
 		fmt.Fprintf(&b, " %q", c.Title)
 	}
@@ -677,7 +695,7 @@ func (s *Service) chatOut(ctx context.Context, p auth.Principal, ch Channel, ver
 }
 
 func (s *Service) toolCreateChannel(ctx context.Context, c *mcpserver.Call, in createChannelIn) (string, channelOut, error) {
-	ch, err := s.CreateChannel(ctx, c.Principal, dto.ChannelCreate{Name: in.Name, Title: in.Title, Topic: in.Topic, Patterns: in.Streams, Surface: in.Surface})
+	ch, err := s.CreateChannel(ctx, c.Principal, dto.ChannelCreate{Name: in.Name, Project: in.Project, Title: in.Title, Topic: in.Topic, Patterns: in.Streams, Surface: in.Surface})
 	if err != nil {
 		return "", channelOut{}, err
 	}
@@ -694,7 +712,7 @@ func (s *Service) toolUpdateChannel(ctx context.Context, c *mcpserver.Call, in u
 }
 
 func (s *Service) toolDeleteChannel(ctx context.Context, c *mcpserver.Call, in nameIn) (string, deleteOut, error) {
-	ch, err := s.Channel(ctx, in.Name)
+	ch, err := s.Channel(ctx, c.Principal, in.Name)
 	if err != nil {
 		return "", deleteOut{}, err
 	}
@@ -705,11 +723,15 @@ func (s *Service) toolDeleteChannel(ctx context.Context, c *mcpserver.Call, in n
 }
 
 func (s *Service) follow(ctx context.Context, c *mcpserver.Call, channel string, on bool) (string, followOut, error) {
-	st, err := s.SetFollow(ctx, c.Principal, channel, on)
+	ch, err := s.Channel(ctx, c.Principal, channel)
 	if err != nil {
 		return "", followOut{}, err
 	}
-	name := normalizeChannel(channel)
+	st, err := s.SetFollow(ctx, c.Principal, ch.Name, on)
+	if err != nil {
+		return "", followOut{}, err
+	}
+	name := ch.Name
 	if st.Followed {
 		return fmt.Sprintf("You follow #%s: its broadcasts reach your inbox.", name), followOut{Channel: name, Followed: true}, nil
 	}
@@ -725,7 +747,7 @@ func (s *Service) toolUnfollow(ctx context.Context, c *mcpserver.Call, in follow
 }
 
 func (s *Service) toolTimeline(ctx context.Context, c *mcpserver.Call, in timelineIn) (string, entryPage, error) {
-	ch, err := s.Channel(ctx, in.Channel)
+	ch, err := s.Channel(ctx, c.Principal, in.Channel)
 	if err != nil {
 		return "", entryPage{}, err
 	}
@@ -794,11 +816,11 @@ func (s *Service) toolRelease(ctx context.Context, c *mcpserver.Call, in release
 	return fmt.Sprintf("Released %s.", in.Resource), releaseOut{Released: in.Resource}, nil
 }
 
-func (s *Service) toolListClaims(ctx context.Context, _ *mcpserver.Call, in listClaimsIn) (string, listClaimsOut, error) {
+func (s *Service) toolListClaims(ctx context.Context, c *mcpserver.Call, in listClaimsIn) (string, listClaimsOut, error) {
 	var patterns []string
 	if in.Channel != "" {
 		var err error
-		if patterns, err = s.ResolveChannel(ctx, in.Channel); err != nil {
+		if _, patterns, err = s.ResolveChannel(ctx, c.Principal, in.Channel); err != nil {
 			return "", listClaimsOut{}, err
 		}
 	}
@@ -806,6 +828,8 @@ func (s *Service) toolListClaims(ctx context.Context, _ *mcpserver.Call, in list
 	if err != nil {
 		return "", listClaimsOut{}, err
 	}
+	a := s.access(ctx, c.Principal)
+	list = slices.DeleteFunc(list, func(cl ClaimRow) bool { return !a.Can(cl.Resource, auth.ScopeRead) })
 	out := listClaimsOut{Claims: []claimDTO{}}
 	var b strings.Builder
 	for _, cl := range list {

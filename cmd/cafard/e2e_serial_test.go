@@ -15,6 +15,8 @@ import (
 	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/ingest/serial/rfc2217"
 	"github.com/nebuloss/cafard/internal/ingest/serial/rfc2217/rfc2217test"
+	"github.com/nebuloss/cafard/internal/messaging"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/testutil"
 )
 
@@ -50,11 +52,16 @@ func TestTwoAgentsContendForASerialPort(t *testing.T) {
 			{Name: "ro", TCP: roAddr},
 			{Name: "dead", RFC2217: dead, Writable: true},
 		}
+		c.Channels.List = append(c.Channels.List, messaging.ChannelConfig{Name: projects.Imported + "/general"})
 	})
 	driver := []auth.Scope{auth.ScopeRead, auth.ScopeMessage, auth.ScopeSerialWrite}
-	a := s.mcp(s.token("agent-a", auth.KindAgent, driver...))
-	b := s.mcp(s.token("agent-b", auth.KindAgent, driver...))
-	_, c := s.agent("agent-c") // read and message only
+	tokA := s.tokenOnly("agent-a", auth.KindAgent, driver...)
+	tokB := s.tokenOnly("agent-b", auth.KindAgent, driver...)
+	tokC := s.tokenOnly("agent-c", auth.KindAgent, auth.ScopeRead, auth.ScopeMessage)
+	for _, name := range []string{"agent-a", "agent-b", "agent-c"} {
+		s.grant(name, projects.Imported, driver...)
+	}
+	a, b, c := s.mcp(tokA), s.mcp(tokB), s.mcp(tokC)
 
 	if names := toolNames(t, a); !slices.Contains(names, "serial_write") || !slices.Contains(names, "serial_control") {
 		t.Errorf("a driver lacks the serial tools: %v", names)
@@ -63,54 +70,54 @@ func TestTwoAgentsContendForASerialPort(t *testing.T) {
 		t.Errorf("tools offered without serial_write: %v", names)
 	}
 
-	for _, st := range []string{"serial:dut1", "serial:dut3", "serial:ro", "serial:dead"} {
+	for _, st := range []string{"serial:imported/dut1", "serial:imported/dut3", "serial:imported/ro", "serial:imported/dead"} {
 		s.waitEntries(st, 1) // connected, or cannot open
 	}
-	call(t, a, "create_channel", map[string]any{"name": "bench", "streams": []string{"serial:dut1"}, "surface": "markers"})
+	call(t, a, "create_channel", map[string]any{"name": "bench", "project": projects.Imported, "streams": []string{"serial:imported/dut1"}, "surface": "markers"})
 
 	// Without a claim nobody writes.
 	for _, cs := range []*mcp.ClientSession{a, b} {
-		text := callFails(t, cs, "serial_write", map[string]any{"stream": "serial:dut1", "data": "reboot"}, "forbidden")
-		if !strings.Contains(text, "Claim serial:dut1 first") {
+		text := callFails(t, cs, "serial_write", map[string]any{"stream": "serial:imported/dut1", "data": "reboot"}, "forbidden")
+		if !strings.Contains(text, "Claim serial:imported/dut1 first") {
 			t.Errorf("unclaimed sentence = %q", text)
 		}
-		callFails(t, cs, "serial_control", map[string]any{"stream": "serial:dut1", "dtr": false}, "forbidden")
+		callFails(t, cs, "serial_control", map[string]any{"stream": "serial:imported/dut1", "dtr": false}, "forbidden")
 	}
 
 	// The holder writes and drives the lines; the far end sees both.
-	call(t, a, "claim", map[string]any{"resource": "serial:dut1", "note": "reset test"})
-	_, out := call(t, a, "serial_write", map[string]any{"stream": "serial:dut1", "data": "reboot"})
+	call(t, a, "claim", map[string]any{"resource": "serial:imported/dut1", "note": "reset test"})
+	_, out := call(t, a, "serial_write", map[string]any{"stream": "serial:imported/dut1", "data": "reboot"})
 	if num(out["bytes_written"]) != 7 || num(out["marker_seq"]) == 0 {
 		t.Errorf("serial_write = %v", out)
 	}
 	eventually(t, "the bytes at the far end", func() bool { return bytes.Equal(dut1.Data(), []byte("reboot\r")) })
-	_, out = call(t, a, "serial_control", map[string]any{"stream": "serial:dut1", "rts": false, "pulse": map[string]any{"line": "dtr", "ms": 50}})
+	_, out = call(t, a, "serial_control", map[string]any{"stream": "serial:imported/dut1", "rts": false, "pulse": map[string]any{"line": "dtr", "ms": 50}})
 	if lines := out["lines"].(map[string]any); lines["dtr"] != true || lines["rts"] != false {
 		t.Errorf("serial_control = %v", out)
 	}
 	if ctl := dut1.Control(); !bytes.Equal(ctl, []byte{rfc2217.ControlRTSOff, rfc2217.ControlDTROff, rfc2217.ControlDTROn}) {
 		t.Errorf("SET-CONTROL values %v", ctl)
 	}
-	call(t, a, "serial_control", map[string]any{"stream": "serial:dut1", "baud": 57600})
+	call(t, a, "serial_control", map[string]any{"stream": "serial:imported/dut1", "baud": 57600})
 	if baud := dut1.Baud(); !bytes.Equal(baud, []byte{0, 0, 0xE1, 0}) {
 		t.Errorf("SET-BAUDRATE % x", baud)
 	}
 
 	// The other agent is refused while the claim holds, by name.
-	text := callFails(t, b, "serial_write", map[string]any{"stream": "serial:dut1", "data": "halt"}, "conflict")
+	text := callFails(t, b, "serial_write", map[string]any{"stream": "serial:imported/dut1", "data": "halt"}, "conflict")
 	if !strings.Contains(text, "agent-a") {
 		t.Errorf("conflict sentence = %q", text)
 	}
-	callFails(t, b, "serial_control", map[string]any{"stream": "serial:dut1", "pulse": map[string]any{"line": "rts", "ms": 10}}, "conflict")
+	callFails(t, b, "serial_control", map[string]any{"stream": "serial:imported/dut1", "pulse": map[string]any{"line": "rts", "ms": 10}}, "conflict")
 
 	// After the release it may claim and write, until its claim expires.
-	call(t, a, "release", map[string]any{"resource": "serial:dut1"})
-	call(t, b, "claim", map[string]any{"resource": "serial:dut1", "ttl_s": 1})
-	call(t, b, "serial_write", map[string]any{"stream": "serial:dut1", "data": "status"})
-	callFails(t, a, "serial_write", map[string]any{"stream": "serial:dut1", "data": "x"}, "conflict")
+	call(t, a, "release", map[string]any{"resource": "serial:imported/dut1"})
+	call(t, b, "claim", map[string]any{"resource": "serial:imported/dut1", "ttl_s": 1})
+	call(t, b, "serial_write", map[string]any{"stream": "serial:imported/dut1", "data": "status"})
+	callFails(t, a, "serial_write", map[string]any{"stream": "serial:imported/dut1", "data": "x"}, "conflict")
 	time.Sleep(1200 * time.Millisecond)
-	callFails(t, b, "serial_write", map[string]any{"stream": "serial:dut1", "data": "late"}, "forbidden")
-	call(t, a, "claim", map[string]any{"resource": "serial:dut1"})
+	callFails(t, b, "serial_write", map[string]any{"stream": "serial:imported/dut1", "data": "late"}, "forbidden")
+	call(t, a, "claim", map[string]any{"resource": "serial:imported/dut1"})
 	eventually(t, "the second write", func() bool {
 		return string(dut1.Data()) == "reboot\rstatus\r"
 	})
@@ -120,16 +127,16 @@ func TestTwoAgentsContendForASerialPort(t *testing.T) {
 
 	// Every step is in the stream, and in the channel bound to it.
 	want := []string{
-		"agent-a claimed serial:dut1",
+		"agent-a claimed serial:imported/dut1",
 		`agent-a> reboot\r`,
 		"serial: agent-a set RTS off, pulsed DTR for 50 ms",
 		"serial: agent-a set 57600 baud",
-		"agent-a released serial:dut1",
-		"agent-b claimed serial:dut1 for 1s",
+		"agent-a released serial:imported/dut1",
+		"agent-b claimed serial:imported/dut1 for 1s",
 		`agent-b> status\r`,
-		"claim of agent-b on serial:dut1 expired",
+		"claim of agent-b on serial:imported/dut1 expired",
 	}
-	text, _ = call(t, a, "read", map[string]any{"streams": []string{"serial:dut1"}, "since_seq": 0})
+	text, _ = call(t, a, "read", map[string]any{"streams": []string{"serial:imported/dut1"}, "since_seq": 0})
 	last := -1
 	for _, w := range want {
 		i := strings.Index(text, w)
@@ -149,18 +156,18 @@ func TestTwoAgentsContendForASerialPort(t *testing.T) {
 	}
 
 	// A raw TCP port takes data but not line control, and says why.
-	call(t, a, "claim", map[string]any{"resource": "serial:dut3"})
-	call(t, a, "serial_write", map[string]any{"stream": "serial:dut3", "data": "ls", "newline": "\n"})
+	call(t, a, "claim", map[string]any{"resource": "serial:imported/dut3"})
+	call(t, a, "serial_write", map[string]any{"stream": "serial:imported/dut3", "data": "ls", "newline": "\n"})
 	eventually(t, "raw tcp data", func() bool { return string(dut3.Data()) == "ls\n" })
-	text = callFails(t, a, "serial_control", map[string]any{"stream": "serial:dut3", "dtr": true}, "bad_request")
+	text = callFails(t, a, "serial_control", map[string]any{"stream": "serial:imported/dut3", "dtr": true}, "bad_request")
 	if !strings.Contains(text, "raw TCP carries data only") {
 		t.Errorf("raw tcp sentence = %q", text)
 	}
 
 	// A port that is not writable is refused even to a claim holder.
-	call(t, a, "claim", map[string]any{"resource": "serial:ro"})
-	text = callFails(t, a, "serial_write", map[string]any{"stream": "serial:ro", "data": "x"}, "forbidden")
-	if !strings.Contains(text, "writable: true") {
+	call(t, a, "claim", map[string]any{"resource": "serial:imported/ro"})
+	text = callFails(t, a, "serial_write", map[string]any{"stream": "serial:imported/ro", "data": "x"}, "forbidden")
+	if !strings.Contains(text, "port of sink imported/ro writable") {
 		t.Errorf("read-only sentence = %q", text)
 	}
 	if d := ro.Data(); len(d) != 0 {
@@ -168,13 +175,13 @@ func TestTwoAgentsContendForASerialPort(t *testing.T) {
 	}
 
 	// A port that is down is busy, with a hint to retry.
-	call(t, a, "claim", map[string]any{"resource": "serial:dead"})
-	res, text, out := callResult(t, a, "serial_write", map[string]any{"stream": "serial:dead", "data": "x"})
+	call(t, a, "claim", map[string]any{"resource": "serial:imported/dead"})
+	res, text, out := callResult(t, a, "serial_write", map[string]any{"stream": "serial:imported/dead", "data": "x"})
 	if !res.IsError || out["code"] != "busy" || num(out["retry_after_s"]) == 0 || !strings.Contains(text, "try again") {
 		t.Errorf("down port = %q %v", text, out)
 	}
-	text = callFails(t, a, "serial_write", map[string]any{"stream": "serial:nope", "data": "x"}, "not_found")
-	if !strings.Contains(text, "serial:dut1") {
+	text = callFails(t, a, "serial_write", map[string]any{"stream": "serial:imported/nope", "data": "x"}, "not_found")
+	if !strings.Contains(text, "serial:imported/dut1") {
 		t.Errorf("unknown stream sentence = %q", text)
 	}
 }

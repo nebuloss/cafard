@@ -15,7 +15,7 @@ import { FakeUploads, flush } from '@/testing/services.ts';
 const entry = fixture('entry_message') as Entry;
 
 function job(id: string, extra: Partial<JobData> = {}): JobData {
-  return { id, chat: 'chan:dut1', text: `text of ${id}`, files: [], processed: false, keepOriginal: false, createdAt: 0, ...extra };
+  return { id, chat: 'chan:lab/dut1', text: `text of ${id}`, files: [], processed: false, keepOriginal: false, createdAt: 0, ...extra };
 }
 
 describe('UploadJob', () => {
@@ -189,16 +189,16 @@ describe('XhrUploadClient', () => {
     const x = fakeXhr(201, JSON.stringify(entry));
     const progress: number[] = [];
     const got = await new XhrUploadClient(() => x).send(
-      job('a', { replyTo: 12, choice: 'yes', logs: [{ stream: 'serial:dut1', from_seq: 3, grep: 'usb' }], files: [{ name: 'a.jpg', blob: new Blob(['x']) }] }),
+      job('a', { replyTo: 12, choice: 'yes', logs: [{ stream: 'serial:lab/dut1', from_seq: 3, grep: 'usb' }], files: [{ name: 'a.jpg', blob: new Blob(['x']) }] }),
       (p) => progress.push(p),
     );
     expect(got.seq).toBe(entry.seq);
     expect(progress).toEqual([0.5]);
     expect(x.headers['X-Cafard']).toBe('1');
-    expect(x.body?.get('chat')).toBe('chan:dut1');
+    expect(x.body?.get('chat')).toBe('chan:lab/dut1');
     expect(x.body?.get('reply_to')).toBe('12');
     expect(x.body?.get('choice')).toBe('yes');
-    expect(JSON.parse(String(x.body?.get('logs')))).toEqual([{ stream: 'serial:dut1', from_seq: 3, grep: 'usb' }]);
+    expect(JSON.parse(String(x.body?.get('logs')))).toEqual([{ stream: 'serial:lab/dut1', from_seq: 3, grep: 'usb' }]);
     expect(x.body?.getAll('files[]')).toHaveLength(1);
   });
 

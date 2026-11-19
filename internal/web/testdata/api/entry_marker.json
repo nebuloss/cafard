@@ -2,12 +2,12 @@
   "seq": 48390,
   "ts": "2026-11-16T09:41:00.000312998Z",
   "src_ts": "2026-11-16T09:40:59.9980012Z",
-  "stream": "serial:dut1",
+  "stream": "serial:lab/dut1",
   "kind": "marker",
   "severity": 5,
   "app": "flashtool",
   "text": "flashed linux-6.18-rc3 to dut1",
-  "chat": "chan:dut1",
+  "chat": "chan:lab/dut1",
   "sender": {
     "name": "codex-build",
     "kind": "agent"

@@ -5,9 +5,11 @@ package view
 import (
 	"context"
 	"hash/fnv"
+	"slices"
 	"sync"
 
 	"github.com/nebuloss/cafard/internal/auth"
+	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
@@ -112,7 +114,12 @@ func Tone(stream string) int {
 	return int(h.Sum32() % 8)
 }
 
-// Streams is status.Streams, for the pages and the API.
-func Streams(ctx context.Context, st *store.Store, reg status.Registry) ([]dto.Stream, error) {
-	return status.Streams(ctx, st, reg)
+// VisibleStreams are the log streams p may read, with their status.
+func VisibleStreams(ctx context.Context, d deps.Deps, p auth.Principal) ([]dto.Stream, error) {
+	list, err := status.Streams(ctx, d.Store, d.Status)
+	if err != nil {
+		return nil, err
+	}
+	a := d.Projects.Access(ctx, p)
+	return slices.DeleteFunc(list, func(s dto.Stream) bool { return !a.Can(s.ID, auth.ScopeRead) }), nil
 }

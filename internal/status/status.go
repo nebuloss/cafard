@@ -191,6 +191,8 @@ func (m *Memory) view(s *source, now time.Time) dto.Stream {
 	v := dto.Stream{
 		ID:         s.src.Stream,
 		Kind:       store.StreamKind(s.src.Stream),
+		Project:    store.ProjectOf(s.src.Stream),
+		Sink:       store.LocalName(s.src.Stream),
 		Transport:  s.src.Transport,
 		Status:     m.state(s, now),
 		RatePerMin: m.rate(s, now),
@@ -321,7 +323,7 @@ func Streams(ctx context.Context, st *store.Store, reg Registry) ([]dto.Stream, 
 		seen[r.ID] = true
 		s, ok := live[r.ID]
 		if !ok {
-			s = dto.Stream{ID: r.ID, Transport: "internal", Status: dto.StreamIdle}
+			s = dto.Stream{ID: r.ID, Transport: "internal", Status: dto.StreamIdle, Project: store.ProjectOf(r.ID), Sink: store.LocalName(r.ID)}
 			if r.LastTS != nil {
 				s.LastActivity = dto.TimePtr(*r.LastTS)
 			}

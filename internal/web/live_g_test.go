@@ -42,7 +42,7 @@ func TestLiveShowsMessagesOnlyToTheirViewers(t *testing.T) {
 	if !strings.Contains(body, "U-Boot") || !strings.Contains(body, "image v42 ready") || strings.Contains(body, "Build 812") || strings.Contains(body, "Started cafard push") {
 		t.Errorf("channel=dut1: want its lines and messages only")
 	}
-	if !strings.Contains(body, `<option value="dut1" selected>#dut1</option>`) || !strings.Contains(body, `value="message" checked`) {
+	if !strings.Contains(body, `<option value="lab/dut1" selected>#dut1</option>`) || !strings.Contains(body, `value="message" checked`) {
 		t.Errorf("the filter form does not show channel=dut1 and kinds=message")
 	}
 }
@@ -52,7 +52,7 @@ func TestLiveCarriesLineActionsAndTheQuickDrop(t *testing.T) {
 	seed(e)
 	body := e.Do("GET", "/live", e.Admin(), nil).Body.String()
 	for _, want := range []string{`data-component="LivePane"`, `data-component="RangeBar"`, `data-action="attach-line"`, `data-action="attach-from"`,
-		`data-action="select"`, `data-component="QuickDropSheet"`, `<option value="chan:dut1">#dut1</option>`, `<select name="channel">`} {
+		`data-action="select"`, `data-component="QuickDropSheet"`, `<option value="chan:lab/dut1">#dut1</option>`, `<select name="channel">`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/live: missing %q", want)
 		}
@@ -68,7 +68,7 @@ func TestSourcesShowEverySourceField(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	seed(e)
 	body := e.Do("GET", "/streams", e.Admin(), nil).Body.String()
-	for _, want := range []string{`data-stream="serial:dut1" data-status="connected"`, `class="stream-dot"`, "serial / rfc2217",
+	for _, want := range []string{`data-stream="serial:lab/dut1" data-status="connected"`, `class="stream-dot"`, "serial / rfc2217",
 		`data-slot="rate"`, `data-slot="last"`, "systemd[1]: Started cafard push.", `data-slot="dropped">0<`, "Open in Live"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/streams: missing %q", want)

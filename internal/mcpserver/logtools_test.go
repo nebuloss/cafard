@@ -37,7 +37,8 @@ func newTestServer(t *testing.T) (*Server, *writer.W, *hookHub) {
 	s := writertest.New(t, writertest.Options{Writer: writer.Options{BatchEvery: time.Millisecond}})
 	st, w, log := s.Store, s.Writer, s.Log
 	hh := &hookHub{inner: s.Hub}
-	d := deps.Deps{Store: st, Writer: w, Hub: hh, Clock: clock.System{}, Log: log}
+	d := deps.Deps{Store: st, Writer: w, Hub: hh, Projects: s.Projects, Clock: clock.System{}, Log: log}
+	s.Member(t, agent.Principal.Name, agent.Principal.Kind, agent.Principal.Scopes...)
 	return New(d, Config{}), w, hh
 }
 
@@ -46,7 +47,7 @@ var agent = &Call{Principal: auth.Principal{Name: "a", Kind: auth.KindAgent, Sco
 func TestWaitForMissesNothingCommittedWhileSubscribing(t *testing.T) {
 	s, w, hh := newTestServer(t)
 	ctx := context.Background()
-	if _, err := w.Commit(ctx, store.Entry{Stream: "serial:dut1", Text: "boot", Severity: 6}); err != nil {
+	if _, err := w.Commit(ctx, store.Entry{Stream: "serial:lab/dut1", Text: "boot", Severity: 6}); err != nil {
 		t.Fatal(err)
 	}
 	for i := range 40 {
@@ -55,7 +56,7 @@ func TestWaitForMissesNothingCommittedWhileSubscribing(t *testing.T) {
 		hh.onSubscribe = func() {
 			go func() {
 				time.Sleep(delay)
-				if _, err := w.Commit(ctx, store.Entry{Stream: "serial:dut1", Text: needle, Severity: 6}); err != nil {
+				if _, err := w.Commit(ctx, store.Entry{Stream: "serial:lab/dut1", Text: needle, Severity: 6}); err != nil {
 					t.Error(err)
 				}
 			}()
@@ -80,7 +81,7 @@ func TestWaitForCatchesUpFromSinceSeq(t *testing.T) {
 	hh.onSubscribe = nil
 	var first int64
 	for i := range 2500 {
-		seq, err := w.Commit(ctx, store.Entry{Stream: "push:a", Text: "line " + strconv.Itoa(i), Severity: 6})
+		seq, err := w.Commit(ctx, store.Entry{Stream: "push:lab/a", Text: "line " + strconv.Itoa(i), Severity: 6})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,13 +130,13 @@ func TestLogToolsNeverReturnMessages(t *testing.T) {
 	ctx := context.Background()
 	if _, err := w.CommitBatch(ctx, []store.Entry{
 		{Stream: "dm:a~b", Kind: store.KindMessage, Text: "secret", Sender: "b", Severity: 6},
-		{Stream: "chan:general", Kind: store.KindMessage, Text: "hello all", Sender: "b", Severity: 6},
-		{Stream: "push:a", Text: "log line", Severity: 6},
+		{Stream: "chan:lab/general", Kind: store.KindMessage, Text: "hello all", Sender: "b", Severity: 6},
+		{Stream: "push:lab/a", Text: "log line", Severity: 6},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	zero := int64(0)
-	for _, streams := range [][]string{nil, {"*"}, {"dm:*", "chan:*"}, {"dm:a~b"}} {
+	for _, streams := range [][]string{nil, {"*"}, {"dm:*", "chan:lab/*"}, {"dm:a~b"}} {
 		text, _, err := s.read(ctx, agent, readIn{selectIn: selectIn{Streams: streams}, SinceSeq: &zero})
 		if err != nil {
 			t.Fatal(err)
@@ -151,7 +152,7 @@ func TestLogToolsNeverReturnMessages(t *testing.T) {
 	if _, _, err := s.context(ctx, agent, contextIn{Seq: 1}); err == nil {
 		t.Error("context on a DM seq: want not_found without messaging")
 	}
-	streams, err := s.streams(ctx)
+	streams, err := s.Streams(ctx, agent.Principal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,6 +160,50 @@ func TestLogToolsNeverReturnMessages(t *testing.T) {
 		if store.IsMessageStream(st.ID) {
 			t.Errorf("list_streams shows %s", st.ID)
 		}
+	}
+}
+
+func TestLogToolsShowOnlyGrantedProjects(t *testing.T) {
+	s, w, _ := newTestServer(t)
+	ctx := context.Background()
+	if _, err := w.CommitBatch(ctx, []store.Entry{
+		{Stream: "serial:lab/dut1", Text: "lab line", Severity: 6},
+		{Stream: "serial:other/dut1", Text: "other line", Severity: 6},
+		{Stream: "serial:loose", Text: "loose line", Severity: 6},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	zero := int64(0)
+	for _, streams := range [][]string{nil, {"serial:*/*"}, {"serial:other/dut1", "serial:loose"}} {
+		text, page, err := s.read(ctx, agent, readIn{selectIn: selectIn{Streams: streams}, SinceSeq: &zero})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if contains(text, "other line") || contains(text, "loose line") {
+			t.Errorf("read %v shows another project: %q", streams, text)
+		}
+		if streams == nil && !contains(text, "lab line") {
+			t.Errorf("read shows no lab line: %q (%v)", text, page.Streams)
+		}
+	}
+	list, err := s.Streams(ctx, agent.Principal)
+	if err != nil || len(list) != 1 || list[0].ID != "serial:lab/dut1" || list[0].Project != "lab" || list[0].Sink != "dut1" {
+		t.Errorf("streams = %+v %v", list, err)
+	}
+	if _, _, err := s.context(ctx, agent, contextIn{Seq: 2}); err == nil {
+		t.Error("context of another project's line")
+	}
+	if _, _, err := s.mark(ctx, agent, markIn{Stream: "serial:other/dut1", Label: "x"}); err == nil {
+		t.Error("marked another project's stream")
+	}
+	nobody := &Call{Principal: auth.Principal{Name: "nobody", Kind: auth.KindAgent, Scopes: auth.NewScopeSet(auth.ScopeRead)}}
+	text, _, err := s.read(ctx, nobody, readIn{SinceSeq: &zero})
+	if err != nil || contains(text, "line") {
+		t.Errorf("read without a grant: %q %v", text, err)
+	}
+	_, out, err := s.waitFor(ctx, nobody, waitIn{Pattern: "line", SinceSeq: &zero, TimeoutS: 1})
+	if err != nil || out.Matched {
+		t.Errorf("wait_for without a grant: %+v %v", out, err)
 	}
 }
 

@@ -171,26 +171,67 @@ func (s *Service) writeGrants(ctx context.Context, merge bool, gs ...Grant) erro
 	return nil
 }
 
-// WriteGrant stores one grant inside tx, which pairing redemption shares
-// with the session it opens. merge adds to the scopes already there.
-func WriteGrant(ctx context.Context, tx *sql.Tx, g Grant, merge bool) error {
-	if err := g.validate(); err != nil {
-		return dto.Errorf(dto.CodeBadRequest, "%v.", err)
+// CheckGrants refuses specs ParseGrants refuses, and those naming a
+// project or channel that does not exist (auth.PairingGrants).
+func (s *Service) CheckGrants(ctx context.Context, text string) error {
+	gs, err := ParseGrants(text)
+	if err != nil {
+		return err
 	}
+	for _, g := range gs {
+		if err := checkTarget(ctx, s.db, g); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RedeemGrants adds the specs to principal inside tx (auth.PairingGrants).
+func (s *Service) RedeemGrants(ctx context.Context, tx *sql.Tx, principal, text string) error {
+	gs, err := ParseGrants(text)
+	if err != nil {
+		return err
+	}
+	for _, g := range gs {
+		g.Principal = principal
+		if err := WriteGrant(ctx, tx, g, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func checkTarget(ctx context.Context, q rowQuerier, g Grant) error {
 	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM projects WHERE name = ?`, g.Project).Scan(&n); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT count(*) FROM projects WHERE name = ?`, g.Project).Scan(&n); err != nil {
 		return err
 	}
 	if n == 0 {
 		return dto.Errorf(dto.CodeNotFound, "There is no project %s.", g.Project)
 	}
 	if g.Channel != "" {
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM channels WHERE name = ?`, g.Target()).Scan(&n); err != nil {
+		if err := q.QueryRowContext(ctx, `SELECT count(*) FROM channels WHERE name = ?`, g.Target()).Scan(&n); err != nil {
 			return err
 		}
 		if n == 0 {
 			return dto.Errorf(dto.CodeNotFound, "Project %s has no channel %s.", g.Project, g.Channel)
 		}
+	}
+	return nil
+}
+
+// WriteGrant stores one grant inside tx, which pairing redemption shares
+// with the session it opens. merge adds to the scopes already there.
+func WriteGrant(ctx context.Context, tx *sql.Tx, g Grant, merge bool) error {
+	if err := g.validate(); err != nil {
+		return dto.Errorf(dto.CodeBadRequest, "%v.", err)
+	}
+	if err := checkTarget(ctx, tx, g); err != nil {
+		return err
 	}
 	existing, err := queryGrants(ctx, tx, `WHERE principal = ? AND project = ? AND coalesce(channel, '') = ?`, g.Principal, g.Project, g.Channel)
 	if err != nil {

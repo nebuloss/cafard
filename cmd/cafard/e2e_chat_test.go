@@ -103,7 +103,7 @@ func TestAPhotoPostedWithASessionReachesAnAgent(t *testing.T) {
 	_, agent := s.agent("claude-laptop")
 	call(t, agent, "follow", map[string]any{"channel": "general"})
 	cookie := s.session()
-	e := s.sendForm(cookie, map[string]string{"chat": "chan:general", "text": "the scope after the reset"}, testPNG(t, 1200, 900))
+	e := s.sendForm(cookie, map[string]string{"chat": "chan:lab/general", "text": "the scope after the reset"}, testPNG(t, 1200, 900))
 	if len(e.Attachments) != 1 || e.Attachments[0].Image == nil || e.Sender == nil || e.Sender.Name != "admin" {
 		t.Fatalf("sent = %+v", e)
 	}
@@ -118,7 +118,7 @@ func TestAPhotoPostedWithASessionReachesAnAgent(t *testing.T) {
 		t.Fatalf("get_message = %q, %d images", text, images)
 	}
 	// The sender comes from the session, never from the form.
-	e = s.sendForm(cookie, map[string]string{"chat": "chan:general", "text": "who am I", "sender": "claude-laptop", "from": "claude-laptop"})
+	e = s.sendForm(cookie, map[string]string{"chat": "chan:lab/general", "text": "who am I", "sender": "claude-laptop", "from": "claude-laptop"})
 	if e.Sender.Name != "admin" {
 		t.Errorf("sender = %s", e.Sender.Name)
 	}
@@ -210,18 +210,18 @@ func TestALogRangeAttachedFromTheUIReachesAnAgent(t *testing.T) {
 		fmt.Fprintf(&nd, `{"text":"usb probe %02d","severity":%d}`+"\n", i, sev)
 		fmt.Fprintf(&nd, `{"text":"other line %02d","severity":3}`+"\n", i)
 	}
-	if resp := s.post(s.admin, "/api/log?stream=serial:dut1", "application/x-ndjson", nd.String()); resp.StatusCode != http.StatusOK {
+	if resp := s.post(s.admin, "/api/log?stream=serial:lab/dut1", "application/x-ndjson", nd.String()); resp.StatusCode != http.StatusOK {
 		t.Fatalf("ingest: %d", resp.StatusCode)
 	}
 	// What the logs pane shows with sev=3 and re=usb, as the UI reads it.
-	_, b := s.browser(cookie, "GET", "/api/entries?streams=serial:dut1&sev=3&re=usb", "", nil, true)
+	_, b := s.browser(cookie, "GET", "/api/entries?streams=serial:lab/dut1&sev=3&re=usb", "", nil, true)
 	var page dto.Page[dto.Entry]
 	if err := json.Unmarshal(b, &page); err != nil || len(page.Items) != 4 {
 		t.Fatalf("entries = %s", b)
 	}
 	from, to := page.Items[0].Seq, page.Items[len(page.Items)-1].Seq
 	sev := 3
-	logs, _ := json.Marshal([]dto.LogRequest{{Stream: "serial:dut1", FromSeq: from, ToSeq: &to, Grep: "usb", MinSeverity: &sev, Title: "usb errors"}})
+	logs, _ := json.Marshal([]dto.LogRequest{{Stream: "serial:lab/dut1", FromSeq: from, ToSeq: &to, Grep: "usb", MinSeverity: &sev, Title: "usb errors"}})
 	e := s.sendForm(cookie, map[string]string{"chat": "dm:codex-build", "text": "see these", "logs": string(logs)})
 	la := e.Attachments[0].Log
 	if la == nil || la.Lines != 4 || la.Grep != "usb" || la.MinSeverity == nil || *la.MinSeverity != 3 {
@@ -298,14 +298,14 @@ func TestCountsUpdateWhenAQuestionArrives(t *testing.T) {
 	})
 	ev := waitEvent(t, feed, "counts with the question", func(ev webtest.Event) bool { return ev.Name == "counts" && counts(ev).OpenQuestions == 1 })
 	c := counts(ev)
-	if len(c.Chats) != 1 || c.Chats[0].ID != "chan:general" || c.Chats[0].OpenQuestions != 1 {
+	if len(c.Chats) != 1 || c.Chats[0].ID != "chan:lab/general" || c.Chats[0].OpenQuestions != 1 {
 		t.Errorf("counts = %+v", c)
 	}
 	// Answering sends "answered" and clears the badge.
 	var o dto.Overview
 	_, b := s.browser(cookie, "GET", "/api/overview", "", nil, true)
 	_ = json.Unmarshal(b, &o)
-	s.sendForm(cookie, map[string]string{"chat": "chan:general", "reply_to": fmt.Sprint(o.Questions[0].Seq), "choice": "yes"})
+	s.sendForm(cookie, map[string]string{"chat": "chan:lab/general", "reply_to": fmt.Sprint(o.Questions[0].Seq), "choice": "yes"})
 	waitEvent(t, feed, "answered", func(ev webtest.Event) bool {
 		return ev.Name == "answered" && strings.Contains(ev.Data, `"choice":"yes"`)
 	})
@@ -316,24 +316,24 @@ func TestAMarkerInABoundChannelIsInTheLogsAndTheChat(t *testing.T) {
 	s := startServer(t)
 	_, agent := s.agent("codex-build")
 	cookie := s.session()
-	s.ingest("serial:dut1", "U-Boot 2024.04\n")
-	call(t, agent, "create_channel", map[string]any{"name": "run-42", "streams": []string{"serial:dut1"}})
+	s.ingest("serial:lab/dut1", "U-Boot 2024.04\n")
+	call(t, agent, "create_channel", map[string]any{"name": "run-42", "streams": []string{"serial:lab/dut1"}})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	feed := s.events(ctx, cookie, "chat=chan:run-42")
+	feed := s.events(ctx, cookie, "chat=chan:lab/run-42")
 	waitEvent(t, feed, "counts", func(ev webtest.Event) bool { return ev.Name == "counts" })
-	call(t, agent, "mark", map[string]any{"stream": "serial:dut1", "label": "test 42 starts"})
-	s.ingest("serial:dut1", "a line after the marker\n")
+	call(t, agent, "mark", map[string]any{"stream": "serial:lab/dut1", "label": "test 42 starts"})
+	s.ingest("serial:lab/dut1", "a line after the marker\n")
 	// The chat page's feed carries the marker and the bound stream's lines.
 	waitEvent(t, feed, "the marker", func(ev webtest.Event) bool {
-		return ev.Name == "entry" && strings.Contains(ev.Data, "test 42 starts") && strings.Contains(ev.Data, `"stream":"serial:dut1"`)
+		return ev.Name == "entry" && strings.Contains(ev.Data, "test 42 starts") && strings.Contains(ev.Data, `"stream":"serial:lab/dut1"`)
 	})
 	waitEvent(t, feed, "the line", func(ev webtest.Event) bool {
 		return ev.Name == "entry" && strings.Contains(ev.Data, "a line after the marker")
 	})
 
 	// Server-rendered: an event row in the chat, and a marker row in its logs.
-	_, b := s.browser(cookie, "GET", "/c/run-42", "", nil, false)
+	_, b := s.browser(cookie, "GET", "/c/lab/run-42", "", nil, false)
 	page := string(b)
 	conv := page[strings.Index(page, `data-component="ConversationView"`):strings.Index(page, `data-component="LogsPane"`)]
 	logs := page[strings.Index(page, `data-component="LogsPane"`):]
@@ -343,12 +343,12 @@ func TestAMarkerInABoundChannelIsInTheLogsAndTheChat(t *testing.T) {
 	if !strings.Contains(logs, `class="marker"`) || !strings.Contains(logs, "test 42 starts") || !strings.Contains(logs, "a line after the marker") {
 		t.Errorf("the logs pane lacks the marker or the line")
 	}
-	_, b = s.browser(cookie, "GET", "/c/run-42?view=logs", "", nil, false)
+	_, b = s.browser(cookie, "GET", "/c/lab/run-42?view=logs", "", nil, false)
 	if !strings.Contains(string(b), `data-view="logs"`) || !strings.Contains(string(b), "test 42 starts") {
 		t.Error("the logs view lacks the marker")
 	}
 	var tl dto.Page[dto.Entry]
-	_, b = s.browser(cookie, "GET", "/api/chats/chan:run-42/timeline", "", nil, true)
+	_, b = s.browser(cookie, "GET", "/api/chats/chan:lab%2Frun-42/timeline", "", nil, true)
 	_ = json.Unmarshal(b, &tl)
 	found := false
 	for _, e := range tl.Items {

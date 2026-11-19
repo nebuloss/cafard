@@ -25,7 +25,11 @@ import (
 func Register(public, admin *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(context.Context) error, error) {
 	sessions := auth.NewSessions(d.Store.DB(), d.Clock)
 	// One Pairings per process: it keeps the clear codes of pending QRs.
-	pairings := auth.NewPairings(d.Store.DB(), d.Clock, sessions)
+	var grants auth.PairingGrants
+	if d.Projects != nil {
+		grants = d.Projects
+	}
+	pairings := auth.NewPairings(d.Store.DB(), d.Clock, sessions, grants)
 	kinds := view.NewKinds(d.Tokens)
 	site, err := pages.New(d, sessions, pairings, kinds)
 	if err != nil {
