@@ -31,6 +31,14 @@ What exists:
   `list_streams`, `read`, `tail`, `wait_for`, `context`, `mark`.
 - `internal/web/assets` (embed, `bundleBuilt`, minimal `layout.html`),
   `src/core` with tests, CI and release workflows, `scripts/remote.sh`.
+- **Projects** (PLAN section 4, "Projects, sinks and grants"; DECISIONS
+  2026-11-19): `internal/projects` owns projects, sinks, grants and the
+  in-memory sink routes, and computes each principal's `Access`. Every
+  channel and log stream is in a project; logs reach a project only
+  through its sinks; nothing is visible without a grant but to the admin
+  session. The admin runs projects at `/projects` (admin interface);
+  `cafard token create --grant|--sink` and `cafard pair --grant` do it
+  from a shell.
 
 ## Conventions come from the sibling projects
 
@@ -157,7 +165,7 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
 - **Track A: `textclean.Format` collapses identical lines,** so a test
   that wants a big log snapshot must make its lines differ.
 - **Track A: an empty `hub.Filter.Streams` is every log stream; `*` is
-  not** (a glob stops at `/`). Message streams match only `chan:*` and
+  not** (a glob stops at `/`). Message streams match only `chan:*/*` and
   `dm:*` patterns.
 - **Track A: MCP resource templates use `{+id}`,** or a stream id with
   `:` does not match the template.
@@ -241,6 +249,38 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   needs the same, and its schema entry added in `build`.
 - **Track G: a nil `*io.PipeWriter` in an `io.Writer` is not nil.** The
   term session converts it explicitly; copy that pattern.
+
+- **Projects: a glob star stops at `/`, and every stream id has one.**
+  `chan:*` matches nothing any more: every channel is `chan:*/*`, one
+  project's channels `chan:lab/*` and its logs `*:lab/*`. Build ids with
+  `projects.Sink.Stream(kind)` and `store.ProjectOf`, not by hand.
+- **Projects: tests need grants.** `writertest.Stack.Member` and
+  `webtest.Env.Principal`/`Session` grant the whole of `lab`;
+  `Token`/`SessionOnly` grant nothing. In `cmd/cafard`, `s.token` grants
+  its scopes on `lab`, `s.tokenOnly` does not, and `startServer` makes
+  `lab` with the sinks of `testSinks` before the server starts (sink
+  routes are in the server's memory, so a sink written by the test's own
+  `projects.Service` is not seen). Add a sink there before a test writes
+  logs to it: `POST /api/log` lands in `push:lab/<sink>` whatever kind the
+  stream name has, and a name with no sink is dropped, not refused.
+- **Projects: `Access` is cached for 5 s** per principal and scope set.
+  A grant written by another process (a test's own service, `cafard token
+  create --grant`) applies within 5 s to a principal the server has
+  already served; write grants before the principal's first request.
+- **Projects: ingesters need `deps.Projects`.** `ingesttest.Deps` has
+  none; use `ingesttest.NewSinks(t, "lab/dut1=10.0.50.42")` and its
+  `Member`. Their database lives outside `t.TempDir()`, whose name has a
+  `#` for fuzz seeds, which a database path may not.
+- **Projects: the serial tools are always registered** and the manager
+  follows `projects.OnSinksChanged` (`Manager.Reconcile`); a sink change
+  stops and starts ports synchronously inside the request that saved it.
+- **Projects: the migration rewrites `entries.stream`** (`0071_projects_import`,
+  Go, in the migration transaction, before the writer starts). That and
+  the FTS rebuild of 0050 are the only writes to `entries` outside the
+  writer; do not add others.
+- **Projects: the old `serial:` list and `netconsole.names` load only to
+  be imported** (once per item, recorded in `config_imports`) into the
+  project `imported`. Do not read them anywhere else.
 
 ## Rules that are easy to break
 

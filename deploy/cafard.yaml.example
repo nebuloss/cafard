@@ -13,9 +13,9 @@
 # this file in that order: http_listen is -http-listen and CAFARD_HTTP_LISTEN.
 # Lists (retention.streams, mcp.allowed_origins, ...) are file-only.
 #
-# The commented-out sections at the end belong to features that are not in
-# this version yet. Uncommenting one before its feature lands makes cafard
-# refuse to start, because the key is unknown.
+# Commented-out keys show the shape of what is not set by default. Projects,
+# their log sinks, serial ports, retention and members are set on the admin
+# interface (/projects), not here.
 
 # Where the database and the photos live. The installer creates it mode 0700,
 # owned by the cafard user. The systemd unit only allows writes under

@@ -88,13 +88,16 @@ for a phone (valid 5 minutes). From a shell, `cafard pair` prints one, for
 up to 24 hours, to send by other means:
 
 ```sh
-sudo -u cafard cafard pair -config /etc/cafard.yaml --name alice-phone
-sudo -u cafard cafard pair -config /etc/cafard.yaml --name alice --ttl 2h --scopes read,message
+sudo -u cafard cafard pair -config /etc/cafard.yaml --name alice-phone --grant lab=read,message
+sudo -u cafard cafard pair -config /etc/cafard.yaml --name alice --ttl 2h --scopes read,message --grant lab:dut1=read,message
 ```
 
 The link starts with `public_url`. It opens on the public interface, so it
 works from wherever people reach cafard. Scopes default to `read`,
-`message` and `ingest`, and never include `admin`.
+`message` and `ingest`, and never include `admin`. They are a cap: the
+person sees only what their grants cover, so give one with `--grant`, on
+the project page (which makes such links with their QR code too), or
+nothing but the admin's direct messages is visible.
 
 ### Upgrading from a version with an admin token
 
@@ -163,10 +166,12 @@ sudo cafard config -config /etc/cafard.yaml
 sudo systemctl restart cafard        # or: rc-service cafard restart
 ```
 
-Unknown keys are errors. The sections at the end of the example (syslog,
-netconsole, OTLP, messaging, images, channels, serial) are commented out
-until the version you run has the feature; uncommenting one too early stops
-cafard from starting, and `cafard config` says which key.
+Unknown keys are errors, and `cafard config` says which key. Projects,
+their sinks (sender addresses, serial ports, tokens), their retention and
+their members are set on the admin interface and kept in the database, not
+in this file; the `serial:` list and `netconsole.names` still load, only to
+be imported once into the project `imported` (see "Upgrading to
+projects").
 
 `public_url` is the address phones and agents use: it goes into pairing QR
 codes and links. Behind a reverse proxy it is the proxy's address.
@@ -190,8 +195,8 @@ admin_listen: 10.0.50.2:8791       # the internal network only
   sessions), and the sign-in links (`/p/...`). Its `/signin` page only says
   to ask the administrator for a link or QR code.
 - **`admin_listen`, the admin interface**: the password sign-in, the Agents
-  page and `/api/tokens`, the Pair page and `/api/pairings`, the password
-  change, and everything the public interface serves, so the admin can chat
+  page and `/api/tokens`, the Pair page and `/api/pairings`, the Projects
+  pages (`/projects/...`), the password change, and everything the public interface serves, so the admin can chat
   and watch logs from there too. Only this interface reads the admin
   session cookie.
 
@@ -258,7 +263,9 @@ USB adapters can change number when replugged; on the host,
 `ls -l /dev/serial/by-id/` shows which `ttyUSB` is which board.
 
 The same works from the web UI: Container, Resources, Add, Device
-Passthrough.
+Passthrough. Then give the port to a sink on its project's page (kind
+"local device", the `/dev/serial/by-id/...` path); it opens as soon as the
+sink is saved.
 
 ## Behind a reverse proxy
 

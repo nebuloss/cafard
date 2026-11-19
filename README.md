@@ -502,12 +502,22 @@ Open `public_url` (or `http://<host>:8790`) in a browser:
   and scan the QR code with the phone within 5 minutes. Each code works
   once. The page also lists signed-in browsers, each with a revoke button.
   `cafard pair --name NAME [--ttl 2h]` prints such a link from a shell.
-- **Sources** (`/streams`) shows every source with its status, kind and
-  transport, rate, last activity, last line and drops, and updates live.
+- **Projects** (`/projects`, admin) lists the projects and makes new
+  ones. A project's page holds its channels, its log sinks (sender
+  addresses, serial port, sink tokens), its retention, its members with
+  their grants, and one-time sign-in links that grant a person the
+  project or one of its channels.
+- **Sources** (`/streams`) shows the sources you may read, one group per
+  project, with status, kind and transport, rate, last activity, last
+  line and drops, and updates live. The admin also sees how many lines
+  were dropped because no sink took them.
 - **Live** (`/live`) shows the last 500 lines (or the range in
   `?from_seq=&to_seq=`) with ANSI colours, filters in the URL (`streams`,
   `sev`, `re`, `kinds`), and follows new lines; scroll up to pause, `f` to
-  toggle.
+  toggle. The stream field suggests each project's logs (`*:lab/*`), and
+  the channel picker groups channels by project.
+- **Chats** (`/`) lists one section per project with its channels and
+  links to the logs of its sinks, then the direct conversations.
 - **Agents** (`/agents`, admin) lists principals and tokens, creates a
   token (shown once, with ready-to-paste Claude Code, Codex, MCP JSON,
   OpenTelemetry and `cafard push` snippets) and revokes them.
@@ -702,7 +712,13 @@ workaround.
 | `retention.blobs_max_bytes` | `5GB` |
 | `retention.streams` | per-stream `lines_max_age` overrides, `{pattern, lines_max_age}`, first match wins |
 
-The janitor runs every 10 minutes.
+Each project has its own four limits, set on its page (0 keeps
+everything); a new project starts with the values above. They apply to
+its channels' messages, its log streams (sizes summed over the project)
+and the images and log snapshots its messages reference. The values above
+are also the limits of what is outside projects: direct messages and
+their images. A `retention.streams` override still wins for the age of the
+streams it matches. The janitor runs every 10 minutes.
 
 ## Install as a service
 
