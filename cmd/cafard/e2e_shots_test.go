@@ -65,7 +65,7 @@ func TestCLISendPostsAScreenshotThePersonSees(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	var seq int64
 	if len(lines) == 2 {
-		_, _ = fmt.Sscanf(lines[0], "seq %d in #general", &seq)
+		_, _ = fmt.Sscanf(lines[0], "seq %d in #lab/general", &seq)
 	}
 	if seq == 0 {
 		t.Fatalf("cafard send printed %q", out)
@@ -111,7 +111,7 @@ func TestCLISendPostsAScreenshotThePersonSees(t *testing.T) {
 	}
 	found := false
 	for _, c := range list.Chats {
-		if c.Name == "general" {
+		if c.ID == "chan:lab/general" {
 			found = true
 			if c.Preview == nil || c.Preview.Text != "[2 images]" || c.Preview.Sender != "claude-laptop" || c.Unread < 1 {
 				t.Errorf("general = %+v, preview %+v", c, c.Preview)
@@ -120,6 +120,15 @@ func TestCLISendPostsAScreenshotThePersonSees(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no general in %s", body)
+	}
+
+	// A channel named with its project, or bare when only one project has it.
+	_, agent := s.agent("claude-laptop")
+	call(t, agent, "create_channel", map[string]any{"name": "dut1"})
+	for _, ch := range []string{"lab/dut1", "dut1"} {
+		if out, err := s.sendCLI(tok, "", "--channel", ch, "on dut1"); err != nil || !strings.Contains(out, "in #lab/dut1") || !strings.Contains(out, "/c/lab/dut1#m") {
+			t.Errorf("--channel %s = %v %q", ch, err, out)
+		}
 	}
 
 	// Text from stdin, flags after the text, a direct message.
@@ -147,13 +156,14 @@ func TestCLISendRefusesBadFilesAndReportsTheServer(t *testing.T) {
 		{[]string{}, "needs a text or an --image"},
 		{[]string{"one", "two"}, "one text argument"},
 		{[]string{"--channel", "nope", "hello"}, "unknown_channel"},
+		{[]string{"--channel", "other/general", "hello"}, "unknown_channel"},
 	} {
 		out, err := s.sendCLI(tok, "", c.args...)
 		if err == nil || !strings.Contains(err.Error(), c.says) {
 			t.Errorf("send %v = %v %q, want %q", c.args, err, out, c.says)
 		}
 	}
-	if s.count("chan:general") != 0 {
+	if s.count("chan:lab/general") != 0 {
 		t.Error("a refused send left a message")
 	}
 	if _, err := s.sendCLI("cfd_1_nope", "", "hello"); err == nil || !strings.Contains(err.Error(), "unauthenticated") {

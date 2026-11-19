@@ -665,19 +665,20 @@ directory, so prefer absolute ones. The server's `/mcp` refuses
 
 ```sh
 cafard send --image shot.png "login page after fix"
-cafard send --channel dut1 --image before.png --image after.png "the fix"
-make test 2>&1 | tail -20 | cafard send --to @humans --channel dut1 -
+cafard send --channel lab/dut1 --image before.png --image after.png "the fix"
+make test 2>&1 | tail -20 | cafard send --to @humans --channel lab/dut1 -
 ```
 
 It posts to `POST /api/messages` as the token's principal (scope
 `message`) and prints the seq and a link to the message in the web UI:
 
 ```text
-seq 4812 in #general
-http://10.0.50.2:8790/c/general#m4812
+seq 4812 in #lab/general
+http://10.0.50.2:8790/c/lab/general#m4812
 ```
 
-`--channel` (default `general`), `--to PRINCIPAL` for a direct message
+`--channel project/channel`, or a bare name only one of your projects has
+(default: the `general` of the one project you may post in), `--to PRINCIPAL` for a direct message
 or `--to @humans`, `--reply-to SEQ`, `--image FILE` (repeat it; png,
 jpeg, webp, gif or heic, 10 files of 20 MiB with the default
 `images:` limits). `-` reads the text from stdin. `--server` and

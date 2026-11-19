@@ -18,7 +18,7 @@ function image(sha: string): Attachment {
 const shots: Entry = {
   ...message,
   seq: 950,
-  chat: 'chan:dut1',
+  chat: 'chan:lab/dut1',
   text: '',
   segments: [],
   sender: { name: 'claude-laptop', kind: 'agent' },
@@ -43,7 +43,7 @@ describe('screenshots from an agent', () => {
     const { services, sources } = fakeServices(() => message);
     running = new HomePage(document, services).start();
     sources[0]?.emit('entry', shots);
-    const row = document.querySelector('.chat-rows a.chat-row[data-chat="chan:dut1"]');
+    const row = document.querySelector('.chat-rows a.chat-row[data-chat="chan:lab/dut1"]');
     expect(row?.querySelector('[data-slot="preview"]')?.textContent).toBe('claude-laptop: [2 images]');
     sources[0]?.emit('entry', { ...shots, seq: 951, text: 'login page after fix\nmore' });
     expect(row?.querySelector('[data-slot="preview"]')?.textContent).toBe('claude-laptop: login page after fix');

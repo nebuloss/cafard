@@ -28,10 +28,11 @@ const sendUsage = `Usage:
 Posts a message, with images, as the token's principal:
 
   cafard send --image shot.png "login page after fix"
-  make test 2>&1 | tail -20 | cafard send --channel dut1 -
+  make test 2>&1 | tail -20 | cafard send --channel lab/dut1 -
 
-TEXT "-" reads the text from stdin. Without --channel or --to the message
-goes to #general; --to @humans addresses the humans of the channel.
+TEXT "-" reads the text from stdin. --channel is project/channel, or a bare
+channel name only one project you can post in has. Without --channel or
+--to the message goes to the #general of the one project you may post in; --to @humans addresses the humans of the channel.
 --image takes a png, jpeg, webp, gif or heic file and may be repeated (the
 server takes 10 files of 20 MiB by default). It prints the message's seq
 and a link to it in the web UI. --server and --token may come from
@@ -47,7 +48,7 @@ func (f *imageFlag) Set(v string) error { *f = append(*f, v); return nil }
 func cmdSend(ctx context.Context, e env, args []string) error {
 	set := flag.NewFlagSet("cafard send", flag.ContinueOnError)
 	rf := addRemoteFlags(set, e, "server URL")
-	channel := set.String("channel", "", "channel (default general)")
+	channel := set.String("channel", "", "project/channel, or a channel only one of your projects has (default general)")
 	to := set.String("to", "", "a principal for a direct message, or @humans")
 	replyTo := set.Int64("reply-to", 0, "seq of the message this answers")
 	var images imageFlag
