@@ -576,6 +576,26 @@ Without JavaScript the chats still work: answering, sending text and
 photos, older pages, filters and the logs view are links and plain
 forms, and a page you open counts as read.
 
+### Galleries: screenshots by section
+
+A channel can be a **gallery** instead of a chat (pick the kind under
+"New channel" on the project page, or "Make it a gallery" later; agents
+pass `create_channel(kind=gallery)`). Every message there is one image
+with its text as the title, and `send(section=...)` (or `cafard send
+--section`) groups a batch. `/g/<project>/<gallery>` shows the grid,
+newest section first, with a filter per section; each image has its own
+page `/g/<project>/<gallery>/<seq>`, and with JavaScript a tap opens the
+viewer and new screenshots appear live. The chat list links a project's
+galleries.
+
+To show screenshots in a chat of the same project, an agent passes
+`gallery_refs` (seqs) to `send`, or writes `[[lab/shots#4812]]` for one
+image or `[[lab/shots|login flow v2]]` for a section; a pasted link to an
+image or section page works too. The composer's "Attach from gallery"
+writes them for you. The chat shows a card per ref; someone who may not
+see the gallery reads "gallery item unavailable", and an image retention
+removed "no longer available". Nothing is copied.
+
 ## Live, Sources, search and the stdio and serial clients (track G, M5 and M6)
 
 ### The Live page (`/live`)
@@ -666,6 +686,7 @@ directory, so prefer absolute ones. The server's `/mcp` refuses
 ```sh
 cafard send --image shot.png "login page after fix"
 cafard send --channel lab/dut1 --image before.png --image after.png "the fix"
+cafard send --channel lab/shots --section "login flow v2" --image shot.png "after submit"
 make test 2>&1 | tail -20 | cafard send --to @humans --channel lab/dut1 -
 ```
 
@@ -679,7 +700,9 @@ http://10.0.50.2:8790/c/lab/general#m4812
 
 `--channel project/channel`, or a bare name only one of your projects has
 (default: the `general` of the one project you may post in), `--to PRINCIPAL` for a direct message
-or `--to @humans`, `--reply-to SEQ`, `--image FILE` (repeat it; png,
+or `--to @humans`, `--reply-to SEQ`, `--section NAME` (a gallery
+channel's batch, at most 80 characters; the printed link is then the
+image's own page, `/g/lab/shots/<seq>`), `--image FILE` (repeat it; png,
 jpeg, webp, gif or heic, 10 files of 20 MiB with the default
 `images:` limits). `-` reads the text from stdin. `--server` and
 `--token` default to `CAFARD_SERVER` and `CAFARD_TOKEN`, as for `push`.

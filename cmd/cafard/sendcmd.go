@@ -23,19 +23,22 @@ import (
 )
 
 const sendUsage = `Usage:
-  cafard send [--server URL] [--token T] [--channel C | --to PRINCIPAL] [--reply-to SEQ] [--image FILE]... [TEXT | -]
+  cafard send [--server URL] [--token T] [--channel C | --to PRINCIPAL] [--reply-to SEQ] [--section NAME] [--image FILE]... [TEXT | -]
 
 Posts a message, with images, as the token's principal:
 
   cafard send --image shot.png "login page after fix"
+  cafard send --channel lab/shots --section "login flow v2" --image shot.png "after submit"
   make test 2>&1 | tail -20 | cafard send --channel lab/dut1 -
 
 TEXT "-" reads the text from stdin. --channel is project/channel, or a bare
 channel name only one project you can post in has. Without --channel or
 --to the message goes to the #general of the one project you may post in; --to @humans addresses the humans of the channel.
 --image takes a png, jpeg, webp, gif or heic file and may be repeated (the
-server takes 10 files of 20 MiB by default). It prints the message's seq
-and a link to it in the web UI. --server and --token may come from
+server takes 10 files of 20 MiB by default). In a gallery channel a message
+is one screenshot with its title as the text, and --section groups a batch
+(at most 80 characters; gallery channels only). It prints the message's seq
+and a link to it in the web UI, the image's own page when it has a section. --server and --token may come from
 CAFARD_SERVER and CAFARD_TOKEN.
 `
 
@@ -51,6 +54,7 @@ func cmdSend(ctx context.Context, e env, args []string) error {
 	channel := set.String("channel", "", "project/channel, or a channel only one of your projects has (default general)")
 	to := set.String("to", "", "a principal for a direct message, or @humans")
 	replyTo := set.Int64("reply-to", 0, "seq of the message this answers")
+	section := set.String("section", "", "gallery channels: the batch this screenshot belongs to")
 	var images imageFlag
 	set.Var(&images, "image", "image file to attach (repeatable)")
 	set.Usage = func() { fmt.Fprint(e.stderr, sendUsage) }
@@ -111,6 +115,7 @@ func cmdSend(ctx context.Context, e env, args []string) error {
 		{"channel", *channel},
 		{"to", *to},
 		{"reply_to", reply},
+		{"section", *section},
 		{"text", text},
 	}
 	entry, err := postMessage(ctx, base, token, fields, images)
@@ -118,7 +123,11 @@ func cmdSend(ctx context.Context, e env, args []string) error {
 		return err
 	}
 	fmt.Fprintf(e.stdout, "seq %d in %s\n", entry.Seq, view.ChatLabel(entry.Chat))
-	if entry.Chat != "" {
+	switch {
+	case entry.Section != "":
+		// Only a gallery takes a section, so this is a gallery item.
+		fmt.Fprintf(e.stdout, "%s%s\n", base, messaging.ItemHref(strings.TrimPrefix(entry.Chat, "chan:"), entry.Seq))
+	case entry.Chat != "":
 		fmt.Fprintf(e.stdout, "%s%s#m%d\n", base, view.ChatHref(entry.Chat), entry.Seq)
 	}
 	return nil

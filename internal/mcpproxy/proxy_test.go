@@ -77,8 +77,10 @@ func (r *toyRemote) reset() {
 type toySend struct {
 	Text   string            `json:"text"`
 	Images []dto.ImageUpload `json:"images,omitempty"`
-	// Section stands for any send argument the proxy does not know.
-	Section string `json:"section,omitempty"`
+	// Section and GalleryRefs stand for the send arguments the proxy
+	// passes as they are.
+	Section     string  `json:"section,omitempty"`
+	GalleryRefs []int64 `json:"gallery_refs,omitempty"`
 }
 
 func connectThrough(t *testing.T, p *Proxy, opts *mcp.ClientOptions) *mcp.ClientSession {

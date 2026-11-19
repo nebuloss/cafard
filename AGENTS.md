@@ -20,7 +20,7 @@ and the remote exist (CONTRACTS.md section 7).
 What exists:
 - `cmd/cafard`: `serve`, `config`, `version`, `token create|list|revoke`,
   `passwd` (the admin password), `pair` (a sign-in link), `push`, `term`,
-  `mcp`, `send`.
+  `mcp`, `send` (`--section` for a gallery's batch).
 - `internal/store` (migrations, entry queries, retention janitor),
   `writer`, `hub`, `status`, `textclean`, `auth` (tokens, sessions,
   pairings, the admin password and its in-memory sessions, bearer auth,

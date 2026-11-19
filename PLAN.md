@@ -1061,12 +1061,16 @@ A resource is a stream id.
   files the proxy reads, types by content and turns into `images`
   (at most 6 of 10 MiB), so an agent attaches a screenshot by path
   instead of writing base64. The paths never reach the server, and the
-  HTTP `/mcp` refuses them: it cannot read the agent's disk.
+  HTTP `/mcp` refuses them: it cannot read the agent's disk. Every other
+  argument passes as it came (`section`, `gallery_refs`, ...); a test
+  sends a screenshot by path into a gallery section and refs to it
+  through the proxy.
 - **Shell**, not MCP: `cafard send [--channel C | --to P] [--reply-to SEQ]
-  [--image FILE]... [TEXT | -]` posts through `POST /api/messages` with the
-  token (section 3.4 of CONTRACTS) and prints the seq and the message's
-  link in the web UI, for agents that would rather run a command, and for
-  scripts.
+  [--section NAME] [--image FILE]... [TEXT | -]` posts through
+  `POST /api/messages` with the token (section 3.4 of CONTRACTS) and prints
+  the seq and the message's link in the web UI (a gallery item's own page
+  when it has a section), for agents that would rather run a command, and
+  for scripts.
 
 ### Output rules (every tool that returns log text)
 

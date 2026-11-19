@@ -102,7 +102,7 @@ func TestImagePathsAreReadHereAndNeverForwarded(t *testing.T) {
 	inline := base64.StdEncoding.EncodeToString(data)
 
 	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "send", Arguments: map[string]any{
-		"text": "login page after fix", "image_paths": []string{shot}, "section": "login",
+		"text": "login page after fix", "image_paths": []string{shot}, "section": "login", "gallery_refs": []int64{41, 42},
 		"images": []any{map[string]any{"data": inline, "mime": "image/png"}},
 	}})
 	if err != nil || res.IsError {
@@ -123,7 +123,7 @@ func TestImagePathsAreReadHereAndNeverForwarded(t *testing.T) {
 	if _, ok := args[imagePathsArg]; ok || strings.Contains(string(args["images"]), dir) {
 		t.Errorf("paths reached the remote: %v", args)
 	}
-	if string(args["section"]) != `"login"` || string(args["text"]) != `"login page after fix"` {
+	if string(args["section"]) != `"login"` || string(args["text"]) != `"login page after fix"` || string(args["gallery_refs"]) != `[41,42]` {
 		t.Errorf("other arguments changed on the way: %v", args)
 	}
 	var images []struct{ Data, Mime string }
