@@ -4,12 +4,16 @@ import type {
   Answer,
   Answered,
   Attachment,
+  ChannelKind,
   Chat,
   ChatPreview,
   ChatCount,
   Claim,
   Counts,
   Entry,
+  GalleryItem,
+  GalleryPage,
+  GallerySection,
   EntryKind,
   ImageAttachment,
   Overview,
@@ -239,6 +243,7 @@ export function parseEntry(raw: unknown, path = 'entry'): Entry {
     attachments: optArr(o, 'attachments', path, parseAttachment),
     seen_by: optArr(o, 'seen_by', path, asString),
     question: o['question'] === undefined ? undefined : parseQuestion(o['question'], `${path}.question`),
+    section: optStr(o, 'section', path),
     event: optBool(o, 'event', path),
   });
 }
@@ -394,6 +399,7 @@ export function parseChat(raw: unknown, path = 'chat'): Chat {
     project: optStr(o, 'project', path),
     project_title: optStr(o, 'project_title', path),
     name: str(o, 'name', path),
+    channel_kind: o['channel_kind'] === undefined ? undefined : oneOf(o, 'channel_kind', path, CHANNEL_KINDS),
     title: optStr(o, 'title', path),
     topic: optStr(o, 'topic', path),
     peer: o['peer'] === undefined ? undefined : parsePrincipal(o['peer'], `${path}.peer`),
@@ -411,6 +417,38 @@ export function parseChat(raw: unknown, path = 'chat'): Chat {
     open_questions: num(o, 'open_questions', path),
     last_activity: optStr(o, 'last_activity', path),
     preview: o['preview'] === undefined ? undefined : parseChatPreview(o['preview'], `${path}.preview`),
+    sections: optArr(o, 'sections', path, parseGallerySection),
+  });
+}
+
+const CHANNEL_KINDS: readonly ChannelKind[] = ['chat', 'gallery'];
+
+function parseGallerySection(raw: unknown, path: string): GallerySection {
+  const o = obj(raw, path);
+  return { name: str(o, 'name', path), items: num(o, 'items', path), last_seq: num(o, 'last_seq', path), href: str(o, 'href', path) };
+}
+
+export function parseGalleryItem(raw: unknown, path = 'item'): GalleryItem {
+  const o = obj(raw, path);
+  return compact({
+    seq: num(o, 'seq', path),
+    chat: str(o, 'chat', path),
+    title: str(o, 'title', path),
+    section: optStr(o, 'section', path),
+    image: parseImage(o['image'], `${path}.image`),
+    href: str(o, 'href', path),
+  });
+}
+
+export function parseGalleryPage(raw: unknown): GalleryPage {
+  const o = obj(raw, 'gallery');
+  return compact({
+    chat: str(o, 'chat', 'gallery'),
+    section: optStr(o, 'section', 'gallery'),
+    items: arr(o, 'items', 'gallery', parseGalleryItem),
+    sections: arr(o, 'sections', 'gallery', parseGallerySection),
+    has_more: bool(o, 'has_more', 'gallery'),
+    next_before_seq: optNum(o, 'next_before_seq', 'gallery'),
   });
 }
 
@@ -457,6 +495,7 @@ export function parseProject(raw: unknown, path = 'project'): Project {
     created_at: str(o, 'created_at', path),
     scopes: arr(o, 'scopes', path, asScope),
     channels: arr(o, 'channels', path, asString),
+    galleries: optArr(o, 'galleries', path, asString),
     sinks: arr(o, 'sinks', path, asString),
     retention: {
       lines_max_age_s: num(r, 'lines_max_age_s', rp),

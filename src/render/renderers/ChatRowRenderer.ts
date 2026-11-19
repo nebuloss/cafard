@@ -1,5 +1,5 @@
 import type { Chat } from '@/model/types.ts';
-import { chatHref, messageTime, previewText } from '@/render/format.ts';
+import { chatPageHref, messageTime, previewText } from '@/render/format.ts';
 import type { SlotTemplate } from '@/render/SlotTemplate.ts';
 
 export const CHAT_ROW_ATTRIBUTES = ['href', 'data-chat', 'data-pinned', 'data-muted', 'data-archived'] as const;
@@ -20,7 +20,7 @@ export class ChatRowRenderer {
 
   render(chat: Chat): HTMLElement {
     const t = this.template.clone();
-    t.attr({ href: chatHref(chat.id), 'data-chat': chat.id, 'data-pinned': chat.pinned, 'data-muted': chat.muted, 'data-archived': chat.archived });
+    t.attr({ href: chatPageHref(chat), 'data-chat': chat.id, 'data-pinned': chat.pinned, 'data-muted': chat.muted, 'data-archived': chat.archived });
     this.fill(t.root, chat);
     return t.root;
   }

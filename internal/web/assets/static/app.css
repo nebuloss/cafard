@@ -1557,6 +1557,25 @@ dialog.image-viewer {
 .viewer-next { right: 12px; top: 50%; }
 .viewer-prev[hidden], .viewer-next[hidden] { display: none; }
 .viewer-open { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); color: var(--inverse-primary); }
+.viewer-caption { position: absolute; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 48px); left: 16px; right: 16px; margin: 0; text-align: center; }
+.viewer-caption[hidden] { display: none; }
+
+/* Galleries: tiles of thumbnails with their titles, one grid per section. */
+.gallery-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gallery-head h2 { flex: 1 1 auto; margin: 0; }
+.gallery-sections { margin: 12px 0; }
+.gallery-sections .chip { text-decoration: none; }
+.gallery-sections .chip[aria-current="true"] { background: var(--secondary-container); color: var(--on-secondary-container); border-color: transparent; }
+.gallery-group .list-heading { display: block; margin: 16px 0 8px; }
+.gallery-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+.gallery-item { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; border-radius: var(--shape-m); overflow: hidden; background: var(--surface-container); }
+.gallery-item img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--surface-container-highest); }
+.gallery-title { padding: 0 8px 8px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-title:empty { display: none; }
+.gallery-figure { margin: 12px 0; }
+.gallery-figure img { display: block; max-width: 100%; max-height: 70dvh; margin: 0 auto; object-fit: contain; }
+.gallery-figure figcaption { margin-top: 8px; text-align: center; }
+.gallery-nav { display: flex; justify-content: space-between; gap: 8px; }
 
 /* The no-JS read beacon is never seen. */
 .seen-beacon { position: absolute; width: 1px; height: 1px; opacity: 0; }

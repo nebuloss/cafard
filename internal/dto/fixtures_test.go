@@ -167,6 +167,7 @@ func channelChat() Chat {
 		Project:       "lab",
 		ProjectTitle:  "Lab bench",
 		Name:          "dut1",
+		ChannelKind:   ChannelChat,
 		Title:         "DUT 1 (RK3588 board)",
 		Topic:         "Bring-up of the 6.18 kernel",
 		Patterns:      []string{"serial:lab/dut1", "syslog:lab/dut1*"},
@@ -181,6 +182,61 @@ func channelChat() Chat {
 		OpenQuestions: 1,
 		LastActivity:  tsp("2026-11-16T09:43:05.120004561Z"),
 		Preview:       &ChatPreview{Seq: 48410, Sender: "claude-laptop", Text: "Should I flash the board with the patched kernel?", Event: false},
+	}
+}
+
+func galleryChat() Chat {
+	return Chat{
+		ID:           "chan:lab/screens",
+		Kind:         ChatChannel,
+		Project:      "lab",
+		ProjectTitle: "Lab bench",
+		Name:         "screens",
+		ChannelKind:  ChannelGallery,
+		Title:        "Screenshots of the web UI",
+		Patterns:     []string{},
+		Streams:      []StreamRef{},
+		Surface:      SurfaceNone,
+		Followed:     true,
+		Source:       SourceRuntime,
+		CreatedBy:    "guillaume",
+		CanManage:    true,
+		Unread:       2,
+		LastActivity: tsp("2026-11-16T09:46:10.002300400Z"),
+		Preview:      &ChatPreview{Seq: 48433, Sender: "claude-laptop", Text: "login page after the fix", Event: false},
+		Sections: []GallerySection{
+			{Name: "login flow v2", Items: 2, LastSeq: 48433, Href: "/g/lab/screens?section=login+flow+v2"},
+			{Name: "", Items: 1, LastSeq: 48401, Href: "/g/lab/screens?section="},
+		},
+	}
+}
+
+func galleryEntry() Entry {
+	return Entry{
+		Seq:         48433,
+		TS:          ts("2026-11-16T09:46:10.002300400Z"),
+		Stream:      "chan:lab/screens",
+		Kind:        EntryMessage,
+		Severity:    6,
+		Text:        "login page after the fix",
+		Meta:        json.RawMessage(`{"section":"login flow v2"}`),
+		Chat:        "chan:lab/screens",
+		Sender:      &Sender{Name: "claude-laptop", Kind: KindAgent},
+		Segments:    []Segment{{T: SegText, V: "login page after the fix"}},
+		Attachments: []Attachment{ImageOf(screenshot())},
+		Section:     "login flow v2",
+	}
+}
+
+func screenshot() ImageAttachment {
+	return ImageAttachment{
+		SHA256:   "9c2e5b8f1a4d7c0e3b6f9a2d5c8e1b4f7a0d3c6e9b2f5a8d1c4e7b0a3f6d9c2e",
+		Mime:     "image/png",
+		Width:    1280,
+		Height:   800,
+		URL:      "/blob/9c2e5b8f1a4d7c0e3b6f9a2d5c8e1b4f7a0d3c6e9b2f5a8d1c4e7b0a3f6d9c2e",
+		ThumbURL: "/blob/9c2e5b8f1a4d7c0e3b6f9a2d5c8e1b4f7a0d3c6e9b2f5a8d1c4e7b0a3f6d9c2e?v=thumb",
+		Preview:  true,
 	}
 }
 
@@ -237,6 +293,26 @@ func fixtures() []fixture {
 		{"attachment_log", LogOf(openLog())},
 		{"chat_channel", channelChat()},
 		{"chat_direct", directChat()},
+		{"chat_gallery", galleryChat()},
+		{"entry_gallery_item", galleryEntry()},
+		{"gallery_page", GalleryPage{
+			Chat:    "chan:lab/screens",
+			Section: ptr("login flow v2"),
+			Items: []GalleryItem{
+				{Seq: 48433, Chat: "chan:lab/screens", Title: "login page after the fix", Section: "login flow v2", Image: screenshot(), Href: "/g/lab/screens/48433"},
+				{Seq: 48431, Chat: "chan:lab/screens", Title: "", Section: "login flow v2", Image: imageAttachment(), Href: "/g/lab/screens/48431"},
+			},
+			Sections:      galleryChat().Sections,
+			HasMore:       true,
+			NextBeforeSeq: 48431,
+		}},
+		{"channel_create_gallery", ChannelCreate{Name: "screens", Project: "lab", Title: "Screenshots of the web UI", Kind: ChannelGallery}},
+		{"send_request_gallery", SendRequest{
+			Text:    "login page after the fix",
+			Channel: "lab/screens",
+			Section: "login flow v2",
+			Images:  []ImageUpload{{Data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", Mime: "image/png"}},
+		}},
 		{"stream", Stream{
 			ID:           "serial:lab/dut1",
 			Kind:         "serial",
@@ -339,7 +415,8 @@ func fixtures() []fixture {
 			Title:     "Lab bench",
 			CreatedAt: ts("2026-11-16T08:00:00Z"),
 			Scopes:    []Scope{ScopeRead, ScopeMessage},
-			Channels:  []string{"chan:lab/dut1", "chan:lab/general"},
+			Channels:  []string{"chan:lab/dut1", "chan:lab/general", "chan:lab/screens"},
+			Galleries: []string{"chan:lab/screens"},
 			Sinks:     []string{"bench-pi", "dut1"},
 			Retention: ProjectRetention{LinesMaxAgeS: 1209600, LinesMaxBytes: 2e9, MessagesMaxAgeS: 7776000, BlobsMaxBytes: 5e9},
 		}},

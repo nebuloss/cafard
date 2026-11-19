@@ -124,3 +124,36 @@ export function logLink(a: {
   if (a.to_seq !== null) q.push(['to_seq', String(a.to_seq)]);
   return `/live?${new URLSearchParams(q).toString()}`;
 }
+
+// Galleries. Each mirrors a Go function in internal/messaging/gallery.go.
+
+/** A gallery's page ("lab/shots"), on a section when one is given, like messaging.GalleryHref. */
+export function galleryHref(gallery: string, section?: string): string {
+  const [project = '', name = ''] = gallery.split('/', 2);
+  const path = `/g/${encodeURIComponent(project)}/${encodeURIComponent(name)}`;
+  return section === undefined ? path : `${path}?${new URLSearchParams({ section }).toString()}`;
+}
+
+/** The stable page of a gallery item, like messaging.ItemHref. */
+export function itemHref(gallery: string, seq: number): string {
+  return `${galleryHref(gallery)}/${seq}`;
+}
+
+/** A gallery item's title: the first line of its text, at most 140 characters, like messaging.previewText. */
+export function itemTitle(text: string): string {
+  let t = text.trim();
+  const nl = t.search(/[\r\n]/);
+  if (nl >= 0) t = `${t.slice(0, nl)} ...`;
+  const runes = Array.from(t);
+  return runes.length > 140 ? `${runes.slice(0, 140).join('')}...` : t;
+}
+
+/** A section's heading, like pages.sectionLabel. */
+export function sectionLabel(name: string): string {
+  return name === '' ? 'Unsorted' : name;
+}
+
+/** Where a chat's row leads: a gallery's grid, else the conversation, like pages.ChatRow. */
+export function chatPageHref(chat: { readonly id: string; readonly channel_kind?: string }): string {
+  return chat.channel_kind === 'gallery' ? galleryHref(chat.id.slice(5)) : chatHref(chat.id);
+}

@@ -46,7 +46,8 @@ type HeaderView struct {
 	Streams                []StreamChip
 	Claims                 []string
 	ChatHref, LogsHref     string
-	Logs                   bool // the logs view is the one shown
+	GalleryHref            string // a gallery channel's grid
+	Logs                   bool   // the logs view is the one shown
 	Bound                  bool
 	Manage                 bool // channel settings are offered
 	PeerKind               string
@@ -268,6 +269,9 @@ func (s *Site) chatHeader(ctx context.Context, data *chatData, p auth.Principal,
 	}
 	if ch != nil {
 		h.Bound = len(ch.Patterns) > 0
+		if ch.Gallery() {
+			h.GalleryHref = messaging.GalleryHref(ch.Name, nil)
+		}
 		h.Manage = p.Has(auth.ScopeMessage)
 		claims, err := s.chats.svc.ActiveClaims(ctx)
 		if err != nil {

@@ -125,7 +125,7 @@ func (s *Service) ChannelChat(ctx context.Context, p auth.Principal, ch Channel)
 	}
 	a := s.access(ctx, p)
 	c := dto.Chat{
-		ID: ch.Stream(), Kind: dto.ChatChannel, Project: ch.Project(), Name: ch.Local(), Title: ch.Title, Topic: ch.Topic,
+		ID: ch.Stream(), Kind: dto.ChatChannel, ChannelKind: ch.Kind, Project: ch.Project(), Name: ch.Local(), Title: ch.Title, Topic: ch.Topic,
 		Patterns: ch.Patterns, Streams: refs, Surface: ch.Surface,
 		Followed: fs.Followed, Pinned: fs.Pinned, Muted: fs.Muted, Archived: ch.Archived(),
 		Source: ch.Source, CreatedBy: ch.CreatedBy, CanManage: ch.CanManage(p, a),

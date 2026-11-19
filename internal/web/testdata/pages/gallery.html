@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>#lab/shots - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="gallery" class="shell">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="bar">
+    
+    <svg class="mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
+    
+    <h1>#lab/shots</h1>
+    <span class="spacer"></span>
+    
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    <span class="avatar" title="admin (human)">A</span>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Main">
+  <a class="nav-item" href="/" aria-current="page">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats">2</span></span>
+    <span class="nav-label">Chats</span>
+  </a>
+  <a class="nav-item" href="/live">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
+    <span class="nav-label">Live</span>
+  </a>
+  <a class="nav-item" href="/streams">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Sources</span>
+  </a>
+  
+  <a class="nav-item rail-only" href="/projects">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></span>
+    <span class="nav-label">Projects</span>
+  </a>
+  <a class="nav-item rail-only" href="/agents">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
+    <span class="nav-label">Agents</span>
+  </a>
+  <a class="nav-item rail-only" href="/pair">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
+    <span class="nav-label">Pair</span>
+  </a>
+  
+  <details class="nav-more">
+    <summary class="nav-item">
+      <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></span>
+      <span class="nav-label">More</span>
+    </summary>
+    <div class="menu" role="menu">
+      
+      <a class="menu-item bar-only" role="menuitem" href="/projects"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg>Projects</a>
+      <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
+      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
+      
+      <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+        <input type="hidden" name="next" value="/g/lab/shots">
+        <span class="menu-caption">Theme</span>
+        <span class="segmented">
+          <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
+          <button type="submit" name="theme" value="light" aria-pressed="false">Light</button>
+          <button type="submit" name="theme" value="dark" aria-pressed="false">Dark</button>
+        </span>
+      </form>
+      <form method="post" action="/signout">
+        <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out admin</button>
+      </form>
+    </div>
+  </details>
+</nav>
+
+
+<main id="main">
+
+
+<section class="page-wide gallery" data-component="GalleryView" data-chat="chan:lab/shots" data-gallery="lab/shots" data-live data-next-seq="12">
+  <header class="gallery-head">
+    <h2>#lab/shots <span class="muted">Screenshots</span></h2>
+    <a class="btn text" href="/c/lab/shots">Conversation</a>
+  </header>
+  
+  <nav class="gallery-sections chips" aria-label="Sections">
+    <a class="chip filter" href="/g/lab/shots" aria-current="true">All</a>
+    <a class="chip filter" href="/g/lab/shots?section=login&#43;flow">login flow <span class="muted">2</span></a><a class="chip filter" href="/g/lab/shots?section=">Unsorted <span class="muted">1</span></a>
+  </nav>
+  
+  
+  <div class="gallery-groups" data-slot="groups">
+    
+    <section class="gallery-group" data-section="login flow">
+      <h3 class="list-heading">login flow</h3>
+      <div class="gallery-grid"><a class="gallery-item" href="/g/lab/shots/11" data-seq="11" data-full="/blob/27f6d11a5d3139511b7e9c6aaa476794b12136ec3ea030af5ae7f757683e8c17"><img data-slot="img" src="/blob/27f6d11a5d3139511b7e9c6aaa476794b12136ec3ea030af5ae7f757683e8c17?v=thumb" alt="after submit ..." width="56" height="42" loading="lazy" decoding="async"><span class="gallery-title" data-slot="title">after submit ...</span></a>
+<a class="gallery-item" href="/g/lab/shots/10" data-seq="10" data-full="/blob/5cbff2b233e3b01e8339c71de45ee40cd3d91f649d3fe059a99b5c3450625613"><img data-slot="img" src="/blob/5cbff2b233e3b01e8339c71de45ee40cd3d91f649d3fe059a99b5c3450625613?v=thumb" alt="login page" width="48" height="36" loading="lazy" decoding="async"><span class="gallery-title" data-slot="title">login page</span></a>
+</div>
+    </section>
+    
+    <section class="gallery-group" data-section="">
+      <h3 class="list-heading">Unsorted</h3>
+      <div class="gallery-grid"><a class="gallery-item" href="/g/lab/shots/9" data-seq="9" data-full="/blob/15b82a8c7f15df5e8f92abe6f31342ff55c327203b700abc36ba9ee8f5a33a71"><img data-slot="img" src="/blob/15b82a8c7f15df5e8f92abe6f31342ff55c327203b700abc36ba9ee8f5a33a71?v=thumb" alt="boot splash" width="40" height="30" loading="lazy" decoding="async"><span class="gallery-title" data-slot="title">boot splash</span></a>
+</div>
+    </section>
+    
+  </div>
+  
+  
+  <p class="banner notice no-script body-small">New images appear when you reload; the bundle shows them live.</p>
+</section>
+
+<dialog class="image-viewer" data-component="ImageViewer" aria-label="Photo">
+  <img data-slot="img" alt="">
+  <p class="viewer-caption" data-slot="caption" hidden></p>
+  <button class="icon-btn viewer-close" type="button" data-action="close" aria-label="Close"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button>
+  <button class="icon-btn viewer-prev" type="button" data-action="prev" aria-label="Previous photo"><svg aria-hidden="true"><use href="/static/icons.svg#chevron_left"></use></svg></button>
+  <button class="icon-btn viewer-next" type="button" data-action="next" aria-label="Next photo"><svg aria-hidden="true"><use href="/static/icons.svg#chevron_right"></use></svg></button>
+  <a class="btn text viewer-open" data-slot="open" href="#" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="/static/icons.svg#open_in_new"></use></svg>Original</a>
+</dialog>
+
+
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-gallery-item"><a class="gallery-item" href="" data-seq="0" data-full=""><img data-slot="img" src="" alt="" loading="lazy" decoding="async"><span class="gallery-title" data-slot="title"></span></a>
+</template>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+
+</body>
+</html>

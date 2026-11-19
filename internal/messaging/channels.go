@@ -45,6 +45,7 @@ func ValidateChannelName(name string) error {
 // Channel is one row of channels with its bindings.
 type Channel struct {
 	Name         string // "project/name"
+	Kind         dto.ChannelKind
 	Title, Topic string
 	Surface      dto.Surface
 	CreatedBy    string
@@ -56,6 +57,9 @@ type Channel struct {
 
 // Stream is the channel's message stream.
 func (c Channel) Stream() string { return "chan:" + c.Name }
+
+// Gallery reports whether the channel is a gallery.
+func (c Channel) Gallery() bool { return c.Kind == dto.ChannelGallery }
 
 // Project is the project the channel belongs to.
 func (c Channel) Project() string { return store.ProjectOf(c.Stream()) }
@@ -177,7 +181,7 @@ func (s *Service) allChannels(ctx context.Context, includeArchived bool) ([]Chan
 }
 
 func (s *Service) queryChannels(ctx context.Context, where string, args ...any) ([]Channel, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT name, coalesce(title, ''), coalesce(topic, ''), surface, created_by,
+	rows, err := s.db.QueryContext(ctx, `SELECT name, kind, coalesce(title, ''), coalesce(topic, ''), surface, created_by,
 		last_activity, archived_at, source FROM channels `+where+` ORDER BY name`, args...)
 	if err != nil {
 		return nil, err
@@ -189,12 +193,13 @@ func (s *Service) queryChannels(ctx context.Context, where string, args ...any) 
 			activity            int64
 			archived            sql.NullInt64
 			surface, sourceName string
+			kind                string
 		)
-		if err := rows.Scan(&c.Name, &c.Title, &c.Topic, &surface, &c.CreatedBy, &activity, &archived, &sourceName); err != nil {
+		if err := rows.Scan(&c.Name, &kind, &c.Title, &c.Topic, &surface, &c.CreatedBy, &activity, &archived, &sourceName); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		c.Surface, c.Source = dto.Surface(surface), dto.ChatSource(sourceName)
+		c.Surface, c.Source, c.Kind = dto.Surface(surface), dto.ChatSource(sourceName), dto.ChannelKind(kind)
 		c.LastActivity = time.Unix(0, activity).UTC()
 		if archived.Valid {
 			t := time.Unix(0, archived.Int64).UTC()
@@ -492,6 +497,10 @@ func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.C
 	if !validSurface(surface) {
 		return Channel{}, dto.Errorf(dto.CodeBadRequest, "surface %q is not none, markers or errors.", surface)
 	}
+	kind, err := channelKind(req.Kind)
+	if err != nil {
+		return Channel{}, err
+	}
 	if _, err := s.channel(ctx, name); err == nil {
 		return Channel{}, dto.Errorf(dto.CodeConflict, "There is already a channel %q.", name)
 	}
@@ -505,9 +514,9 @@ func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.C
 	}
 	defer tx.Rollback()
 	now := s.clock.Now().UnixNano()
-	res, err := tx.ExecContext(ctx, `INSERT INTO channels(name, title, topic, surface, created_by, created_at, last_activity, source)
-		VALUES (?, ?, ?, ?, ?, ?, ?, 'runtime') ON CONFLICT(name) DO NOTHING`,
-		name, nullStr(req.Title), nullStr(req.Topic), string(surface), p.Name, now, now)
+	res, err := tx.ExecContext(ctx, `INSERT INTO channels(name, kind, title, topic, surface, created_by, created_at, last_activity, source)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'runtime') ON CONFLICT(name) DO NOTHING`,
+		name, string(kind), nullStr(req.Title), nullStr(req.Topic), string(surface), p.Name, now, now)
 	if err != nil {
 		return Channel{}, err
 	}
@@ -536,6 +545,17 @@ func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.C
 	return s.Channel(ctx, p, name)
 }
 
+// channelKind checks a requested kind; "" is a chat.
+func channelKind(k dto.ChannelKind) (dto.ChannelKind, error) {
+	switch k {
+	case "":
+		return dto.ChannelChat, nil
+	case dto.ChannelChat, dto.ChannelGallery:
+		return k, nil
+	}
+	return "", dto.Errorf(dto.CodeBadRequest, "A channel kind is chat or gallery, not %q.", k)
+}
+
 func uniq(in []string) []string {
 	var out []string
 	for _, v := range in {
@@ -559,7 +579,7 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 		return Channel{}, err
 	}
 	a := s.access(ctx, p)
-	if len(u.AddPatterns)+len(u.RemovePatterns) > 0 || u.Rename != "" || u.Archived != nil {
+	if len(u.AddPatterns)+len(u.RemovePatterns) > 0 || u.Rename != "" || u.Archived != nil || u.Kind != "" {
 		if err := needProjectMessage(a, ch.Project()); err != nil {
 			return Channel{}, err
 		}
@@ -586,6 +606,14 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 	}
 	if u.Surface != "" && !validSurface(u.Surface) {
 		return Channel{}, dto.Errorf(dto.CodeBadRequest, "surface %q is not none, markers or errors.", u.Surface)
+	}
+	if u.Kind != "" {
+		if _, err := channelKind(u.Kind); err != nil {
+			return Channel{}, err
+		}
+		if ch.Local() == General && u.Kind == dto.ChannelGallery {
+			return Channel{}, dto.Errorf(dto.CodeBadRequest, "#general stays a chat; make a gallery channel for screenshots.")
+		}
 	}
 	newName := ""
 	if u.Rename != "" {
@@ -625,6 +653,11 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 	}
 	if u.Surface != "" {
 		if _, err := tx.ExecContext(ctx, `UPDATE channels SET surface = ? WHERE name = ?`, string(u.Surface), ch.Name); err != nil {
+			return Channel{}, err
+		}
+	}
+	if u.Kind != "" {
+		if _, err := tx.ExecContext(ctx, `UPDATE channels SET kind = ? WHERE name = ?`, string(u.Kind), ch.Name); err != nil {
 			return Channel{}, err
 		}
 	}
@@ -677,6 +710,9 @@ func (s *Service) UpdateChannel(ctx context.Context, p auth.Principal, name stri
 	if len(removed) > 0 {
 		parts = append(parts, "unbound "+strings.Join(removed, ", "))
 	}
+	if u.Kind != "" && u.Kind != ch.Kind {
+		parts = append(parts, "made it a "+string(u.Kind))
+	}
 	if len(parts) > 0 {
 		if err := s.marker(ctx, "chan:"+final, p.Name, p.Name+" "+strings.Join(parts, "; ")); err != nil {
 			return Channel{}, err
@@ -698,8 +734,8 @@ func (s *Service) rename(ctx context.Context, from, to string) error {
 			q    string
 			args []any
 		}{
-			{`INSERT INTO channels(name, title, topic, surface, created_by, created_at, last_activity, archived_at, source)
-				SELECT ?, title, topic, surface, created_by, created_at, last_activity, archived_at, source FROM channels WHERE name = ?`, []any{to, from}},
+			{`INSERT INTO channels(name, kind, title, topic, surface, created_by, created_at, last_activity, archived_at, source)
+				SELECT ?, kind, title, topic, surface, created_by, created_at, last_activity, archived_at, source FROM channels WHERE name = ?`, []any{to, from}},
 			{`UPDATE channel_streams SET channel = ? WHERE channel = ?`, []any{to, from}},
 			{`INSERT INTO streams(id, kind, labels, created_at, last_seq, retention)
 				SELECT ?, kind, labels, created_at, last_seq, retention FROM streams WHERE id = ? ON CONFLICT(id) DO NOTHING`, []any{"chan:" + to, "chan:" + from}},

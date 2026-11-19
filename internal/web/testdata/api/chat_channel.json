@@ -4,6 +4,7 @@
   "project": "lab",
   "project_title": "Lab bench",
   "name": "dut1",
+  "channel_kind": "chat",
   "title": "DUT 1 (RK3588 board)",
   "topic": "Bring-up of the 6.18 kernel",
   "patterns": [

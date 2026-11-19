@@ -39,6 +39,11 @@ What exists:
   session. The admin runs projects at `/projects` (admin interface);
   `cafard token create --grant|--sink` and `cafard pair --grant` do it
   from a shell.
+- **Galleries** (PLAN section 6.3; DECISIONS 2026-11-19, "gallery
+  channels"): a channel's `kind` is `chat` or `gallery`;
+  `internal/messaging/gallery.go` reads items and sections, and
+  `internal/web/pages/gallery.go` serves `/g/<project>/<gallery>` and each
+  item's page, `src/pages/GalleryPage.ts` the viewer and live tiles.
 
 ## Conventions come from the sibling projects
 
@@ -281,6 +286,14 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
 - **Projects: the old `serial:` list and `netconsole.names` load only to
   be imported** (once per item, recorded in `config_imports`) into the
   project `imported`. Do not read them anywhere else.
+
+- **Galleries: an item is a message with an image** (`galleryImage` in
+  `internal/messaging/gallery.go`, the first image, the text's first line
+  as the title). Its section is `meta.section`, so a new field that
+  writes `meta` on messages must keep it (`SendMessage` marshals the
+  whole `meta` struct). The gallery fixtures come from `seedGallery`,
+  which only `TestEveryPageCarriesItsTwins` and the gallery tests call,
+  so the other web tests keep their chat counts.
 
 ## Rules that are easy to break
 

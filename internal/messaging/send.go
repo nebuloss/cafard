@@ -50,7 +50,8 @@ func (s *Service) Send(ctx context.Context, from auth.Principal, m dto.SendReque
 type target struct {
 	stream    string
 	recipient string
-	channel   string // set for channel messages
+	channel   string   // set for channel messages
+	ch        *Channel // likewise
 }
 
 func (s *Service) target(ctx context.Context, from auth.Principal, to, channel string) (target, error) {
@@ -76,7 +77,7 @@ func (s *Service) target(ctx context.Context, from auth.Principal, to, channel s
 		if err != nil {
 			return target{}, err
 		}
-		t := target{stream: ch.Stream(), channel: ch.Name}
+		t := target{stream: ch.Stream(), channel: ch.Name, ch: &ch}
 		if to == dto.RecipientHumans {
 			t.recipient = dto.RecipientHumans
 		}
@@ -165,6 +166,17 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 		}
 		blobs = append(blobs, staged...)
 	}
+	if md.Section, err = NormalizeSection(m.Section); err != nil {
+		return store.Entry{}, err
+	}
+	if t.ch != nil && t.ch.Gallery() {
+		if len(m.Images) == 0 && len(blobs) == 0 {
+			return store.Entry{}, dto.Errorf(dto.CodeBadRequest,
+				"#%s is a gallery: every message there is an image with a title. Attach an image, or post text in a chat channel of the project.", t.ch.Name)
+		}
+	} else if md.Section != "" {
+		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "section groups the images of a gallery; this message does not go to a gallery channel.")
+	}
 	if strings.TrimSpace(text) == "" && len(m.Images) == 0 && len(blobs) == 0 && len(m.Logs) == 0 {
 		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "A message needs text, an image or a log attachment.")
 	}
@@ -202,7 +214,7 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 		md.Choices = &c
 	}
 	var rawMeta json.RawMessage
-	if md.Choices != nil || md.Choice != "" {
+	if md.Choices != nil || md.Choice != "" || md.Section != "" {
 		if rawMeta, err = json.Marshal(md); err != nil {
 			return store.Entry{}, err
 		}

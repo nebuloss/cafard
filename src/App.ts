@@ -14,6 +14,7 @@ import { PairPage } from '@/pages/PairPage.ts';
 import { StreamsPage } from '@/pages/StreamsPage.ts';
 import { ChatPage } from '@/pages/ChatPage.ts';
 import { DropPage } from '@/pages/DropPage.ts';
+import { GalleryPage } from '@/pages/GalleryPage.ts';
 import { HomePage } from '@/pages/HomePage.ts';
 import { KeepOriginal } from '@/media/KeepOriginal.ts';
 import { ResizeToJpeg } from '@/media/ResizeToJpeg.ts';
@@ -72,6 +73,7 @@ export class App {
     this.pages.register('home', (doc) => new HomePage(doc, this.services));
     this.pages.register('chat', (doc) => new ChatPage(doc, this.services));
     this.pages.register('drop', (doc) => new DropPage(doc, this.services));
+    this.pages.register('gallery', (doc) => new GalleryPage(doc, this.services));
   }
 
   start(): Disposable {

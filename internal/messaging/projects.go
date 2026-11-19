@@ -38,6 +38,9 @@ func (s *Service) Projects(ctx context.Context, p auth.Principal) ([]dto.Project
 		for _, ch := range chs {
 			if ch.Project() == pr.Name {
 				d.Channels = append(d.Channels, ch.Stream())
+				if ch.Gallery() {
+					d.Galleries = append(d.Galleries, ch.Stream())
+				}
 			}
 		}
 		if a.ProjectScopes(pr.Name).Has(auth.ScopeRead) {
@@ -94,6 +97,26 @@ func (s *Service) toolListProjects(ctx context.Context, c *mcpserver.Call, _ str
 			names[i] = "#" + strings.TrimPrefix(ch, "chan:")
 		}
 		fmt.Fprintf(&b, "; channels: %s", strings.Join(names, ", "))
+		for _, g := range pr.Galleries {
+			fmt.Fprintf(&b, "; gallery #%s (post screenshots there)", strings.TrimPrefix(g, "chan:"))
+			ch, err := s.channel(ctx, g)
+			if err != nil {
+				continue
+			}
+			secs, err := s.GallerySections(ctx, ch)
+			if err != nil {
+				return "", listProjectsOut{}, err
+			}
+			var named []string
+			for _, sec := range secs {
+				if sec.Name != "" {
+					named = append(named, sec.Name)
+				}
+			}
+			if len(named) > 0 {
+				fmt.Fprintf(&b, " with sections %s", strings.Join(named, ", "))
+			}
+		}
 		if len(pr.Sinks) > 0 {
 			fmt.Fprintf(&b, "; sinks: %s", strings.Join(pr.Sinks, ", "))
 		}

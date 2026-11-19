@@ -3,6 +3,40 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-19: gallery channels
+
+Asked for by the user: agents that test a UI post screenshots in batches,
+and a conversation buries them. PLAN section 6.3 is the model. Choices
+the brief left open, with their reasons:
+
+- **A kind on the channel, not a new kind of chat.** A gallery is a
+  channel whose messages are shown as a grid, so grants, follows,
+  retention, unread counts, search and the conversation view all apply
+  unchanged, and turning a chat into a gallery (or back) rewrites
+  nothing. The one rule that differs: a message to a gallery needs an
+  image. Markers stay in the gallery's conversation and are not items.
+- **An item is the first image of a message,** its title the first line of
+  the text (140 characters, as previews). A message with several images
+  is one item; the grid stays one tile per post, and agents are told to
+  post one image per message.
+- **The section is in `meta.section`,** not a column: it is a property of
+  one message, queried with `json_extract` on one channel's rows, and the
+  section list is a `GROUP BY` over them. Its name excludes control
+  characters and `[`, `]`, `|`, kept for a short syntax that points at
+  gallery items from message text.
+- **`#general` stays a chat,** so every project keeps a place where text
+  can go.
+- **The chat list's row of a gallery leads to its grid;** the grid links to
+  the conversation (markers, and the composer a human may use) and the
+  conversation's header back to the grid.
+- **The item page is the no-bundle viewer,** and the stable address of one
+  item: `/g/<project>/<gallery>/<seq>`, with newer and older inside its
+  section. The bundle's viewer shows the original with the title as a
+  caption; previous and next also stay in the section.
+- **Agents may make galleries** (`create_channel(kind=gallery)`) as they
+  make channels, and change the kind with the binding-change right, so an
+  agent with no admin at hand still has somewhere to put screenshots.
+
 ## 2026-11-19: projects, sinks and grants
 
 Asked for by the user: a Discord-like organisation where the admin makes

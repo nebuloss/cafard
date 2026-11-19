@@ -36,6 +36,7 @@ func (a *API) MountChats(mux *http.ServeMux, svc *messaging.Service, shares *vie
 	mux.Handle("PATCH /api/channels/{name}", a.Write(auth.ScopeMessage, c.updateChannel))
 	mux.Handle("DELETE /api/channels/{name}", a.Write(auth.ScopeMessage, c.deleteChannel))
 	mux.Handle("GET /api/shares/{id}", a.Read(auth.ScopeMessage, c.share))
+	mux.Handle("GET /api/galleries/{name}", a.Read(auth.ScopeRead, c.gallery))
 }
 
 func flag(r *http.Request, name string) bool {
@@ -271,4 +272,28 @@ func (c *chatsAPI) share(w http.ResponseWriter, r *http.Request, p auth.Principa
 		return
 	}
 	dto.WriteJSON(w, http.StatusOK, sh.DTO())
+}
+
+// gallery is a page of a gallery's items and its sections, for the
+// gallery page's paging and the composer's gallery picker.
+func (c *chatsAPI) gallery(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	q := r.URL.Query()
+	ch, err := c.svc.Gallery(r.Context(), p, r.PathValue("name"))
+	if err != nil {
+		c.Fail(w, r, err)
+		return
+	}
+	var section *string
+	if q.Has("section") {
+		sec := q.Get("section")
+		section = &sec
+	}
+	before, _ := strconv.ParseInt(q.Get("before_seq"), 10, 64)
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	page, err := c.svc.GalleryPage(r.Context(), ch, section, before, limit)
+	if err != nil {
+		c.Fail(w, r, err)
+		return
+	}
+	dto.WriteJSON(w, http.StatusOK, page)
 }

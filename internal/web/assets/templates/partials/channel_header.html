@@ -12,6 +12,7 @@
     <a class="seg" href="{{.LogsHref}}"{{if .Logs}} aria-current="page"{{end}} data-view="logs">Logs<span class="new-error-dot" data-slot="error-dot" hidden></span></a>
   </nav>
   {{end}}
+  {{if .GalleryHref}}<a class="btn tonal ch-gallery" href="{{.GalleryHref}}"><svg aria-hidden="true"><use href="/static/icons.svg#image"></use></svg>Gallery</a>{{end}}
   {{if .Manage}}<button class="icon-btn only-scripted" type="button" data-action="settings" aria-label="Channel settings" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#settings"></use></svg></button>{{end}}
   {{if .Streams}}
   <div class="ch-streams" data-slot="streams">

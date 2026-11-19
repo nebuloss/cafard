@@ -1,0 +1,4 @@
+{{- /* One gallery item (tpl-gallery-item): the thumbnail and the title. A
+     plain link to the item's page; the bundle opens the viewer on
+     data-full instead. Data: GalleryItemView. */ -}}
+<a class="gallery-item" href="{{.Href}}" data-seq="{{.Seq}}" data-full="{{.Full}}">{{if .NoPreview}}<span class="image-file" data-slot="img">HEIC: open to download</span>{{else}}<img data-slot="img" src="{{.Src}}" alt="{{.Alt}}"{{if .Width}} width="{{.Width}}" height="{{.Height}}"{{end}} loading="lazy" decoding="async">{{end}}<span class="gallery-title" data-slot="title">{{.Title}}</span></a>

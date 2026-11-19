@@ -8,11 +8,15 @@
   <h2 id="channels">Channels</h2>
   <ul class="list project-channels">
     {{range .Data.Channels}}
-    <li data-channel="{{.Name}}">
+    <li data-channel="{{.Name}}" data-kind="{{.Kind}}">
       <a class="grow" href="{{.Href}}">
-        <span class="title">#{{.Name}}{{if .Title}} {{.Title}}{{end}}</span>
+        <span class="title">#{{.Name}}{{if .Title}} {{.Title}}{{end}}{{if .Gallery}} <span class="chip">gallery</span>{{end}}</span>
         <span class="subtitle">{{if .Bindings}}bound to <span class="mono">{{.Bindings}}</span>{{else}}no bound logs{{end}}{{if .Topic}}; {{.Topic}}{{end}}</span>
       </a>
+      {{if .KindAction}}<form method="post" action="{{.KindAction}}">
+        <input type="hidden" name="kind" value="{{.OtherKind}}">
+        <button class="btn text" type="submit">{{.OtherKindLabel}}</button>
+      </form>{{end}}
     </li>
     {{end}}
   </ul>
@@ -22,6 +26,7 @@
       <label class="ofield"><span>Name</span><input name="name" required placeholder="dut1" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9\-]{0,39}"></label>
       <label class="ofield"><span>Title</span><input name="title" maxlength="200"></label>
       <label class="ofield"><span>Topic</span><input name="topic" maxlength="500"></label>
+      <label class="ofield"><span>Kind</span><select name="kind"><option value="chat" selected>Chat: a conversation</option><option value="gallery">Gallery: screenshots with titles, by section</option></select></label>
       <label class="ofield"><span>Bound logs</span><textarea name="patterns" rows="2" placeholder="serial:{{.Data.Name}}/dut1" autocomplete="off" spellcheck="false"></textarea></label>
       <p class="help">One stream id or glob per line, inside this project (serial:{{.Data.Name}}/dut1, *:{{.Data.Name}}/dut1).</p>
       <button class="btn filled" type="submit">Make channel</button>

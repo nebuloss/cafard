@@ -40,6 +40,7 @@ type sendIn struct {
 	ReplyTo int64             `json:"reply_to,omitempty" jsonschema:"seq of the message this answers"`
 	Images  []dto.ImageUpload `json:"images,omitempty" jsonschema:"at most 6 images: base64 data and mime"`
 	Logs    []dto.LogRequest  `json:"logs,omitempty" jsonschema:"at most 5 log slices: {stream or channel, from_seq, to_seq (omit for open-ended), grep, min_severity, title}"`
+	Section string            `json:"section,omitempty" jsonschema:"gallery channels only: the batch this screenshot belongs to, e.g. login flow v2 (at most 80 characters)"`
 }
 
 type sendLog struct {
@@ -150,12 +151,13 @@ type listChannelsOut struct {
 }
 
 type createChannelIn struct {
-	Name    string      `json:"name" jsonschema:"lowercase slug, e.g. run-42, or project/run-42"`
-	Project string      `json:"project,omitempty" jsonschema:"the project, needed when you may make channels in several"`
-	Title   string      `json:"title,omitempty"`
-	Topic   string      `json:"topic,omitempty"`
-	Streams []string    `json:"streams,omitempty" jsonschema:"stream ids or globs of the channel's project to bind, e.g. serial:dut1, syslog:dut1*"`
-	Surface dto.Surface `json:"surface,omitempty" jsonschema:"none, markers (default) or errors: which entries of bound streams the chat shows"`
+	Name    string          `json:"name" jsonschema:"lowercase slug, e.g. run-42, or project/run-42"`
+	Project string          `json:"project,omitempty" jsonschema:"the project, needed when you may make channels in several"`
+	Title   string          `json:"title,omitempty"`
+	Topic   string          `json:"topic,omitempty"`
+	Streams []string        `json:"streams,omitempty" jsonschema:"stream ids or globs of the channel's project to bind, e.g. serial:dut1, syslog:dut1*"`
+	Surface dto.Surface     `json:"surface,omitempty" jsonschema:"none, markers (default) or errors: which entries of bound streams the chat shows"`
+	Kind    dto.ChannelKind `json:"kind,omitempty" jsonschema:"chat (default) or gallery: a gallery holds screenshots, one image and a title per message"`
 }
 
 type channelOut struct {
@@ -163,14 +165,15 @@ type channelOut struct {
 }
 
 type updateChannelIn struct {
-	Name          string      `json:"name"`
-	Rename        string      `json:"rename,omitempty"`
-	Title         *string     `json:"title,omitempty"`
-	Topic         *string     `json:"topic,omitempty"`
-	AddStreams    []string    `json:"add_streams,omitempty"`
-	RemoveStreams []string    `json:"remove_streams,omitempty"`
-	Surface       dto.Surface `json:"surface,omitempty"`
-	Archived      *bool       `json:"archived,omitempty"`
+	Name          string          `json:"name"`
+	Rename        string          `json:"rename,omitempty"`
+	Title         *string         `json:"title,omitempty"`
+	Topic         *string         `json:"topic,omitempty"`
+	AddStreams    []string        `json:"add_streams,omitempty"`
+	RemoveStreams []string        `json:"remove_streams,omitempty"`
+	Surface       dto.Surface     `json:"surface,omitempty"`
+	Archived      *bool           `json:"archived,omitempty"`
+	Kind          dto.ChannelKind `json:"kind,omitempty" jsonschema:"chat or gallery"`
 }
 
 type nameIn struct {
@@ -238,17 +241,17 @@ func toClaimDTO(c ClaimRow) claimDTO {
 // resources.
 func (s *Service) RegisterTools(m *mcpserver.Server) {
 	r, w := auth.ScopeRead, auth.ScopeMessage
-	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_projects", Description: "The projects you have a grant in: your scopes there, their channels and sinks. Name a channel project/name when several have it."}, s.toolListProjects)
+	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_projects", Description: "The projects you have a grant in: your scopes there, their channels, their galleries (where screenshots go) with their sections, and their sinks. Name a channel project/name when several have it."}, s.toolListProjects)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_principals", Description: "Who can be messaged (those you share a project with): name, kind (agent, human, device), last seen."}, s.toolListPrincipals)
-	mcpserver.AddTool(m, w, mcp.Tool{Name: "send", Description: "Send a message: to a principal (direct), to @humans in a channel, or to a whole channel (default general). Attach images and log slices. Do not send acknowledgements or thanks."}, s.toolSend)
+	mcpserver.AddTool(m, w, mcp.Tool{Name: "send", Description: "Send a message: to a principal (direct), to @humans in a channel, or to a whole channel (default general). Attach images and log slices. In a gallery channel a message is a screenshot: an image, a short title as text, and a section for a batch. Do not send acknowledgements or thanks."}, s.toolSend)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "inbox", Description: "Your unread messages: direct ones, those to @humans if you are human, and broadcasts in channels you follow. Check it at the start of a task and whenever you wait."}, s.toolInbox)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "get_message", Description: "One message in full: text, its images, and the first lines of its log attachments. Marks it read unless ack=false."}, s.toolGetMessage)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "get_log_attachment", Description: "The lines of a message's log attachment, page by page; an open-ended one keeps delivering new lines."}, s.toolGetLog)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "ack", Description: "Mark messages read (for you only)."}, s.toolAck)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "wait_message", Description: "Wait for the next message for you (or a reply to reply_to), or timed_out."}, s.toolWaitMessage)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "ask_human", Description: "Ask the humans something, with optional choice buttons, and wait for the first answer. Use it when you need a physical action."}, s.toolAskHuman)
-	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_channels", Description: "The channels: topic, bound streams and their status, followed or not, unread count, last activity."}, s.toolListChannels)
-	mcpserver.AddTool(m, w, mcp.Tool{Name: "create_channel", Description: "Create a channel, optionally bound to streams (e.g. run-42 bound to serial:dut1). You follow it."}, s.toolCreateChannel)
+	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_channels", Description: "The channels: kind (chat or gallery, with a gallery's sections), topic, bound streams and their status, followed or not, unread count, last activity."}, s.toolListChannels)
+	mcpserver.AddTool(m, w, mcp.Tool{Name: "create_channel", Description: "Create a channel, optionally bound to streams (e.g. run-42 bound to serial:dut1), or a gallery for screenshots (kind=gallery). You follow it."}, s.toolCreateChannel)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "update_channel", Description: "Change a channel: title, topic, bindings, surface; rename and archive are for its creator or an admin. Binding changes leave a marker."}, s.toolUpdateChannel)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "delete_channel", Description: "Delete a channel and its messages (creator or admin, runtime channels only)."}, s.toolDeleteChannel)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "follow", Description: "Follow a channel: its broadcasts reach your inbox."}, s.toolFollow)
@@ -288,7 +291,8 @@ func (s *Service) toolListPrincipals(ctx context.Context, c *mcpserver.Call, in 
 
 func (s *Service) toolSend(ctx context.Context, c *mcpserver.Call, in sendIn) (string, sendOut, error) {
 	e, err := s.SendMessage(ctx, c.Principal, SendInput{SendRequest: dto.SendRequest{
-		Text: in.Text, To: in.To, Channel: in.Channel, ReplyTo: in.ReplyTo, Images: in.Images, Logs: in.Logs}})
+		Text: in.Text, To: in.To, Channel: in.Channel, ReplyTo: in.ReplyTo, Images: in.Images, Logs: in.Logs,
+		Section: in.Section}})
 	if err != nil {
 		return "", sendOut{}, err
 	}
@@ -333,7 +337,11 @@ func (s *Service) summary(ctx context.Context, viewer auth.Principal, e store.En
 	if logs > 0 {
 		fmt.Fprintf(&b, " [%d log attachment(s)]", logs)
 	}
-	if m := readMeta(e); m.Choices != nil {
+	m := readMeta(e)
+	if m.Section != "" {
+		fmt.Fprintf(&b, " [section %q]", m.Section)
+	}
+	if m.Choices != nil {
 		if a, _ := s.answer(ctx, e.Seq); a == nil {
 			fmt.Fprintf(&b, " [open question")
 		} else {
@@ -633,6 +641,11 @@ func (s *Service) toolListChannels(ctx context.Context, c *mcpserver.Call, in li
 		if err != nil {
 			return "", listChannelsOut{}, err
 		}
+		if ch.Gallery() {
+			if chat.Sections, err = s.GallerySections(ctx, ch); err != nil {
+				return "", listChannelsOut{}, err
+			}
+		}
 		out.Channels = append(out.Channels, chat)
 		b.WriteString(channelLine(chat))
 		b.WriteByte('\n')
@@ -648,6 +661,20 @@ func channelLine(c dto.Chat) string {
 	fmt.Fprintf(&b, "#%s", strings.TrimPrefix(c.ID, "chan:"))
 	if c.Title != "" {
 		fmt.Fprintf(&b, " %q", c.Title)
+	}
+	if c.ChannelKind == dto.ChannelGallery {
+		b.WriteString(", a gallery (post screenshots here)")
+		if len(c.Sections) > 0 {
+			parts := make([]string, len(c.Sections))
+			for i, sec := range c.Sections {
+				name := sec.Name
+				if name == "" {
+					name = "(unsorted)"
+				}
+				parts[i] = fmt.Sprintf("%s: %d", name, sec.Items)
+			}
+			fmt.Fprintf(&b, "; sections, newest first: %s", strings.Join(parts, ", "))
+		}
 	}
 	if c.Topic != "" {
 		fmt.Fprintf(&b, ", topic: %s", c.Topic)
@@ -695,7 +722,7 @@ func (s *Service) chatOut(ctx context.Context, p auth.Principal, ch Channel, ver
 }
 
 func (s *Service) toolCreateChannel(ctx context.Context, c *mcpserver.Call, in createChannelIn) (string, channelOut, error) {
-	ch, err := s.CreateChannel(ctx, c.Principal, dto.ChannelCreate{Name: in.Name, Project: in.Project, Title: in.Title, Topic: in.Topic, Patterns: in.Streams, Surface: in.Surface})
+	ch, err := s.CreateChannel(ctx, c.Principal, dto.ChannelCreate{Name: in.Name, Project: in.Project, Title: in.Title, Topic: in.Topic, Patterns: in.Streams, Surface: in.Surface, Kind: in.Kind})
 	if err != nil {
 		return "", channelOut{}, err
 	}
@@ -704,7 +731,7 @@ func (s *Service) toolCreateChannel(ctx context.Context, c *mcpserver.Call, in c
 
 func (s *Service) toolUpdateChannel(ctx context.Context, c *mcpserver.Call, in updateChannelIn) (string, channelOut, error) {
 	ch, err := s.UpdateChannel(ctx, c.Principal, in.Name, dto.ChannelUpdate{Rename: in.Rename, Title: in.Title, Topic: in.Topic,
-		AddPatterns: in.AddStreams, RemovePatterns: in.RemoveStreams, Surface: in.Surface, Archived: in.Archived})
+		AddPatterns: in.AddStreams, RemovePatterns: in.RemoveStreams, Surface: in.Surface, Archived: in.Archived, Kind: in.Kind})
 	if err != nil {
 		return "", channelOut{}, err
 	}

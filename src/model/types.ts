@@ -96,6 +96,8 @@ export interface Entry {
   readonly attachments?: readonly Attachment[];
   readonly seen_by?: readonly string[];
   readonly question?: Question;
+  /** A gallery item's section. */
+  readonly section?: string;
   readonly event?: boolean;
 }
 
@@ -243,6 +245,8 @@ export interface Chat {
   readonly project?: string;
   readonly project_title?: string;
   readonly name: string;
+  /** Channels only: a conversation, or a gallery of images with titles. */
+  readonly channel_kind?: ChannelKind;
   readonly title?: string;
   readonly topic?: string;
   readonly peer?: Principal;
@@ -260,6 +264,37 @@ export interface Chat {
   readonly open_questions: number;
   readonly last_activity?: string;
   readonly preview?: ChatPreview;
+  /** A gallery's sections, newest first, where an agent lists channels. */
+  readonly sections?: readonly GallerySection[];
+}
+
+export type ChannelKind = 'chat' | 'gallery';
+
+/** A batch of a gallery's items; name "" holds those without one. */
+export interface GallerySection {
+  readonly name: string;
+  readonly items: number;
+  readonly last_seq: number;
+  readonly href: string;
+}
+
+/** One image of a gallery, with its title. */
+export interface GalleryItem {
+  readonly seq: number;
+  readonly chat: string;
+  readonly title: string;
+  readonly section?: string;
+  readonly image: ImageAttachment;
+  readonly href: string;
+}
+
+export interface GalleryPage {
+  readonly chat: string;
+  readonly section?: string;
+  readonly items: readonly GalleryItem[];
+  readonly sections: readonly GallerySection[];
+  readonly has_more: boolean;
+  readonly next_before_seq?: number;
 }
 
 export interface Overview {
@@ -339,6 +374,8 @@ export interface Project {
   readonly created_at: string;
   readonly scopes: readonly Scope[];
   readonly channels: readonly string[];
+  /** Those of channels that are galleries. */
+  readonly galleries?: readonly string[];
   readonly sinks: readonly string[];
   readonly retention: ProjectRetention;
 }

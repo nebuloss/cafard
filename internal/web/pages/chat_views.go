@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/web/view"
 )
@@ -141,6 +142,9 @@ func ChatRow(c dto.Chat, now time.Time, active string) ChatRowView {
 	v := ChatRowView{ID: c.ID, Href: view.ChatHref(c.ID), Name: ChatName(c), Title: c.Title,
 		Unread: count(c.Unread), Questions: count(c.OpenQuestions),
 		Pinned: c.Pinned, Muted: c.Muted, Archived: c.Archived, Active: c.ID == active, Unfollowed: !c.Followed}
+	if c.ChannelKind == dto.ChannelGallery {
+		v.Href = messaging.GalleryHref(strings.TrimPrefix(c.ID, "chan:"), nil)
+	}
 	if c.Muted {
 		v.Unread = ""
 	}

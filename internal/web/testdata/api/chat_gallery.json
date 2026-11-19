@@ -1,0 +1,42 @@
+{
+  "id": "chan:lab/screens",
+  "kind": "channel",
+  "project": "lab",
+  "project_title": "Lab bench",
+  "name": "screens",
+  "channel_kind": "gallery",
+  "title": "Screenshots of the web UI",
+  "patterns": [],
+  "streams": [],
+  "surface": "none",
+  "followed": true,
+  "pinned": false,
+  "muted": false,
+  "archived": false,
+  "source": "runtime",
+  "created_by": "guillaume",
+  "can_manage": true,
+  "unread": 2,
+  "open_questions": 0,
+  "last_activity": "2026-11-16T09:46:10.0023004Z",
+  "preview": {
+    "seq": 48433,
+    "sender": "claude-laptop",
+    "text": "login page after the fix",
+    "event": false
+  },
+  "sections": [
+    {
+      "name": "login flow v2",
+      "items": 2,
+      "last_seq": 48433,
+      "href": "/g/lab/screens?section=login+flow+v2"
+    },
+    {
+      "name": "",
+      "items": 1,
+      "last_seq": 48401,
+      "href": "/g/lab/screens?section="
+    }
+  ]
+}

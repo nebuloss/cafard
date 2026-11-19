@@ -106,7 +106,7 @@
       <span>Channel</span>
       <select name="channel">
         <option value="" selected>None</option>
-        <optgroup label="Lab"><option value="lab/dut1">#dut1</option><option value="lab/general">#general</option></optgroup>
+        <optgroup label="Lab"><option value="lab/dut1">#dut1</option><option value="lab/general">#general</option><option value="lab/shots">#shots</option></optgroup>
       </select>
     </label>
     <label class="ofield">
@@ -142,7 +142,7 @@
   <button class="btn text" type="button" data-action="cancel">Cancel</button>
 </div>
 
-  <div class="logview dense" data-component="LogView" data-next-seq="9" data-follow="true" data-query="">
+  <div class="logview dense" data-component="LogView" data-next-seq="12" data-follow="true" data-query="">
     <div class="log-list mono" role="list" aria-label="Log lines" data-slot="list">
     
 <div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="1"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:lab/dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
@@ -179,7 +179,7 @@
 <form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="10">
   <input type="hidden" name="back" value="/live">
   
-  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><optgroup label="Lab"><option value="chan:lab/dut1">#dut1</option><option value="chan:lab/general">#general</option></optgroup><optgroup label="Direct"><option value="dm:codex-build">@codex-build</option></optgroup></select></label>
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><optgroup label="Lab"><option value="chan:lab/dut1">#dut1</option><option value="chan:lab/general">#general</option><option value="chan:lab/shots">#shots</option></optgroup><optgroup label="Direct"><option value="dm:codex-build">@codex-build</option></optgroup></select></label>
   
   <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
   <div class="upload-list" data-slot="uploads" aria-live="polite"></div>

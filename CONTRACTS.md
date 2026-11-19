@@ -547,6 +547,7 @@ type Entry = {
   attachments?: Attachment[];
   seen_by?: string[];
   question?: { choices: string[]; open: boolean; answer?: { by: string; choice?: string; seq: number } };
+  section?: string;                  // a gallery item's section (meta.section), PLAN 6.3
   // event rows in a timeline:
   event?: boolean;                   // a line or marker from a bound stream, shown as an event row
 };
@@ -578,6 +579,7 @@ type Project = {
   name: string; title?: string; created_at: string;
   scopes: Scope[];                     // the viewer's project-wide scopes (capped); every scope for the admin
   channels: string[];                  // visible chat ids, "chan:lab/dut1"
+  galleries?: string[];                // those of channels that are galleries
   sinks: string[];                     // sink names, when the viewer may read the project's logs
   retention: { lines_max_age_s: number; lines_max_bytes: number; messages_max_age_s: number; blobs_max_bytes: number }; // 0 = none
 };
@@ -588,6 +590,7 @@ type Chat = {
   project?: string;                    // channels only
   project_title?: string;
   name: string; title?: string; topic?: string;
+  channel_kind?: "chat" | "gallery";   // channels only (PLAN 6.3)
   peer?: Principal;                    // direct only
   patterns: string[];                  // channel bindings
   streams: StreamRef[];                // streams the patterns match now
@@ -599,6 +602,20 @@ type Chat = {
   last_activity?: string;
   preview?: { seq: number; sender?: string; text: string; event: boolean };
   // preview.text of a message with images and no text is "[1 image]" or "[N images]"
+  sections?: GallerySection[];         // a gallery's, newest first; in list_channels only
+};
+type GallerySection = { name: string; items: number; last_seq: number; href: string };  // name "" = Unsorted
+type GalleryItem = {
+  seq: number; chat: string;           // "chan:lab/screens"
+  title: string;                       // first line of the text, at most 140 characters
+  section?: string; image: ImageAttachment;
+  href: string;                        // "/g/lab/screens/48433"
+};
+type GalleryPage = {                   // GET /api/galleries/{project/name}?section=&before_seq=&limit= (60 at most)
+  chat: string; section?: string;      // the filter, when applied
+  items: GalleryItem[];                // newest first
+  sections: GallerySection[];          // every section, newest first
+  has_more: boolean; next_before_seq?: number;
 };
 type StreamRef = { id: string; status: StreamState };
 type StreamState = "connected" | "idle" | "down";
@@ -624,11 +641,11 @@ type Counts = {
   chats: { id: string; unread: number; open_questions: number }[];  // only chats with a change or non-zero
 };
 
-type ChannelCreate = { name: string; project?: string; title?: string; topic?: string; patterns?: string[]; surface?: Chat["surface"] };
+type ChannelCreate = { name: string; project?: string; title?: string; topic?: string; patterns?: string[]; surface?: Chat["surface"]; kind?: "chat" | "gallery" };
 type ChannelUpdate = {
   rename?: string; title?: string; topic?: string;
   add_patterns?: string[]; remove_patterns?: string[];
-  surface?: Chat["surface"]; archived?: boolean;
+  surface?: Chat["surface"]; archived?: boolean; kind?: "chat" | "gallery";
 };
 
 type Token = { id: number; label: string; principal: string; kind: PrincipalKind; scopes: Scope[]; created_at: string; last_used?: string };
@@ -656,6 +673,7 @@ Multipart form fields:
 | `logs` | JSON array of `{stream \| channel, from_seq, to_seq?, grep?, min_severity?, title?}`, at most 5 |
 | `files[]` | images, 10 files of 20 MiB at most |
 | `staged` | a share id from `/share`; its files are attached |
+| `section` | a gallery item's section (PLAN 6.3); refused unless the chat is a gallery. A message to a gallery needs an image |
 | `back` | a same-origin path to return to with `?error=` (only its `share` parameter is kept), for forms not on the chat page (`/drop`, home) |
 | `next` | a same-origin path to go to once sent, instead of the chat (home's question cards) |
 
@@ -733,6 +751,11 @@ Every connection also receives `counts` and `stream_status`.
   content is the same sentence as `error.message` in section 3.2.
   Structured content is `{code, message, retry_after_s?}`, with the codes
   of section 3.2.
+- **Galleries** (PLAN 6.3). `send` takes `section` (gallery channels
+  only) and refuses a message to a gallery without an image
+  (`bad_request`). `create_channel` and `update_channel` take `kind`
+  (`chat` or `gallery`). `list_channels` gives `channel_kind` and, for a
+  gallery, `sections`; `list_projects` gives `galleries`.
 - **`cafard mcp` adds `image_paths` to `send`** (a list of local file
   paths, in its `tools/list` and its calls only). It reads each file,
   sniffs a png, jpeg, webp or gif, and forwards `images: [{data, mime}]`
@@ -757,6 +780,8 @@ Every connection also receives `counts` and `stream_status`.
 | `home` | `pages/home.html` | `HomePage` | D |
 | `chat` | `pages/chat.html` (channel and direct) | `ChatPage` | D |
 | `drop` | `pages/drop.html` | `DropPage` | D |
+| `gallery` | `pages/gallery.html` (`/g/{project}/{gallery}`) | `GalleryPage` | galleries |
+| `item` | `pages/item.html` (`/g/{project}/{gallery}/{seq}`) | none: plain links | galleries |
 | `live` | `pages/live.html` | `LivePage` | C (LogView in M3), page in M5 |
 | `streams` | `pages/streams.html` | `StreamsPage` | C |
 | `agents` | `pages/agents.html` | `AgentsPage` | C |
@@ -792,6 +817,7 @@ Each partial below is rendered twice:
 | `tpl-upload-status` | `partials/upload_status.html` | `label`, `progress`, `retry` | `data-state`, `value` on progress | all with a composer |
 | `tpl-toast` | `partials/toast.html` | `text`, `action` | `data-tone` | all |
 | `tpl-stream-card` | `partials/stream_card.html` | `name`, `status`, `transport`, `rate`, `last`, `preview`, `dropped`, `claim`, `line-state`, `open` | `data-stream`, `data-status`, `href` on `open` | streams |
+| `tpl-gallery-item` | `partials/gallery_item.html` | `img`, `title` | `href` (`/g/...`), `data-seq`, `data-full` (only `/blob/...`); `src` (only `/blob/...`), `alt`, `width`, `height` on `img` | gallery |
 | `tpl-needs-you-question` | `partials/needs_you.html` (`partials/needs_you_question`) | as `tpl-question`, plus `chat` (link to the question in its chat) | as `tpl-question`, plus `href` on `chat` (same-origin) | home |
 
 The chat list groups its channel rows in one `<section class="project-chats"

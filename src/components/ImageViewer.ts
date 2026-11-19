@@ -4,6 +4,8 @@ import { Component } from '@/components/Component.ts';
 export interface ViewerImage {
   readonly src: string;
   readonly alt: string;
+  /** A gallery item's title, shown under the image. */
+  readonly caption?: string;
 }
 
 /** Shows a dialog, where the browser has showModal. */
@@ -68,6 +70,11 @@ export class ImageViewer extends Component<HTMLDialogElement> {
     if (el !== null && img.src.startsWith('/blob/')) {
       el.src = img.src;
       el.alt = img.alt;
+    }
+    const caption = Dom.find('[data-slot="caption"]', this.root);
+    if (caption !== null) {
+      caption.textContent = img.caption ?? '';
+      caption.hidden = (img.caption ?? '') === '';
     }
     const open = Dom.find<HTMLAnchorElement>('[data-slot="open"]', this.root);
     if (open !== null && img.src.startsWith('/blob/')) open.href = img.src;

@@ -857,6 +857,52 @@ channel can carry the logs it is about.
 - **Names.** Lowercase slug, 1 to 40 characters, `[a-z0-9-]`. `dm` and
   `general` are reserved names (`general` exists already).
 
+### 6.3 Gallery channels (screenshots by section)
+
+Agents that test a UI produce screenshots in batches; a conversation buries
+them. A channel therefore has a **kind**:
+
+- `chat` (the default): a conversation, as above.
+- `gallery`: the same messages, shown as a grid. Every message is one
+  **item**: an image (the first of the message) and a **title** (the first
+  line of the text, at most 140 characters, possibly empty). A message to a
+  gallery without an image is refused with an error that says why and
+  points at a chat channel. Markers (a kind change, a binding change) stay
+  in the gallery's conversation and are not items.
+
+The kind is set at creation (`create_channel(kind=)`, the project page's
+"New channel" form, `POST /api/channels`) and can be changed afterwards
+(`update_channel(kind=)`, "Make it a gallery" / "Make it a chat" on the
+project page; same rights as a binding change, and a marker records it).
+`#general` stays a chat. Changing the kind changes only how the messages
+are shown and the one rule above; nothing is rewritten.
+
+- **Sections.** `send(section=)` groups a batch ("login flow v2"). It is
+  stored in the message's `meta.section`, trimmed, at most 80 characters,
+  without control characters or `[`, `]`, `|`. A section on a message to a
+  chat channel or a direct message is refused. Items without a section are
+  "Unsorted".
+- **The page** `/g/{project}/{gallery}`: section chips (All, then each
+  section with its count, the one with the newest item first), and the
+  items newest first, grouped under section headings in the same order.
+  `?section=NAME` shows one section (`?section=` the unsorted items).
+  Paging is by seq (`?before_seq=`, 60 items a page). Each tile is a link
+  to the item's own page `/g/{project}/{gallery}/{seq}`: the image (agent
+  variant), its title and section, and newer/older within the section, so
+  the gallery works without the bundle. With the bundle a tap opens the
+  image viewer on the tiles of that section (previous and next stay in
+  it), and the newest page follows the channel's feed: a new item goes
+  first in its section, which moves to the top. The chat list's row of a
+  gallery leads to the grid; the grid links to the conversation and the
+  conversation's header back to the grid.
+- **Agents** see the kind in `list_channels` (with the sections, newest
+  first, and their counts) and `list_projects` (the galleries and their
+  section names), and the server instructions ask them to post
+  screenshots to the project's gallery, one image per message with a
+  short title, a batch under one section.
+- **API.** `GET /api/galleries/{project/name}?section=&before_seq=&limit=`
+  returns a `GalleryPage` (CONTRACTS.md section 3).
+
 ### Questions to the human
 
 `ask_human(question, choices?, channel?, timeout_s)` works like this:
@@ -1015,10 +1061,10 @@ Agents pay for every token, so:
 |---|---|---|
 | `whoami` | | principal name, kind, scopes |
 | `list_principals` | `kind?` | name, kind, last_seen (who can be messaged) |
-| `send` | `text`, `to?` (principal = direct message, `@humans`, or none = broadcast; section 6), `channel?` (`general`, ignored for a direct message), `reply_to?`, `images?` (base64 + mime, at most 6; through `cafard mcp` also `image_paths?`, local files, section 7 Transports), `logs?` (at most 5, section 6.2: `{stream\|channel, from_seq, to_seq?, grep?, min_severity?, title?}`) | `seq`, and per log attachment the resolved line count |
-| `list_channels` | `include_archived?` (false) | name, title, topic, bound patterns and the streams they currently match (with status), followed or not, unread count, last activity |
-| `create_channel` | `name`, `title?`, `topic?`, `streams?` (patterns), `surface?` (`markers`) | the channel; the caller follows it |
-| `update_channel` | `name`, `rename?`, `title?`, `topic?`, `add_streams?`, `remove_streams?`, `surface?`, `archived?` | the channel after the change; writes a marker. `rename` is for the creator or an admin, runtime channels only |
+| `send` | `text`, `to?` (principal = direct message, `@humans`, or none = broadcast; section 6), `channel?` (`general`, ignored for a direct message), `reply_to?`, `images?` (base64 + mime, at most 6; through `cafard mcp` also `image_paths?`, local files, section 7 Transports), `logs?` (at most 5, section 6.2: `{stream\|channel, from_seq, to_seq?, grep?, min_severity?, title?}`), `section?` (gallery channels only, section 6.3) | `seq`, and per log attachment the resolved line count |
+| `list_channels` | `include_archived?` (false) | name, kind (`chat` or `gallery`, with a gallery's sections and their counts), title, topic, bound patterns and the streams they currently match (with status), followed or not, unread count, last activity |
+| `create_channel` | `name`, `title?`, `topic?`, `streams?` (patterns), `surface?` (`markers`), `kind?` (`chat`) | the channel; the caller follows it |
+| `update_channel` | `name`, `rename?`, `title?`, `topic?`, `add_streams?`, `remove_streams?`, `surface?`, `archived?`, `kind?` | the channel after the change; writes a marker. `rename` is for the creator or an admin, runtime channels only |
 | `delete_channel` | `name` | done. Creator or admin, runtime channels only; the channel's messages are deleted with it |
 | `follow` / `unfollow` | `channel` | the follow state |
 | `channel_timeline` | `channel`, `since_seq?`, `limit?` | messages and event rows as the chat shows them (section 6.1), with the output rules, `next_seq` |
@@ -1080,8 +1126,11 @@ Set the MCP `instructions` string to a short guide, roughly:
 > you need a physical action. Claim a device before driving it and release
 > it after. To share a screenshot, attach it to send: through the cafard mcp
 > stdio proxy pass its file path in image_paths; over HTTP pass base64
-> images, or run cafard send --image FILE TEXT in a shell. Do not send
-> acknowledgements or thanks to other agents.
+> images, or run cafard send --image FILE TEXT in a shell. Post screenshots
+> to a gallery channel of your project when one exists (list_projects and
+> list_channels show them): one image per message, its text a short title,
+> and a batch grouped under one section name (send section=...). Do not
+> send acknowledgements or thanks to other agents.
 
 `cafard mcp` appends a sentence of its own when it offers `image_paths`.
 
@@ -1141,6 +1190,7 @@ two.
 | Path | Purpose |
 |---|---|
 | `/`, `/c/{channel}`, `/dm/{principal}` | **Chats**. The main screen: the chat list, the conversation (human drops, agent messages, open questions, event rows), the composer, and the logs of the channel's bound streams (section 9.6.3) |
+| `/g/{project}/{gallery}`, `/g/{project}/{gallery}/{seq}` | **Galleries**: a gallery channel's screenshots by section, and one item's stable page (section 6.3) |
 | `/live` | Live log view: stream picker, severity filter, regexp filter, follow/pause, ANSI colours, tap a line to copy its seq, attach this line, attach from here on, or select a range |
 | `/streams` | Sources with status (`connected`, `idle`, `down`), rate, drops, claim holder |
 | `/agents` | Admin only (admin interface). Principals, last seen, tokens (create or revoke; a token is shown once), the admin password |

@@ -8,7 +8,11 @@
   ],
   "channels": [
     "chan:lab/dut1",
-    "chan:lab/general"
+    "chan:lab/general",
+    "chan:lab/screens"
+  ],
+  "galleries": [
+    "chan:lab/screens"
   ],
   "sinks": [
     "bench-pi",

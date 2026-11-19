@@ -28,6 +28,7 @@ func (s *Site) mountProjects(mux *http.ServeMux) {
 	mux.HandleFunc("GET /projects/{project}", s.Auth(auth.ScopeAdmin, s.project))
 	mux.Handle("POST /projects/{project}/retention", s.Write(auth.ScopeAdmin, s.saveRetention))
 	mux.Handle("POST /projects/{project}/channels", s.Write(auth.ScopeAdmin, s.createProjectChannel))
+	mux.Handle("POST /projects/{project}/channels/{channel}/kind", s.Write(auth.ScopeAdmin, s.setChannelKind))
 	mux.Handle("POST /projects/{project}/sinks", s.Write(auth.ScopeAdmin, s.saveSink))
 	mux.Handle("POST /projects/{project}/sinks/{sink}", s.Write(auth.ScopeAdmin, s.saveSink))
 	mux.Handle("POST /projects/{project}/sinks/{sink}/delete", s.Write(auth.ScopeAdmin, s.deleteSink))
@@ -115,6 +116,10 @@ func (s *Site) createProject(w http.ResponseWriter, r *http.Request, p auth.Prin
 
 type projectChannelView struct {
 	Name, Href, Title, Topic, Bindings string
+	Kind                               dto.ChannelKind
+	Gallery                            bool
+	// The form that turns a chat into a gallery or back; #general has none.
+	KindAction, OtherKind, OtherKindLabel string
 }
 
 type sinkView struct {
@@ -181,6 +186,8 @@ func (s *Site) project(w http.ResponseWriter, r *http.Request, p auth.Principal)
 		notice = "Grant removed."
 	case "channel":
 		notice = "Channel made."
+	case "kind":
+		notice = "Channel kind changed. Its messages stay; only how they are shown changes."
 	}
 	s.renderProject(w, r, p, projectPage{status: http.StatusOK, notice: notice})
 }
@@ -223,8 +230,19 @@ func (s *Site) projectData(ctx context.Context, p auth.Principal, pr projects.Pr
 			}
 			local := strings.TrimPrefix(c.Name, pr.Name+"/")
 			data.ChannelNames = append(data.ChannelNames, local)
-			data.Channels = append(data.Channels, projectChannelView{Name: local, Href: view.ChatHref(c.Stream()), Title: c.Title,
-				Topic: c.Topic, Bindings: strings.Join(c.Patterns, ", ")})
+			cv := projectChannelView{Name: local, Href: view.ChatHref(c.Stream()), Title: c.Title,
+				Topic: c.Topic, Bindings: strings.Join(c.Patterns, ", "), Kind: c.Kind, Gallery: c.Gallery()}
+			if cv.Gallery {
+				cv.Href = messaging.GalleryHref(c.Name, nil)
+			}
+			if local != messaging.General {
+				cv.KindAction = projectHref(pr.Name) + "/channels/" + url.PathEscape(local) + "/kind"
+				cv.OtherKind, cv.OtherKindLabel = string(dto.ChannelGallery), "Make it a gallery"
+				if cv.Gallery {
+					cv.OtherKind, cv.OtherKindLabel = string(dto.ChannelChat), "Make it a chat"
+				}
+			}
+			data.Channels = append(data.Channels, cv)
 		}
 	}
 	sinks, err := s.d.Projects.Sinks(ctx, pr.Name)
@@ -426,12 +444,33 @@ func (s *Site) createProjectChannel(w http.ResponseWriter, r *http.Request, p au
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	req := dto.ChannelCreate{Name: strings.TrimSpace(r.PostFormValue("name")), Project: r.PathValue("project"),
-		Title: r.PostFormValue("title"), Topic: r.PostFormValue("topic"), Patterns: strings.Fields(r.PostFormValue("patterns"))}
+		Title: r.PostFormValue("title"), Topic: r.PostFormValue("topic"), Patterns: strings.Fields(r.PostFormValue("patterns")),
+		Kind: dto.ChannelKind(r.PostFormValue("kind"))}
 	if _, err := s.chats.svc.CreateChannel(r.Context(), p, req); err != nil {
 		s.projectFail(w, r, p, err)
 		return
 	}
 	http.Redirect(w, r, projectHref(req.Project)+"?done=channel", http.StatusSeeOther)
+}
+
+// setChannelKind turns a channel of the project into a gallery or a chat.
+func (s *Site) setChannelKind(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	if s.chats == nil {
+		http.NotFound(w, r)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	project := r.PathValue("project")
+	kind := dto.ChannelKind(r.PostFormValue("kind"))
+	if kind == "" {
+		s.projectFail(w, r, p, dto.Errorf(dto.CodeBadRequest, "Choose chat or gallery."))
+		return
+	}
+	if _, err := s.chats.svc.UpdateChannel(r.Context(), p, project+"/"+r.PathValue("channel"), dto.ChannelUpdate{Kind: kind}); err != nil {
+		s.projectFail(w, r, p, err)
+		return
+	}
+	http.Redirect(w, r, projectHref(project)+"?done=kind", http.StatusSeeOther)
 }
 
 // sinkFromForm reads the sink form: the name comes from the path when it

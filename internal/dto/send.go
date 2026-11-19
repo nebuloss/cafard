@@ -11,6 +11,8 @@ type SendRequest struct {
 	Logs    []LogRequest  `json:"logs,omitempty"`
 	Choice  string        `json:"choice,omitempty"`
 	Staged  string        `json:"staged,omitempty"`
+	// Section groups a gallery item with others (gallery channels only).
+	Section string `json:"section,omitempty"`
 }
 
 // ImageUpload is an inline image of a SendRequest.

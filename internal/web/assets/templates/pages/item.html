@@ -1,0 +1,14 @@
+{{/* One gallery item's own page, its stable link: the image, its title
+     and section, and the items around it in the section. */}}
+<section class="page-wide gallery-item-page">
+  <p class="body-small"><a href="{{.Data.GalleryHref}}">#{{.Data.Gallery}}</a> / <a href="{{.Data.SectionHref}}">{{.Data.SectionLabel}}</a></p>
+  <figure class="gallery-figure">
+    {{if .Data.Image}}<a href="{{.Data.Item.Full}}"><img src="{{.Data.Image}}" alt="{{.Data.Item.Alt}}"></a>{{else}}<a class="btn tonal" href="{{.Data.Item.Full}}">Download the image</a>{{end}}
+    <figcaption>{{.Data.Item.Title}}</figcaption>
+  </figure>
+  <nav class="gallery-nav" aria-label="In this section">
+    {{if .Data.Newer}}<a class="btn text" href="{{.Data.Newer}}" rel="prev"><svg aria-hidden="true"><use href="/static/icons.svg#chevron_left"></use></svg>Newer</a>{{end}}
+    <a class="btn text" href="{{.Data.Item.Full}}"><svg aria-hidden="true"><use href="/static/icons.svg#open_in_new"></use></svg>Original</a>
+    {{if .Data.Older}}<a class="btn text" href="{{.Data.Older}}" rel="next">Older<svg aria-hidden="true"><use href="/static/icons.svg#chevron_right"></use></svg></a>{{end}}
+  </nav>
+</section>

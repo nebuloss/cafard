@@ -116,6 +116,8 @@ func (f *form) set(name, value string) error {
 		f.in.Choice = value
 	case "staged":
 		f.in.Staged = value
+	case "section":
+		f.in.Section = value
 	case "reply_to":
 		if value == "" {
 			return nil

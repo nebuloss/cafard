@@ -121,6 +121,7 @@
 <span class="stream-dot" data-status="connected" title="serial:lab/dut1: connected"></span>
 </span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: Power-cycle dut1?</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">2</span></span></span></a>
 <a class="chat-row" href="/c/lab/general" data-chat="chan:lab/general"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#general</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+<a class="chat-row" href="/g/lab/shots" data-chat="chan:lab/shots"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#shots</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: after submit ...</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">3</span></span></span></a>
 </div>
     
     
@@ -150,6 +151,7 @@
     <a class="seg" href="/c/lab/dut1?view=logs" data-view="logs">Logs<span class="new-error-dot" data-slot="error-dot" hidden></span></a>
   </nav>
   
+  
   <button class="icon-btn only-scripted" type="button" data-action="settings" aria-label="Channel settings" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#settings"></use></svg></button>
   
   <div class="ch-streams" data-slot="streams">
@@ -164,7 +166,7 @@
   </div>
   <div class="pane-conv">
     
-    <div class="conversation timeline" data-component="ConversationView" role="log" aria-live="polite" aria-label="Messages" data-chat="chan:lab/dut1" data-next-seq="9" data-follow="true" data-filter="">
+    <div class="conversation timeline" data-component="ConversationView" role="log" aria-live="polite" aria-label="Messages" data-chat="chan:lab/dut1" data-next-seq="12" data-follow="true" data-filter="">
       <div class="event-row" data-seq="3" data-severity="6" data-kind="marker"><time class="event-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="event-stream" data-slot="stream">serial:lab/dut1</span><span class="event-text" data-slot="text">codex-build: flashed linux-6.18-rc3</span><a class="event-open" data-slot="open" href="/live?streams=serial%3Alab%2Fdut1&amp;to_seq=3">logs</a></div>
 <div class="event-row" data-seq="5" data-severity="6" data-kind="marker"><time class="event-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="event-stream" data-slot="stream">chan:lab/dut1</span><span class="event-text" data-slot="text">admin bound serial:lab/dut1</span><a class="event-open" data-slot="open">logs</a></div>
 <article class="message" id="m6" data-seq="6" data-sender-kind="agent">
@@ -222,7 +224,7 @@
   <button class="btn text" type="button" data-action="cancel">Cancel</button>
 </div>
 
-  <div class="logview dense" data-component="LogView" data-next-seq="9" data-follow="true" data-query="channel=lab%2Fdut1">
+  <div class="logview dense" data-component="LogView" data-next-seq="12" data-follow="true" data-query="channel=lab%2Fdut1">
     <div class="log-list mono" role="list" aria-label="Log lines" data-slot="list">
     
 <div class="line" role="listitem" data-seq="1" data-sev="6" data-tone="1"><time class="line-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40:00.000</time><span class="line-stream" data-slot="stream">serial:lab/dut1</span><abbr class="line-sev" data-slot="sev" title="INFO">I</abbr><span class="line-text" data-slot="text">U-Boot 2024.04 (Nov 16 2026)</span></div>
@@ -319,6 +321,7 @@
 
 <dialog class="image-viewer" data-component="ImageViewer" aria-label="Photo">
   <img data-slot="img" alt="">
+  <p class="viewer-caption" data-slot="caption" hidden></p>
   <button class="icon-btn viewer-close" type="button" data-action="close" aria-label="Close"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button>
   <button class="icon-btn viewer-prev" type="button" data-action="prev" aria-label="Previous photo"><svg aria-hidden="true"><use href="/static/icons.svg#chevron_left"></use></svg></button>
   <button class="icon-btn viewer-next" type="button" data-action="next" aria-label="Next photo"><svg aria-hidden="true"><use href="/static/icons.svg#chevron_right"></use></svg></button>

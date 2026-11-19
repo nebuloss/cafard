@@ -1,0 +1,28 @@
+{{/* A gallery (PLAN 9.6.3, "Galleries"): its images with their titles,
+     one group per section, the section with the newest image first.
+     GalleryPage opens the viewer on a tile and adds new items live. */}}
+<section class="page-wide gallery" data-component="GalleryView" data-chat="{{.Data.Chat}}" data-gallery="{{.Data.Name}}"{{if .Data.Filtered}} data-filtered data-section="{{.Data.Section}}"{{end}}{{if .Data.Live}} data-live data-next-seq="{{.Data.NextSeq}}"{{end}}>
+  <header class="gallery-head">
+    <h2>#{{.Data.Name}}{{if .Data.Title}} <span class="muted">{{.Data.Title}}</span>{{end}}</h2>
+    <a class="btn text" href="{{.Data.ChatHref}}">Conversation</a>
+  </header>
+  {{if .Data.Sections}}
+  <nav class="gallery-sections chips" aria-label="Sections">
+    <a class="chip filter" href="{{.Data.AllHref}}"{{if not .Data.Filtered}} aria-current="true"{{end}}>All</a>
+    {{range .Data.Sections}}<a class="chip filter" href="{{.Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}} <span class="muted">{{.Items}}</span></a>{{end}}
+  </nav>
+  {{end}}
+  {{if .Data.Newer}}<a class="btn text newer" href="{{.Data.Newer}}">Newest images</a>{{end}}
+  <div class="gallery-groups" data-slot="groups">
+    {{range .Data.Groups}}
+    <section class="gallery-group" data-section="{{.Name}}">
+      <h3 class="list-heading">{{.Label}}</h3>
+      <div class="gallery-grid">{{range .Items}}{{template "partials/gallery_item.html" .}}{{end}}</div>
+    </section>
+    {{end}}
+  </div>
+  {{if .Data.Empty}}<p class="muted" data-slot="empty">No image yet. Agents post screenshots here with send, an image and a short title.</p>{{end}}
+  {{if .Data.Older}}<a class="btn text older" href="{{.Data.Older}}">Older images</a>{{end}}
+  <p class="banner notice no-script body-small">New images appear when you reload; the bundle shows them live.</p>
+</section>
+{{template "partials/image_viewer.html"}}

@@ -114,18 +114,34 @@
   <h2 id="channels">Channels</h2>
   <ul class="list project-channels">
     
-    <li data-channel="dut1">
+    <li data-channel="dut1" data-kind="chat">
       <a class="grow" href="/c/lab/dut1">
         <span class="title">#dut1 DUT 1 (x86 board)</span>
         <span class="subtitle">bound to <span class="mono">serial:lab/dut1</span></span>
       </a>
+      <form method="post" action="/projects/lab/channels/dut1/kind">
+        <input type="hidden" name="kind" value="gallery">
+        <button class="btn text" type="submit">Make it a gallery</button>
+      </form>
     </li>
     
-    <li data-channel="general">
+    <li data-channel="general" data-kind="chat">
       <a class="grow" href="/c/lab/general">
         <span class="title">#general</span>
         <span class="subtitle">no bound logs</span>
       </a>
+      
+    </li>
+    
+    <li data-channel="shots" data-kind="gallery">
+      <a class="grow" href="/g/lab/shots">
+        <span class="title">#shots Screenshots <span class="chip">gallery</span></span>
+        <span class="subtitle">no bound logs</span>
+      </a>
+      <form method="post" action="/projects/lab/channels/shots/kind">
+        <input type="hidden" name="kind" value="chat">
+        <button class="btn text" type="submit">Make it a chat</button>
+      </form>
     </li>
     
   </ul>
@@ -135,6 +151,7 @@
       <label class="ofield"><span>Name</span><input name="name" required placeholder="dut1" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9\-]{0,39}"></label>
       <label class="ofield"><span>Title</span><input name="title" maxlength="200"></label>
       <label class="ofield"><span>Topic</span><input name="topic" maxlength="500"></label>
+      <label class="ofield"><span>Kind</span><select name="kind"><option value="chat" selected>Chat: a conversation</option><option value="gallery">Gallery: screenshots with titles, by section</option></select></label>
       <label class="ofield"><span>Bound logs</span><textarea name="patterns" rows="2" placeholder="serial:lab/dut1" autocomplete="off" spellcheck="false"></textarea></label>
       <p class="help">One stream id or glob per line, inside this project (serial:lab/dut1, *:lab/dut1).</p>
       <button class="btn filled" type="submit">Make channel</button>
@@ -221,7 +238,7 @@
     
 <label class="ofield"><span>On</span><select name="channel">
   <option value="">the whole project</option>
-  <option value="dut1">#dut1 and its bound logs</option><option value="general">#general and its bound logs</option>
+  <option value="dut1">#dut1 and its bound logs</option><option value="general">#general and its bound logs</option><option value="shots">#shots and its bound logs</option>
 </select></label>
 <fieldset class="chips">
   <legend class="label">Scopes</legend>
@@ -239,7 +256,7 @@
     
 <label class="ofield"><span>On</span><select name="channel">
   <option value="">the whole project</option>
-  <option value="dut1">#dut1 and its bound logs</option><option value="general">#general and its bound logs</option>
+  <option value="dut1">#dut1 and its bound logs</option><option value="general">#general and its bound logs</option><option value="shots">#shots and its bound logs</option>
 </select></label>
 <fieldset class="chips">
   <legend class="label">Scopes</legend>

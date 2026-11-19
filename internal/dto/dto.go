@@ -92,6 +92,8 @@ type Entry struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 	SeenBy      []string     `json:"seen_by,omitempty"`
 	Question    *Question    `json:"question,omitempty"`
+	// Section is the section of a gallery item.
+	Section string `json:"section,omitempty"`
 
 	// Event marks a line or marker of a bound stream shown as a timeline row.
 	Event bool `json:"event,omitempty"`
@@ -152,6 +154,15 @@ const (
 	ChatDirect  ChatKind = "direct"
 )
 
+// ChannelKind is how a channel presents its messages: a conversation, or
+// a gallery of images with titles.
+type ChannelKind string
+
+const (
+	ChannelChat    ChannelKind = "chat"
+	ChannelGallery ChannelKind = "gallery"
+)
+
 // Surface is which entries of bound streams a channel shows as event rows.
 type Surface string
 
@@ -175,7 +186,8 @@ type Chat struct {
 	Kind          ChatKind     `json:"kind"`
 	Project       string       `json:"project,omitempty"` // channels only
 	ProjectTitle  string       `json:"project_title,omitempty"`
-	Name          string       `json:"name"` // inside its project for a channel
+	Name          string       `json:"name"`                   // inside its project for a channel
+	ChannelKind   ChannelKind  `json:"channel_kind,omitempty"` // channels only
 	Title         string       `json:"title,omitempty"`
 	Topic         string       `json:"topic,omitempty"`
 	Peer          *Principal   `json:"peer,omitempty"`
@@ -193,6 +205,9 @@ type Chat struct {
 	OpenQuestions int          `json:"open_questions"`
 	LastActivity  *Time        `json:"last_activity,omitempty"`
 	Preview       *ChatPreview `json:"preview,omitempty"`
+	// Sections of a gallery, newest first; only in list_channels, where an
+	// agent picks one.
+	Sections []GallerySection `json:"sections,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -319,24 +334,26 @@ type ChatCount struct {
 
 // ChannelCreate is the body that creates a channel.
 type ChannelCreate struct {
-	Name     string   `json:"name"`              // "dut1", or "lab/dut1"
-	Project  string   `json:"project,omitempty"` // needed when the creator may make channels in several projects
-	Title    string   `json:"title,omitempty"`
-	Topic    string   `json:"topic,omitempty"`
-	Patterns []string `json:"patterns,omitempty"`
-	Surface  Surface  `json:"surface,omitempty"`
+	Name     string      `json:"name"`              // "dut1", or "lab/dut1"
+	Project  string      `json:"project,omitempty"` // needed when the creator may make channels in several projects
+	Title    string      `json:"title,omitempty"`
+	Topic    string      `json:"topic,omitempty"`
+	Patterns []string    `json:"patterns,omitempty"`
+	Surface  Surface     `json:"surface,omitempty"`
+	Kind     ChannelKind `json:"kind,omitempty"` // default chat
 }
 
 // ChannelUpdate is the body that changes a channel. Title, Topic and
 // Archived are pointers so that "clear" and "false" differ from "unchanged".
 type ChannelUpdate struct {
-	Rename         string   `json:"rename,omitempty"`
-	Title          *string  `json:"title,omitempty"`
-	Topic          *string  `json:"topic,omitempty"`
-	AddPatterns    []string `json:"add_patterns,omitempty"`
-	RemovePatterns []string `json:"remove_patterns,omitempty"`
-	Surface        Surface  `json:"surface,omitempty"`
-	Archived       *bool    `json:"archived,omitempty"`
+	Rename         string      `json:"rename,omitempty"`
+	Title          *string     `json:"title,omitempty"`
+	Topic          *string     `json:"topic,omitempty"`
+	AddPatterns    []string    `json:"add_patterns,omitempty"`
+	RemovePatterns []string    `json:"remove_patterns,omitempty"`
+	Surface        Surface     `json:"surface,omitempty"`
+	Archived       *bool       `json:"archived,omitempty"`
+	Kind           ChannelKind `json:"kind,omitempty"`
 }
 
 // Token is an API token, without its secret.
@@ -447,9 +464,10 @@ type Project struct {
 	Name      string           `json:"name"`
 	Title     string           `json:"title,omitempty"`
 	CreatedAt Time             `json:"created_at"`
-	Scopes    []Scope          `json:"scopes"`   // the viewer's project-wide scopes
-	Channels  []string         `json:"channels"` // chat ids the viewer can read
-	Sinks     []string         `json:"sinks"`    // when the viewer may read the project's logs
+	Scopes    []Scope          `json:"scopes"`              // the viewer's project-wide scopes
+	Channels  []string         `json:"channels"`            // chat ids the viewer can read
+	Galleries []string         `json:"galleries,omitempty"` // those of Channels that are galleries
+	Sinks     []string         `json:"sinks"`               // when the viewer may read the project's logs
 	Retention ProjectRetention `json:"retention"`
 }
 

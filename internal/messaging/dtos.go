@@ -16,6 +16,7 @@ import (
 type meta struct {
 	Choices *[]string `json:"choices,omitempty"`
 	Choice  string    `json:"choice,omitempty"`
+	Section string    `json:"section,omitempty"` // a gallery item's
 }
 
 func readMeta(e store.Entry) meta {
@@ -93,7 +94,9 @@ func (s *Service) EntryDTO(ctx context.Context, viewer auth.Principal, e store.E
 		return dto.Entry{}, err
 	}
 	out.SeenBy = seen
-	if m := readMeta(e); m.Choices != nil {
+	m := readMeta(e)
+	out.Section = m.Section
+	if m.Choices != nil {
 		q := &dto.Question{Choices: *m.Choices, Open: true}
 		if q.Answer, err = s.answer(ctx, e.Seq); err != nil {
 			return dto.Entry{}, err

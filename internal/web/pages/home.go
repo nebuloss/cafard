@@ -40,6 +40,7 @@ func (s *Site) addChatTwins() {
 	s.AddTwin("tpl-attachment-chip", "partials/attachment_chip.html", AttachmentChipView{})
 	s.AddTwin("tpl-upload-status", "partials/upload_status.html", UploadStatusView{})
 	s.AddTwin("tpl-needs-you-question", "partials/question.html", QuestionView{InList: true})
+	s.AddTwin("tpl-gallery-item", "partials/gallery_item.html", GalleryItemView{})
 }
 
 // Twins of each chat page.
@@ -56,6 +57,7 @@ func (s *Site) mountHome(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", s.Auth(auth.ScopeRead, s.home))
 	if s.chats != nil {
 		s.mountChats(mux)
+		s.mountGalleries(mux)
 	}
 }
 

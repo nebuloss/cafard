@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -81,6 +82,7 @@ var twinSlots = map[string][]string{
 	"tpl-attachment-chip":    {"label", "remove"},
 	"tpl-upload-status":      {"label", "progress", "retry"},
 	"tpl-needs-you-question": {"sender", "time", "body", "choices", "reply-form", "answer", "chat"},
+	"tpl-gallery-item":       {"img", "title"},
 }
 
 var pageTwins = map[string][]string{
@@ -95,13 +97,16 @@ var pageTwins = map[string][]string{
 		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-toast"},
 	"chat": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
 		"tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
-	"drop": {"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
+	"drop":    {"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
+	"gallery": {"tpl-gallery-item", "tpl-toast"},
+	"item":    {"tpl-toast"},
 }
 
 var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
 	"projects": "/projects", "project": "/projects/lab",
 	"home": "/", "chat": "/c/lab/dut1", "drop": "/drop",
+	"gallery": "/g/lab/shots", "item": "", // the item's seq is known once seeded
 }
 
 var templateRE = regexp.MustCompile(`(?s)<template id="(tpl-[a-z-]+)">(.*?)</template>`)
@@ -121,6 +126,7 @@ var scriptTag = regexp.MustCompile(`<script type="module" src="/app/main.js"></s
 func TestEveryPageCarriesItsTwins(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	seed(e)
+	seedGallery(e)
 	cookie := e.Admin()
 	// A token and a browser of the admin's, for the Agents and Pair fixtures.
 	e.Principal("admin", auth.KindHuman, auth.ScopeIngest, auth.ScopeRead, auth.ScopeMessage)
@@ -135,7 +141,11 @@ func TestEveryPageCarriesItsTwins(t *testing.T) {
 		if page == "signin" {
 			c = nil
 		}
-		rec := e.Do("GET", pagePaths[page], c, nil)
+		path := pagePaths[page]
+		if page == "item" {
+			path = fmt.Sprintf("/g/lab/shots/%d", galleryShots.items[1])
+		}
+		rec := e.Do("GET", path, c, nil)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s: status %d\n%s", page, rec.Code, rec.Body)
 		}
@@ -159,7 +169,7 @@ func TestEveryPageCarriesItsTwins(t *testing.T) {
 		// The bundle's tag depends on whether main.js was built; the
 		// fixture must not.
 		fixture := scriptTag.ReplaceAllString(body, "")
-		path := filepath.Join("testdata", "pages", page+".html")
+		path = filepath.Join("testdata", "pages", page+".html")
 		if *update {
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 				t.Fatal(err)
