@@ -48,11 +48,12 @@ func NormalizeSection(s string) (string, error) {
 	return s, nil
 }
 
-// GalleryHref is the page of a gallery ("lab/shots"), on a section when
-// section is not nil ("" is the unsorted items).
+// GalleryHref is the page of a gallery ("lab/shots") in its project's
+// view, on a section when section is not nil ("" is the unsorted items).
+// The old /g/<project>/<gallery> addresses redirect there.
 func GalleryHref(gallery string, section *string) string {
 	project, local, _ := strings.Cut(gallery, "/")
-	h := "/g/" + url.PathEscape(project) + "/" + url.PathEscape(local)
+	h := "/projects/" + url.PathEscape(project) + "/g/" + url.PathEscape(local)
 	if section != nil {
 		h += "?" + url.Values{"section": {*section}}.Encode()
 	}

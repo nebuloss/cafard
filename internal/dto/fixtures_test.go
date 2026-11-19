@@ -205,8 +205,8 @@ func galleryChat() Chat {
 		LastActivity: tsp("2026-11-16T09:46:10.002300400Z"),
 		Preview:      &ChatPreview{Seq: 48433, Sender: "claude-laptop", Text: "login page after the fix", Event: false},
 		Sections: []GallerySection{
-			{Name: "login flow v2", Items: 2, LastSeq: 48433, Href: "/g/lab/screens?section=login+flow+v2"},
-			{Name: "", Items: 1, LastSeq: 48401, Href: "/g/lab/screens?section="},
+			{Name: "login flow v2", Items: 2, LastSeq: 48433, Href: "/projects/lab/g/screens?section=login+flow+v2"},
+			{Name: "", Items: 1, LastSeq: 48401, Href: "/projects/lab/g/screens?section="},
 		},
 	}
 }
@@ -242,7 +242,7 @@ func screenshot() ImageAttachment {
 
 func galleryItem() GalleryItem {
 	return GalleryItem{Seq: 48433, Chat: "chan:lab/screens", Title: "login page after the fix", Section: "login flow v2", Image: screenshot(),
-		Href: "/g/lab/screens/48433", Ref: "[[lab/screens#48433]]"}
+		Href: "/projects/lab/g/screens/48433", Ref: "[[lab/screens#48433]]"}
 }
 
 // refsEntry is a chat message pointing at an item, a section, an item
@@ -260,8 +260,8 @@ func refsEntry() Entry {
 		Sender:   &Sender{Name: "claude-laptop", Kind: KindAgent},
 		Segments: []Segment{{T: SegText, V: "The login page before and after the fix:"}},
 		GalleryRefs: []GalleryRef{
-			{State: RefOK, Gallery: "lab/screens", Seq: 48433, Section: "login flow v2", Href: "/g/lab/screens/48433", Item: &it},
-			{State: RefOK, Gallery: "lab/screens", Section: "login flow v2", Href: "/g/lab/screens?section=login+flow+v2", Items: []GalleryItem{it}, Count: 2},
+			{State: RefOK, Gallery: "lab/screens", Seq: 48433, Section: "login flow v2", Href: "/projects/lab/g/screens/48433", Item: &it},
+			{State: RefOK, Gallery: "lab/screens", Section: "login flow v2", Href: "/projects/lab/g/screens?section=login+flow+v2", Items: []GalleryItem{it}, Count: 2},
 			{State: RefUnavailable},
 			{State: RefGone, Gallery: "lab/screens", Seq: 48001},
 		},
@@ -329,7 +329,7 @@ func fixtures() []fixture {
 			Section: ptr("login flow v2"),
 			Items: []GalleryItem{
 				galleryItem(),
-				{Seq: 48431, Chat: "chan:lab/screens", Title: "", Section: "login flow v2", Image: imageAttachment(), Href: "/g/lab/screens/48431", Ref: "[[lab/screens#48431]]"},
+				{Seq: 48431, Chat: "chan:lab/screens", Title: "", Section: "login flow v2", Image: imageAttachment(), Href: "/projects/lab/g/screens/48431", Ref: "[[lab/screens#48431]]"},
 			},
 			Sections:      galleryChat().Sections,
 			HasMore:       true,

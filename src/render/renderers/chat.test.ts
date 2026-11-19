@@ -81,7 +81,7 @@ describe('chat renderers on the pages the Go template test wrote', () => {
   it('builds chat rows like the list', () => {
     const r = chatRenderers(document, viewer, clock);
     const row = r.rows?.render(fixture('chat_channel') as Chat);
-    expect(row?.getAttribute('href')).toBe('/c/lab/dut1');
+    expect(row?.getAttribute('href')).toBe('/projects/lab/c/dut1');
     expect(row?.hasAttribute('data-pinned')).toBe(true);
     expect(row?.querySelector('[data-slot="name"]')?.textContent).toBe('#dut1');
     expect(row?.querySelector('[data-slot="unread"]')?.textContent).toBe('3');
@@ -111,7 +111,7 @@ describe('home renderers', () => {
     loadPage('home');
     const r = chatRenderers(document, viewer, clock, { back: '/', next: '/' });
     const card = r.needsYou?.render({ ...(fixture('entry_question') as Entry), question: { choices: ['yes'], open: true } });
-    expect(card?.querySelector('[data-slot="chat"]')?.getAttribute('href')).toBe('/c/lab/dut1#m48410');
+    expect(card?.querySelector('[data-slot="chat"]')?.getAttribute('href')).toBe('/projects/lab/c/dut1#m48410');
     expect(card?.querySelector('[data-slot="chat"]')?.textContent).toBe('in #lab/dut1');
     expect(card?.querySelector<HTMLInputElement>('input[name="next"]')?.value).toBe('/');
     expect(slots(card ?? null)).toEqual(slots(document.querySelector('.needs-you .question')));

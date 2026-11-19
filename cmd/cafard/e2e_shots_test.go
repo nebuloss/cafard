@@ -126,7 +126,7 @@ func TestCLISendPostsAScreenshotThePersonSees(t *testing.T) {
 	_, agent := s.agent("claude-laptop")
 	call(t, agent, "create_channel", map[string]any{"name": "dut1"})
 	for _, ch := range []string{"lab/dut1", "dut1"} {
-		if out, err := s.sendCLI(tok, "", "--channel", ch, "on dut1"); err != nil || !strings.Contains(out, "in #lab/dut1") || !strings.Contains(out, "/c/lab/dut1#m") {
+		if out, err := s.sendCLI(tok, "", "--channel", ch, "on dut1"); err != nil || !strings.Contains(out, "in #lab/dut1") || !strings.Contains(out, "/projects/lab/c/dut1#m") {
 			t.Errorf("--channel %s = %v %q", ch, err, out)
 		}
 	}

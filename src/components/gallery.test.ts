@@ -38,14 +38,14 @@ function titles(section: string): string[] {
 
 describe('gallery strings', () => {
   it('match the Go ones', () => {
-    expect(galleryHref('lab/shots')).toBe('/g/lab/shots');
-    expect(galleryHref('lab/shots', 'login flow')).toBe('/g/lab/shots?section=login+flow');
-    expect(galleryHref('lab/shots', '')).toBe('/g/lab/shots?section=');
-    expect(itemHref('lab/shots', 42)).toBe('/g/lab/shots/42');
+    expect(galleryHref('lab/shots')).toBe('/projects/lab/g/shots');
+    expect(galleryHref('lab/shots', 'login flow')).toBe('/projects/lab/g/shots?section=login+flow');
+    expect(galleryHref('lab/shots', '')).toBe('/projects/lab/g/shots?section=');
+    expect(itemHref('lab/shots', 42)).toBe('/projects/lab/g/shots/42');
     expect(itemTitle('  after submit\nthe rest ')).toBe('after submit ...');
     expect(itemTitle('é'.repeat(141))).toBe(`${'é'.repeat(140)}...`);
-    expect(chatPageHref({ id: 'chan:lab/shots', channel_kind: 'gallery' })).toBe('/g/lab/shots');
-    expect(chatPageHref({ id: 'chan:lab/dut1', channel_kind: 'chat' })).toBe('/c/lab/dut1');
+    expect(chatPageHref({ id: 'chan:lab/shots', channel_kind: 'gallery' })).toBe('/projects/lab/g/shots');
+    expect(chatPageHref({ id: 'chan:lab/dut1', channel_kind: 'chat' })).toBe('/projects/lab/c/dut1');
   });
 });
 
@@ -103,7 +103,7 @@ describe('the gallery page', () => {
     expect(groups()).toEqual(['', 'login flow']);
     expect(titles('')).toEqual(['splash v2', 'boot splash']);
     const tile = document.querySelector<HTMLAnchorElement>('a.gallery-item[data-seq="20"]');
-    expect(tile?.getAttribute('href')).toBe('/g/lab/shots/20');
+    expect(tile?.getAttribute('href')).toBe('/projects/lab/g/shots/20');
     expect(tile?.dataset['full']).toBe(`/blob/${'c'.repeat(64)}`);
     expect(tile?.querySelector('img')?.getAttribute('src')).toBe(`/blob/${'c'.repeat(64)}?v=thumb`);
 

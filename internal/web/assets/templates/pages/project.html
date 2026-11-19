@@ -50,7 +50,7 @@
           {{range .Tokens}}
           <tr data-token="{{.ID}}">
             <td>{{.Label}}</td><td class="mono">{{.Principal}}</td><td>{{.Created}}</td><td>{{.LastUsed}}</td>
-            <td><form method="post" action="/tokens/{{.ID}}/revoke" data-confirm="Revoke this token? Devices using it stop sending at once."><input type="hidden" name="next" value="{{$.Data.Base}}"><button class="btn text danger-text" type="submit">Revoke</button></form></td>
+            <td><form method="post" action="/tokens/{{.ID}}/revoke" data-confirm="Revoke this token? Devices using it stop sending at once."><input type="hidden" name="next" value="{{$.Data.Settings}}"><button class="btn text danger-text" type="submit">Revoke</button></form></td>
           </tr>
           {{end}}
           </tbody>

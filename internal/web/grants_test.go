@@ -59,7 +59,7 @@ func TestPagesAndAPIFollowGrants(t *testing.T) {
 			t.Errorf("%s without a grant = %d %s", path, code, b)
 		}
 	}
-	for _, path := range []string{"/c/lab/dut1", "/c/lab/general", "/blob/" + seeded.sha,
+	for _, path := range []string{"/projects/lab/c/dut1", "/projects/lab/c/general", "/blob/" + seeded.sha,
 		fmt.Sprintf("/api/messages/%d", seeded.message), fmt.Sprintf("/api/messages/%d/attachments/1", seeded.message)} {
 		if code, _ := get(nobody, path); code != http.StatusNotFound {
 			t.Errorf("%s without a grant = %d", path, code)
@@ -77,7 +77,7 @@ func TestPagesAndAPIFollowGrants(t *testing.T) {
 	if code, b := get(narrow, "/api/chats?all=1"); code != http.StatusOK || listLen(t, b, "chats") != 1 {
 		t.Errorf("chats with a channel grant = %d %s", code, b)
 	}
-	for path, want := range map[string]int{"/c/lab/dut1": 200, "/c/lab/general": 404, "/c/lab/bench": 404, "/blob/" + seeded.sha: 200,
+	for path, want := range map[string]int{"/projects/lab/c/dut1": 200, "/projects/lab/c/general": 404, "/projects/lab/c/bench": 404, "/blob/" + seeded.sha: 200,
 		fmt.Sprintf("/api/messages/%d/attachments/1", seeded.message): 200} {
 		if code, _ := get(narrow, path); code != want {
 			t.Errorf("%s with a channel grant = %d, want %d", path, code, want)

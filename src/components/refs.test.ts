@@ -36,7 +36,7 @@ describe('gallery refs in a chat', () => {
     loadPage('chat');
     const cards = Array.from(document.querySelectorAll<HTMLAnchorElement>('.conversation a.gallery-ref'));
     expect(cards.map((c) => c.dataset['state'])).toEqual(['ok', 'ok']);
-    expect(cards[0]?.getAttribute('href')).toMatch(/^\/g\/lab\/shots\/\d+$/);
+    expect(cards[0]?.getAttribute('href')).toMatch(/^\/projects\/lab\/g\/shots\/\d+$/);
     expect(cards[0]?.querySelector('[data-slot="meta"]')?.textContent).toBe('#lab/shots / Unsorted');
     expect(cards[1]?.dataset['kind']).toBe('section');
     expect(cards[1]?.querySelector('[data-slot="meta"]')?.textContent).toBe('2 images in #lab/shots');
@@ -50,12 +50,12 @@ describe('gallery refs in a chat', () => {
     const cards = Array.from(row?.querySelectorAll<HTMLAnchorElement>('a.gallery-ref') ?? []);
     expect(cards.map((c) => c.dataset['state'])).toEqual(['ok', 'ok', 'unavailable', 'gone']);
     const [item, section, hidden, gone] = cards;
-    expect(item?.getAttribute('href')).toBe('/g/lab/screens/48433');
+    expect(item?.getAttribute('href')).toBe('/projects/lab/g/screens/48433');
     expect(item?.querySelector('img')?.getAttribute('src')).toBe(page.items[0]?.image.thumb_url);
     expect(item?.querySelector('[data-slot="title"]')?.textContent).toBe('login page after the fix');
     expect(item?.querySelector('[data-slot="meta"]')?.textContent).toBe('#lab/screens / login flow v2');
     expect(section?.dataset['kind']).toBe('section');
-    expect(section?.getAttribute('href')).toBe('/g/lab/screens?section=login+flow+v2');
+    expect(section?.getAttribute('href')).toBe('/projects/lab/g/screens?section=login+flow+v2');
     expect(section?.querySelector('[data-slot="title"]')?.textContent).toBe('login flow v2');
     expect(section?.querySelector('[data-slot="meta"]')?.textContent).toBe('2 images in #lab/screens');
     // Nothing but the word: no link, no thumbnail, no name.

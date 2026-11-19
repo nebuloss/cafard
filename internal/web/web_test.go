@@ -106,9 +106,9 @@ var pageTwins = map[string][]string{
 
 var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
-	"projects": "/projects", "project": "/projects/lab",
-	"home": "/", "chat": "/c/lab/dut1", "drop": "/drop",
-	"gallery": "/g/lab/shots", "galleries": "/g/lab", "item": "", // the item's seq is known once seeded
+	"projects": "/projects", "project": "/projects/lab/settings",
+	"home": "/", "chat": "/projects/lab/c/dut1", "drop": "/drop",
+	"gallery": "/projects/lab/g/shots", "galleries": "/projects/lab/g", "item": "", // the item's seq is known once seeded
 }
 
 var templateRE = regexp.MustCompile(`(?s)<template id="(tpl-[a-z-]+)">(.*?)</template>`)
@@ -145,7 +145,7 @@ func TestEveryPageCarriesItsTwins(t *testing.T) {
 		}
 		path := pagePaths[page]
 		if page == "item" {
-			path = fmt.Sprintf("/g/lab/shots/%d", galleryShots.items[1])
+			path = fmt.Sprintf("/projects/lab/g/shots/%d", galleryShots.items[1])
 		}
 		rec := e.Do("GET", path, c, nil)
 		if rec.Code != http.StatusOK {

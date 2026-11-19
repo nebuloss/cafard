@@ -18,9 +18,9 @@ import (
 // viewer instead and adds new items live.
 
 func (s *Site) mountGalleries(mux *http.ServeMux) {
-	mux.HandleFunc("GET /g/{project}", s.Auth(auth.ScopeRead, s.galleriesPage))
-	mux.HandleFunc("GET /g/{project}/{name}", s.Auth(auth.ScopeRead, s.galleryPage))
-	mux.HandleFunc("GET /g/{project}/{name}/{seq}", s.Auth(auth.ScopeRead, s.itemPage))
+	mux.HandleFunc("GET /projects/{project}/g", s.Auth(auth.ScopeRead, s.galleriesPage))
+	mux.HandleFunc("GET /projects/{project}/g/{name}", s.Auth(auth.ScopeRead, s.galleryPage))
+	mux.HandleFunc("GET /projects/{project}/g/{name}/{seq}", s.Auth(auth.ScopeRead, s.itemPage))
 }
 
 // GalleryItemView is partials/gallery_item.html (tpl-gallery-item).

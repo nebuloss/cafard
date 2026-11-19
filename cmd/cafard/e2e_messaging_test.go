@@ -277,7 +277,7 @@ func TestBroadcastIsSeenByBothAgentsAndAckedIndependently(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/c/lab/general" {
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/projects/lab/c/general" {
 		t.Errorf("form post = %d %s", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	req, _ = http.NewRequest(http.MethodPost, s.base+"/api/messages", strings.NewReader("chat=chan%3Alab%2Fnope&text=x"))
@@ -288,7 +288,7 @@ func TestBroadcastIsSeenByBothAgentsAndAckedIndependently(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/c/lab/nope?error=unknown_channel" {
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/projects/lab/c/nope?error=unknown_channel" {
 		t.Errorf("failed form post = %d %s", resp.StatusCode, resp.Header.Get("Location"))
 	}
 }
@@ -505,7 +505,7 @@ func TestAskHumanIsAnsweredThroughTheAPI(t *testing.T) {
 	resp := s.post(s.admin, "/api/messages", "application/x-www-form-urlencoded", fmt.Sprintf("reply_to=%d&choice=done&chat=chan%%3Alab%%2Fgeneral", seq))
 	// The 303 leads to the chat page, which takes a session: a bearer
 	// client lands on the sign-in page that returns there.
-	if u := resp.Request.URL; u.Path != "/c/lab/general" && u.Query().Get("next") != "/c/lab/general" {
+	if u := resp.Request.URL; u.Path != "/projects/lab/c/general" && u.Query().Get("next") != "/projects/lab/c/general" {
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("answer = %d %s", resp.StatusCode, b)
 	}

@@ -80,17 +80,17 @@ func noBundleChats() map[string][]string {
 	return map[string][]string{
 		"/": {
 			"Needs you", "Power-cycle dut1?", `action="/api/messages"`, `name="choice" value="done"`, `name="reply_to" value="` + q + `"`,
-			`name="next" value="/"`, `href="/c/lab/dut1"`, `href="/dm/codex-build"`, `href="/drop"`, `href="/?all=1"`, `href="/?archived=1"`,
+			`name="next" value="/"`, `href="/projects/lab/c/dut1"`, `href="/dm/codex-build"`, `href="/drop"`, `href="/?all=1"`, `href="/?archived=1"`,
 			"Build 812 is green.",
 		},
-		"/c/lab/dut1": {
+		"/projects/lab/c/dut1": {
 			"image v42 ready", "<code>dwc3</code>", `<a href="https://git.example.com/k/4a1f" rel="noopener noreferrer" target="_blank">`,
 			`<form class="composer"`, `enctype="multipart/form-data"`, `name="files[]"`, `capture="environment"`, `name="chat" value="chan:lab/dut1"`,
-			`class="event-row"`, "codex-build: flashed linux-6.18-rc3", `href="/c/lab/dut1?view=logs"`, `href="/c/lab/dut1?f=questions"`,
+			`class="event-row"`, "codex-build: flashed linux-6.18-rc3", `href="/projects/lab/c/dut1?view=logs"`, `href="/projects/lab/c/dut1?f=questions"`,
 			`href="/blob/` + seeded.sha + `"`, `href="/live?from_seq=1&amp;streams=serial%3Alab%2Fdut1&amp;to_seq=2"`, "Power-cycle dut1?",
 			`href="/live?streams=serial%3Alab%2Fdut1"`, "1 question waiting for you",
 		},
-		"/c/lab/dut1?view=logs": {`data-view="logs"`, "U-Boot 2024.04", `class="marker"`, `action="/c/lab/dut1"`},
+		"/projects/lab/c/dut1?view=logs": {`data-view="logs"`, "U-Boot 2024.04", `class="marker"`, `action="/projects/lab/c/dut1"`},
 		"/dm/codex-build":       {"Build 812 is green.", `name="chat" value="dm:codex-build"`},
 		"/drop":                 {`<select name="chat"`, `<option value="chan:lab/dut1">#dut1</option>`, `action="/api/messages"`, `name="back" value="/drop"`},
 	}
@@ -114,7 +114,7 @@ func TestANoScriptRenderAcksWhatItShows(t *testing.T) {
 	if n := unread(); n != 2 {
 		t.Fatalf("unread before = %d", n)
 	}
-	body := e.Do("GET", "/c/lab/dut1", cookie, nil).Body.String()
+	body := e.Do("GET", "/projects/lab/c/dut1", cookie, nil).Body.String()
 	if !assets.BundleBuilt() {
 		if n := unread(); n != 0 {
 			t.Errorf("unread after a no-bundle render = %d", n)
@@ -355,11 +355,11 @@ func TestChatPageHasAnOlderLinkAndFilters(t *testing.T) {
 		}
 	}
 	shown := func(page, text string) bool { return strings.Contains(page, `data-slot="body">`+text+`</div>`) }
-	body := e.Do("GET", "/c/lab/dut1", cookie, nil).Body.String()
+	body := e.Do("GET", "/projects/lab/c/dut1", cookie, nil).Body.String()
 	if !shown(body, "step 59") || shown(body, "step 05") {
 		t.Error("the page is not the latest 50")
 	}
-	m := regexp.MustCompile(`href="(/c/lab/dut1\?before_seq=\d+)" data-slot="older"`).FindStringSubmatch(body)
+	m := regexp.MustCompile(`href="(/projects/lab/c/dut1\?before_seq=\d+)" data-slot="older"`).FindStringSubmatch(body)
 	if m == nil {
 		t.Fatal("no Older link")
 	}
@@ -367,15 +367,15 @@ func TestChatPageHasAnOlderLinkAndFilters(t *testing.T) {
 	if !shown(older, "step 05") || shown(older, "step 59") || !strings.Contains(older, "Newest messages") {
 		t.Error("the Older page is wrong")
 	}
-	q := e.Do("GET", "/c/lab/dut1?f=questions", cookie, nil).Body.String()
+	q := e.Do("GET", "/projects/lab/c/dut1?f=questions", cookie, nil).Body.String()
 	if !shown(q, "Power-cycle dut1?") || shown(q, "step 59") {
 		t.Error("the questions filter is wrong")
 	}
-	img := e.Do("GET", "/c/lab/dut1?f=images", cookie, nil).Body.String()
+	img := e.Do("GET", "/projects/lab/c/dut1?f=images", cookie, nil).Body.String()
 	if !strings.Contains(img, "image v42 ready") || shown(img, "step 59") {
 		t.Error("the images filter is wrong")
 	}
-	if rec := e.Do("GET", "/c/lab/nope", cookie, nil); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Channels you can read") {
+	if rec := e.Do("GET", "/projects/lab/c/nope", cookie, nil); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Channels you can read") {
 		t.Errorf("unknown channel: %d", rec.Code)
 	}
 	if rec := e.Do("GET", "/dm/admin", cookie, nil); rec.Code != http.StatusNotFound {
@@ -391,7 +391,7 @@ func TestChatPagesEscapeHostileMessages(t *testing.T) {
 		Text: "<script>alert(1)</script> [x](javascript:alert(2)) javascript:alert(3) \x1b]0;owned\x07", Channel: "dut1"}}); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/", "/c/lab/dut1"} {
+	for _, path := range []string{"/", "/projects/lab/c/dut1"} {
 		body := e.Do("GET", path, cookie, nil).Body.String()
 		for _, bad := range []string{"<script>alert", `href="javascript:`, "\x1b"} {
 			if strings.Contains(body, bad) {
@@ -400,7 +400,7 @@ func TestChatPagesEscapeHostileMessages(t *testing.T) {
 		}
 	}
 	e.Commit(store.Entry{Stream: "serial:lab/dut1", Kind: store.KindMarker, Severity: 6, Text: "<img src=x onerror=alert(4)>"})
-	if body := e.Do("GET", "/c/lab/dut1", cookie, nil).Body.String(); strings.Contains(body, "<img src=x") {
+	if body := e.Do("GET", "/projects/lab/c/dut1", cookie, nil).Body.String(); strings.Contains(body, "<img src=x") {
 		t.Error("a hostile marker reached the page")
 	}
 }

@@ -17,7 +17,7 @@ type GalleryItem struct {
 	Title   string          `json:"title"`
 	Section string          `json:"section,omitempty"`
 	Image   ImageAttachment `json:"image"`
-	Href    string          `json:"href"` // /g/<project>/<gallery>/<seq>
+	Href    string          `json:"href"` // /projects/<project>/g/<gallery>/<seq>
 	Ref     string          `json:"ref"`  // [[<project>/<gallery>#<seq>]]
 }
 

@@ -17,7 +17,7 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// A conversation, /c/{name} and /dm/{peer} (PLAN 9.6.3). The
+// A conversation, /projects/{project}/c/{name} and /dm/{peer} (PLAN 9.6.3). The
 // server renders the latest 50 rows, the composer, and for a bound
 // channel the logs of its streams; the bundle follows from there.
 
@@ -32,7 +32,7 @@ const (
 )
 
 func (s *Site) mountChats(mux *http.ServeMux) {
-	mux.HandleFunc("GET /c/{project}/{name}", s.Auth(auth.ScopeRead, s.channelPage))
+	mux.HandleFunc("GET /projects/{project}/c/{name}", s.Auth(auth.ScopeRead, s.channelPage))
 	mux.HandleFunc("GET /dm/{peer}", s.Auth(auth.ScopeRead, s.directPage))
 	mux.HandleFunc("GET /drop", s.Auth(auth.ScopeMessage, s.drop))
 	mux.Handle("POST /share", s.Write(auth.ScopeMessage, s.share))

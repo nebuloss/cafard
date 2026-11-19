@@ -48,7 +48,7 @@ func TestGalleryArgumentsPassThroughTheProxy(t *testing.T) {
 	if len(lines) == 2 {
 		_, _ = fmt.Sscanf(lines[0], "seq %d in #lab/shots", &seq)
 	}
-	if seq == 0 || lines[1] != fmt.Sprintf("%s/g/lab/shots/%d", s.base, seq) {
+	if seq == 0 || lines[1] != fmt.Sprintf("%s/projects/lab/g/shots/%d", s.base, seq) {
 		t.Fatalf("cafard send --section printed %q", got)
 	}
 	if e := s.message(tok, seq); e.Section != "login flow" || e.Text != "after submit" {

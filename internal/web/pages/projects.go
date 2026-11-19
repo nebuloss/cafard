@@ -25,7 +25,7 @@ import (
 func (s *Site) mountProjects(mux *http.ServeMux) {
 	mux.HandleFunc("GET /projects", s.Auth(auth.ScopeAdmin, s.projectList))
 	mux.Handle("POST /projects", s.Write(auth.ScopeAdmin, s.createProject))
-	mux.HandleFunc("GET /projects/{project}", s.Auth(auth.ScopeAdmin, s.project))
+	mux.HandleFunc("GET /projects/{project}/settings", s.Auth(auth.ScopeAdmin, s.project))
 	mux.Handle("POST /projects/{project}/retention", s.Write(auth.ScopeAdmin, s.saveRetention))
 	mux.Handle("POST /projects/{project}/channels", s.Write(auth.ScopeAdmin, s.createProjectChannel))
 	mux.Handle("POST /projects/{project}/channels/{channel}/kind", s.Write(auth.ScopeAdmin, s.setChannelKind))
@@ -77,7 +77,7 @@ func (s *Site) renderProjects(w http.ResponseWriter, r *http.Request, p auth.Pri
 			s.Oops(w, r, &p, err)
 			return
 		}
-		row := projectRowView{Name: pr.Name, Title: pr.Title, Href: projectHref(pr.Name), Created: Day(pr.CreatedAt), Sinks: len(sinks)}
+		row := projectRowView{Name: pr.Name, Title: pr.Title, Href: view.SettingsHref(pr.Name), Created: Day(pr.CreatedAt), Sinks: len(sinks)}
 		for _, c := range chans {
 			if c.Project() == pr.Name {
 				row.Channels++
@@ -97,8 +97,6 @@ func (s *Site) renderProjects(w http.ResponseWriter, r *http.Request, p auth.Pri
 	s.Render(w, status, "projects", l, []string{"tpl-toast"}, data)
 }
 
-func projectHref(name string) string { return "/projects/" + url.PathEscape(name) }
-
 func (s *Site) createProject(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 	pr, err := s.d.Projects.Create(r.Context(), strings.TrimSpace(r.PostFormValue("name")), r.PostFormValue("title"))
@@ -111,7 +109,7 @@ func (s *Site) createProject(w http.ResponseWriter, r *http.Request, p auth.Prin
 		s.Oops(w, r, &p, err)
 		return
 	}
-	http.Redirect(w, r, projectHref(pr.Name), http.StatusSeeOther)
+	http.Redirect(w, r, view.SettingsHref(pr.Name), http.StatusSeeOther)
 }
 
 type projectChannelView struct {
@@ -149,18 +147,20 @@ type retentionView struct {
 }
 
 type projectData struct {
-	Name, Title, Created, Base string
-	HasChats                   bool
-	Retention                  retentionView
-	Channels                   []projectChannelView
-	ChannelNames               []string
-	Sinks                      []sinkView
-	NewSink                    sinkView
-	Grants                     []grantView
-	Principals, Humans         []string
-	Scopes                     []scopeOption
-	Token                      *createdView // a sink token, shown once
-	Pending                    []pendingView
+	// Base is where the forms post (/projects/<name>/...), Settings the
+	// page they come back to.
+	Name, Title, Created, Base, Settings string
+	HasChats                             bool
+	Retention                            retentionView
+	Channels                             []projectChannelView
+	ChannelNames                         []string
+	Sinks                                []sinkView
+	NewSink                              sinkView
+	Grants                               []grantView
+	Principals, Humans                   []string
+	Scopes                               []scopeOption
+	Token                                *createdView // a sink token, shown once
+	Pending                              []pendingView
 }
 
 // projectPage is what a handler wants shown on top of the project page.
@@ -216,7 +216,7 @@ func (s *Site) renderProject(w http.ResponseWriter, r *http.Request, p auth.Prin
 }
 
 func (s *Site) projectData(ctx context.Context, p auth.Principal, pr projects.Project) (projectData, error) {
-	data := projectData{Name: pr.Name, Title: pr.Title, Created: Day(pr.CreatedAt), Base: projectHref(pr.Name), HasChats: s.chats != nil,
+	data := projectData{Name: pr.Name, Title: pr.Title, Created: Day(pr.CreatedAt), Base: view.ProjectHref(pr.Name), Settings: view.SettingsHref(pr.Name), HasChats: s.chats != nil,
 		Retention: retentionView{LinesMaxAge: durationText(pr.Retention.LinesMaxAge), LinesMaxBytes: units.ByteSize(pr.Retention.LinesMaxBytes).String(),
 			MessagesMaxAge: durationText(pr.Retention.MessagesMaxAge), BlobsMaxBytes: units.ByteSize(pr.Retention.BlobsMaxBytes).String()}}
 	if s.chats != nil {
@@ -236,7 +236,7 @@ func (s *Site) projectData(ctx context.Context, p auth.Principal, pr projects.Pr
 				cv.Href = messaging.GalleryHref(c.Name, nil)
 			}
 			if local != messaging.General {
-				cv.KindAction = projectHref(pr.Name) + "/channels/" + url.PathEscape(local) + "/kind"
+				cv.KindAction = view.ProjectHref(pr.Name) + "/channels/" + url.PathEscape(local) + "/kind"
 				cv.OtherKind, cv.OtherKindLabel = string(dto.ChannelGallery), "Make it a gallery"
 				if cv.Gallery {
 					cv.OtherKind, cv.OtherKindLabel = string(dto.ChannelChat), "Make it a chat"
@@ -313,7 +313,7 @@ func grantsTouch(specs, project string) bool {
 }
 
 func sinkViewOf(k projects.Sink, tokens []auth.TokenRow) sinkView {
-	v := sinkView{Name: k.Name, Title: k.Title, Action: projectHref(k.Project) + "/sinks/" + url.PathEscape(k.Name),
+	v := sinkView{Name: k.Name, Title: k.Title, Action: view.ProjectHref(k.Project) + "/sinks/" + url.PathEscape(k.Name),
 		LiveHref: "/live?" + url.Values{"streams": {"*:" + k.Ref()}}.Encode(), SerialKind: "none",
 		DefaultTokenPrincipal: tokenPrincipal(k)}
 	var srcs []string
@@ -434,7 +434,7 @@ func (s *Site) saveRetention(w http.ResponseWriter, r *http.Request, p auth.Prin
 		s.projectFail(w, r, p, err)
 		return
 	}
-	http.Redirect(w, r, projectHref(r.PathValue("project"))+"?done=retention", http.StatusSeeOther)
+	http.Redirect(w, r, view.SettingsHref(r.PathValue("project"))+"?done=retention", http.StatusSeeOther)
 }
 
 func (s *Site) createProjectChannel(w http.ResponseWriter, r *http.Request, p auth.Principal) {
@@ -450,7 +450,7 @@ func (s *Site) createProjectChannel(w http.ResponseWriter, r *http.Request, p au
 		s.projectFail(w, r, p, err)
 		return
 	}
-	http.Redirect(w, r, projectHref(req.Project)+"?done=channel", http.StatusSeeOther)
+	http.Redirect(w, r, view.SettingsHref(req.Project)+"?done=channel", http.StatusSeeOther)
 }
 
 // setChannelKind turns a channel of the project into a gallery or a chat.
@@ -470,7 +470,7 @@ func (s *Site) setChannelKind(w http.ResponseWriter, r *http.Request, p auth.Pri
 		s.projectFail(w, r, p, err)
 		return
 	}
-	http.Redirect(w, r, projectHref(project)+"?done=kind", http.StatusSeeOther)
+	http.Redirect(w, r, view.SettingsHref(project)+"?done=kind", http.StatusSeeOther)
 }
 
 // sinkFromForm reads the sink form: the name comes from the path when it
@@ -537,7 +537,7 @@ func (s *Site) saveSink(w http.ResponseWriter, r *http.Request, p auth.Principal
 		s.projectFail(w, r, p, err)
 		return
 	}
-	http.Redirect(w, r, projectHref(k.Project)+"?done=sink", http.StatusSeeOther)
+	http.Redirect(w, r, view.SettingsHref(k.Project)+"?done=sink", http.StatusSeeOther)
 }
 
 func (s *Site) deleteSink(w http.ResponseWriter, r *http.Request, p auth.Principal) {
@@ -546,7 +546,7 @@ func (s *Site) deleteSink(w http.ResponseWriter, r *http.Request, p auth.Princip
 		s.projectFail(w, r, p, err)
 		return
 	}
-	http.Redirect(w, r, projectHref(project)+"?done=sink-deleted", http.StatusSeeOther)
+	http.Redirect(w, r, view.SettingsHref(project)+"?done=sink-deleted", http.StatusSeeOther)
 }
 
 // createSinkToken answers with the project page showing the token once.
@@ -575,7 +575,7 @@ func (s *Site) createSinkToken(w http.ResponseWriter, r *http.Request, p auth.Pr
 		s.projectFail(w, r, p, err)
 		return
 	}
-	created := &createdView{Principal: name, Secret: secret, Done: projectHref(k.Project),
+	created := &createdView{Principal: name, Secret: secret, Done: view.SettingsHref(k.Project),
 		Snippets: view.TokenSnippets(s.d.Server.BaseURL(), k.Name, secret, auth.NewScopeSet(auth.ScopeIngest))}
 	s.renderProject(w, r, p, projectPage{status: http.StatusCreated, created: created,
 		notice: "Token for sink " + k.Ref() + ": it writes there only, whatever stream it names, and reads nothing."})
@@ -610,7 +610,7 @@ func (s *Site) saveGrant(w http.ResponseWriter, r *http.Request, p auth.Principa
 		s.projectFail(w, r, p, err)
 		return
 	}
-	http.Redirect(w, r, projectHref(g.Project)+"?done=grant", http.StatusSeeOther)
+	http.Redirect(w, r, view.SettingsHref(g.Project)+"?done=grant", http.StatusSeeOther)
 }
 
 func (s *Site) deleteGrant(w http.ResponseWriter, r *http.Request, p auth.Principal) {
@@ -624,7 +624,7 @@ func (s *Site) deleteGrant(w http.ResponseWriter, r *http.Request, p auth.Princi
 		s.projectFail(w, r, p, err)
 		return
 	}
-	http.Redirect(w, r, projectHref(project)+"?done=grant-deleted", http.StatusSeeOther)
+	http.Redirect(w, r, view.SettingsHref(project)+"?done=grant-deleted", http.StatusSeeOther)
 }
 
 // createProjectPairing makes a sign-in link whose person gets a grant on

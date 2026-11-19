@@ -51,8 +51,10 @@ type refMeta struct {
 
 var (
 	refRE = regexp.MustCompile(`\[\[([a-z0-9][a-z0-9._-]{0,39})/([a-z0-9][a-z0-9-]{0,39})(?:#([0-9]{1,18})|\|([^\]\[|\n]{1,80}))\]\]`)
-	// A link to a gallery page, with or without the server's address.
-	galleryLinkRE = regexp.MustCompile(`(?:https?://[^\s/]+)?/g/([a-z0-9][a-z0-9._-]{0,39})/([a-z0-9][a-z0-9-]{0,39})(?:/([0-9]{1,18})|\?section=([^\s#&]+))`)
+	// A link to a gallery page, with or without the server's address: the
+	// project view's /projects/<p>/g/<gallery>, or the older /g/<p>/<gallery>
+	// that people pasted before it.
+	galleryLinkRE = regexp.MustCompile(`(?:https?://[^\s/]+)?(?:/projects/([a-z0-9][a-z0-9._-]{0,39})/g|/g/([a-z0-9][a-z0-9._-]{0,39}))/([a-z0-9][a-z0-9-]{0,39})(?:/([0-9]{1,18})|\?section=([^\s#&]+))`)
 )
 
 // refMatch is a ref or a gallery link written in a message, and where.
@@ -86,11 +88,11 @@ func refMatches(text string) []refMatch {
 		add(m, group(m, 1), group(m, 2), group(m, 3), group(m, 4))
 	}
 	for _, m := range galleryLinkRE.FindAllStringSubmatchIndex(text, -1) {
-		sec := group(m, 4)
+		sec := group(m, 5)
 		if u, err := url.QueryUnescape(sec); err == nil {
 			sec = u
 		}
-		add(m, group(m, 1), group(m, 2), group(m, 3), sec)
+		add(m, group(m, 1)+group(m, 2), group(m, 3), group(m, 4), sec)
 	}
 	return out
 }

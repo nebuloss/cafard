@@ -26,7 +26,7 @@ describe('h', () => {
   it('refuses script URLs', () => {
     expect(() => h('a', { href: 'javascript:alert(1)' })).toThrow();
     expect(() => h('img', { src: 'data:image/png;base64,AA' })).toThrow();
-    expect(h('a', { href: '/c/lab/dut1' }).getAttribute('href')).toBe('/c/lab/dut1');
+    expect(h('a', { href: '/projects/lab/c/dut1' }).getAttribute('href')).toBe('/projects/lab/c/dut1');
   });
 });
 

@@ -16,8 +16,11 @@ export function imageCount(n: number): string {
   return n === 1 ? '1 image' : `${n} images`;
 }
 
+/** A gallery page of the project view, the only place a card leads. */
+const GALLERY_PAGE = /^\/projects\/[^/]+\/g\//;
+
 function samePage(href: string | undefined): string | undefined {
-  return href !== undefined && href.startsWith('/g/') ? href : undefined;
+  return href !== undefined && GALLERY_PAGE.test(href) ? href : undefined;
 }
 
 /**

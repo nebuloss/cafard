@@ -31,13 +31,13 @@ func TestTheAdminRunsAProjectFromItsPage(t *testing.T) {
 
 	post("/projects", url.Values{"name": {"Bad Name"}}, http.StatusBadRequest)
 	rec := e.Do("POST", "/projects", admin, url.Values{"name": {"rack"}, "title": {"Rack 2"}})
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/projects/rack" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/projects/rack/settings" {
 		t.Fatalf("create: %d %s", rec.Code, rec.Header().Get("Location"))
 	}
-	if body := e.Do("GET", "/projects", admin, nil).Body.String(); !strings.Contains(body, `href="/projects/rack"`) || !strings.Contains(body, "Rack 2") {
+	if body := e.Do("GET", "/projects", admin, nil).Body.String(); !strings.Contains(body, `href="/projects/rack/settings"`) || !strings.Contains(body, "Rack 2") {
 		t.Error("the list lacks the new project")
 	}
-	page := e.Do("GET", "/projects/rack", admin, nil).Body.String()
+	page := e.Do("GET", "/projects/rack/settings", admin, nil).Body.String()
 	if !strings.Contains(page, "#general") {
 		t.Error("a new project has no #general")
 	}
@@ -52,7 +52,7 @@ func TestTheAdminRunsAProjectFromItsPage(t *testing.T) {
 	if err != nil || len(k.Sources) != 2 || k.Serial == nil || k.Serial.RFC2217 != "10.0.50.30:7001" || k.Serial.Baud != 57600 || !k.Serial.Writable {
 		t.Fatalf("sink = %+v %v", k, err)
 	}
-	page = e.Do("GET", "/projects/rack", admin, nil).Body.String()
+	page = e.Do("GET", "/projects/rack/settings", admin, nil).Body.String()
 	for _, want := range []string{"10.0.50.42, 10.0.51.0/24", "rfc2217 10.0.50.30:7001, 57600 8N1, writable", `action="/projects/rack/sinks/dut9"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("project page lacks %q", want)
@@ -70,7 +70,7 @@ func TestTheAdminRunsAProjectFromItsPage(t *testing.T) {
 	if err != nil || p.Sink != "rack/dut9" || p.Name != "rack-dut9" || p.Kind != auth.KindDevice {
 		t.Errorf("sink token = %+v %v", p, err)
 	}
-	if !strings.Contains(e.Do("GET", "/projects/rack", admin, nil).Body.String(), "bench pi") {
+	if !strings.Contains(e.Do("GET", "/projects/rack/settings", admin, nil).Body.String(), "bench pi") {
 		t.Error("the sink token is not listed")
 	}
 
@@ -79,7 +79,7 @@ func TestTheAdminRunsAProjectFromItsPage(t *testing.T) {
 	if pr, _ := e.Deps.Projects.Project(ctx, "rack"); pr.Retention.LinesMaxAge.Hours() != 720 || pr.Retention.LinesMaxBytes != 1e9 || pr.Retention.BlobsMaxBytes != 512<<20 {
 		t.Errorf("retention = %+v", pr.Retention)
 	}
-	if page := e.Do("GET", "/projects/rack", admin, nil).Body.String(); !strings.Contains(page, `value="720h"`) || !strings.Contains(page, `value="512MiB"`) {
+	if page := e.Do("GET", "/projects/rack/settings", admin, nil).Body.String(); !strings.Contains(page, `value="720h"`) || !strings.Contains(page, `value="512MiB"`) {
 		t.Error("the retention form does not show the saved values")
 	}
 
@@ -103,7 +103,7 @@ func TestTheAdminRunsAProjectFromItsPage(t *testing.T) {
 	if _, err := e.Tokens.Lookup(ctx, secret); err == nil {
 		t.Error("deleting the sink left its token working")
 	}
-	if rec := e.Do("GET", "/projects/nope", admin, nil); rec.Code != http.StatusNotFound {
+	if rec := e.Do("GET", "/projects/nope/settings", admin, nil); rec.Code != http.StatusNotFound {
 		t.Errorf("unknown project: %d", rec.Code)
 	}
 	// Only the admin interface has these pages.

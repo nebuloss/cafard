@@ -87,11 +87,16 @@ export function eventLink(stream: string, seq: number): string {
   return `/live?${new URLSearchParams({ streams: stream, to_seq: String(seq) }).toString()}`;
 }
 
-/** The page of a chat id, like pages.ChatHref. */
+/** A project's view, like view.ProjectHref. */
+export function projectHref(project: string): string {
+  return `/projects/${encodeURIComponent(project)}`;
+}
+
+/** The page of a chat id, like view.ChatHref. */
 export function chatHref(id: string): string {
   if (id.startsWith('chan:')) {
     const [project = '', name = ''] = id.slice(5).split('/', 2);
-    return `/c/${encodeURIComponent(project)}/${encodeURIComponent(name)}`;
+    return `${projectHref(project)}/c/${encodeURIComponent(name)}`;
   }
   if (id.startsWith('dm:')) return `/dm/${encodeURIComponent(id.slice(3))}`;
   return '/';
@@ -136,7 +141,7 @@ export function logLink(a: {
 /** A gallery's page ("lab/shots"), on a section when one is given, like messaging.GalleryHref. */
 export function galleryHref(gallery: string, section?: string): string {
   const [project = '', name = ''] = gallery.split('/', 2);
-  const path = `/g/${encodeURIComponent(project)}/${encodeURIComponent(name)}`;
+  const path = `${projectHref(project)}/g/${encodeURIComponent(name)}`;
   return section === undefined ? path : `${path}?${new URLSearchParams({ section }).toString()}`;
 }
 

@@ -333,7 +333,7 @@ func TestAMarkerInABoundChannelIsInTheLogsAndTheChat(t *testing.T) {
 	})
 
 	// Server-rendered: an event row in the chat, and a marker row in its logs.
-	_, b := s.browser(cookie, "GET", "/c/lab/run-42", "", nil, false)
+	_, b := s.browser(cookie, "GET", "/projects/lab/c/run-42", "", nil, false)
 	page := string(b)
 	conv := page[strings.Index(page, `data-component="ConversationView"`):strings.Index(page, `data-component="LogsPane"`)]
 	logs := page[strings.Index(page, `data-component="LogsPane"`):]
@@ -343,7 +343,7 @@ func TestAMarkerInABoundChannelIsInTheLogsAndTheChat(t *testing.T) {
 	if !strings.Contains(logs, `class="marker"`) || !strings.Contains(logs, "test 42 starts") || !strings.Contains(logs, "a line after the marker") {
 		t.Errorf("the logs pane lacks the marker or the line")
 	}
-	_, b = s.browser(cookie, "GET", "/c/lab/run-42?view=logs", "", nil, false)
+	_, b = s.browser(cookie, "GET", "/projects/lab/c/run-42?view=logs", "", nil, false)
 	if !strings.Contains(string(b), `data-view="logs"`) || !strings.Contains(string(b), "test 42 starts") {
 		t.Error("the logs view lacks the marker")
 	}

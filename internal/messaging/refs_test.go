@@ -115,8 +115,9 @@ func TestGalleryRefsResolvePerReader(t *testing.T) {
 	e := newEnv(t)
 	w := newRefsWorld(t, e)
 	e.clk.Advance(time.Minute)
-	text := fmt.Sprintf("compare [[lab/shots#%d]] with [[lab/shots|login flow]], [[other/pics#%d]] and https://cafard.lan/g/lab/shots/%d",
-		w.items[6], w.foreign, w.items[5])
+	// A link of the project view and an older /g/ link both count.
+	text := fmt.Sprintf("compare [[lab/shots#%d]] with [[lab/shots|login flow]], [[other/pics#%d]] and https://cafard.lan/g/lab/shots/%d or /projects/lab/g/shots/%d",
+		w.items[6], w.foreign, w.items[5], w.items[4])
 	out, err := refsSend(e, w.a, "lab/general", text)
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +126,7 @@ func TestGalleryRefsResolvePerReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if refs := readMeta(m).Refs; len(refs) != 3 {
+	if refs := readMeta(m).Refs; len(refs) != 4 {
 		t.Fatalf("refs = %+v (another project's is not one)", refs)
 	}
 
@@ -133,24 +134,24 @@ func TestGalleryRefsResolvePerReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := fmt.Sprintf("compare with , [[other/pics#%d]] and", w.foreign); d.Text != want {
+	if want := fmt.Sprintf("compare with , [[other/pics#%d]] and or", w.foreign); d.Text != want {
 		t.Errorf("text = %q, want %q", d.Text, want)
 	}
 	if strings.Contains(string(d.Meta), "refs") {
 		t.Errorf("meta = %s", d.Meta)
 	}
-	if len(d.GalleryRefs) != 3 {
+	if len(d.GalleryRefs) != 4 {
 		t.Fatalf("refs = %+v", d.GalleryRefs)
 	}
-	item, section, link := d.GalleryRefs[0], d.GalleryRefs[1], d.GalleryRefs[2]
+	item, section, link, link2 := d.GalleryRefs[0], d.GalleryRefs[1], d.GalleryRefs[2], d.GalleryRefs[3]
 	if item.State != dto.RefOK || item.Item == nil || item.Item.Title != "screen 7" || item.Href != ItemHref("lab/shots", w.items[6]) || item.Gallery != "lab/shots" {
 		t.Errorf("item ref = %+v", item)
 	}
-	if section.State != dto.RefOK || section.Count != 2 || len(section.Items) != 2 || section.Items[0].Seq != w.items[1] || section.Href != "/g/lab/shots?section=login+flow" {
+	if section.State != dto.RefOK || section.Count != 2 || len(section.Items) != 2 || section.Items[0].Seq != w.items[1] || section.Href != "/projects/lab/g/shots?section=login+flow" {
 		t.Errorf("section ref = %+v", section)
 	}
-	if link.State != dto.RefOK || link.Seq != w.items[5] {
-		t.Errorf("link ref = %+v", link)
+	if link.State != dto.RefOK || link.Seq != w.items[5] || link2.State != dto.RefOK || link2.Seq != w.items[4] {
+		t.Errorf("link refs = %+v, %+v", link, link2)
 	}
 
 	// narrow reads the message but not the gallery: three bare
@@ -174,7 +175,7 @@ func TestGalleryRefsResolvePerReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(gm, "unavailable to you") != 3 || strings.Contains(gm, "screen ") {
+	if strings.Count(gm, "unavailable to you") != 4 || strings.Contains(gm, "screen ") {
 		t.Errorf("narrow's get_message:\n%s", gm)
 	}
 

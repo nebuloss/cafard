@@ -58,7 +58,7 @@ func TestGalleryPageGroupsItemsBySectionWithoutTheBundle(t *testing.T) {
 	seed(e)
 	seedGallery(e)
 	cookie := e.Admin()
-	rec := e.Do("GET", "/g/lab/shots", cookie, nil)
+	rec := e.Do("GET", "/projects/lab/g/shots", cookie, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d\n%s", rec.Code, rec.Body)
 	}
@@ -67,8 +67,8 @@ func TestGalleryPageGroupsItemsBySectionWithoutTheBundle(t *testing.T) {
 	for _, want := range []string{
 		`data-component="GalleryView"`, `data-chat="chan:lab/shots"`, `data-live`,
 		`<h3 class="list-heading">login flow</h3>`, `<h3 class="list-heading">Unsorted</h3>`,
-		fmt.Sprintf(`href="/g/lab/shots/%d"`, items[0]), `alt="login page"`, "after submit ...",
-		`href="/g/lab/shots?section=login&#43;flow"`, `href="/g/lab/shots?section="`, `href="/c/lab/shots"`,
+		fmt.Sprintf(`href="/projects/lab/g/shots/%d"`, items[0]), `alt="login page"`, "after submit ...",
+		`href="/projects/lab/g/shots?section=login&#43;flow"`, `href="/projects/lab/g/shots?section="`, `href="/projects/lab/c/shots"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("gallery page lacks %q", want)
@@ -87,25 +87,25 @@ func TestGalleryPageGroupsItemsBySectionWithoutTheBundle(t *testing.T) {
 	}
 
 	// The filter shows one section and marks its chip.
-	body = e.Do("GET", "/g/lab/shots?section=login+flow", cookie, nil).Body.String()
+	body = e.Do("GET", "/projects/lab/g/shots?section=login+flow", cookie, nil).Body.String()
 	if strings.Contains(body, ">Unsorted</h3>") || !strings.Contains(body, "data-filtered") || !strings.Contains(body, `aria-current="true">login flow`) {
 		t.Errorf("filtered page:\n%s", body)
 	}
-	body = e.Do("GET", "/g/lab/shots?section=", cookie, nil).Body.String()
+	body = e.Do("GET", "/projects/lab/g/shots?section=", cookie, nil).Body.String()
 	if strings.Contains(body, ">login flow</h3>") || !strings.Contains(body, ">Unsorted</h3>") {
 		t.Error("section= shows the unsorted items only")
 	}
 
 	// Paging by seq: before_seq shows the older ones and does not follow the feed.
-	body = e.Do("GET", fmt.Sprintf("/g/lab/shots?before_seq=%d", items[1]), cookie, nil).Body.String()
+	body = e.Do("GET", fmt.Sprintf("/projects/lab/g/shots?before_seq=%d", items[1]), cookie, nil).Body.String()
 	if strings.Contains(body, fmt.Sprintf(`data-seq="%d"`, items[1])) || !strings.Contains(body, fmt.Sprintf(`data-seq="%d"`, items[0])) ||
 		strings.Contains(body, "data-live") || !strings.Contains(body, "Newest images") {
 		t.Errorf("older page:\n%s", body)
 	}
 
 	// The item's own page: the image, the title, and its neighbours in the section.
-	body = e.Do("GET", fmt.Sprintf("/g/lab/shots/%d", items[1]), cookie, nil).Body.String()
-	for _, want := range []string{"login page", "?v=agent", fmt.Sprintf(`href="/g/lab/shots/%d" rel="prev"`, items[2]), `href="/g/lab/shots?section=login&#43;flow"`} {
+	body = e.Do("GET", fmt.Sprintf("/projects/lab/g/shots/%d", items[1]), cookie, nil).Body.String()
+	for _, want := range []string{"login page", "?v=agent", fmt.Sprintf(`href="/projects/lab/g/shots/%d" rel="prev"`, items[2]), `href="/projects/lab/g/shots?section=login&#43;flow"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("item page lacks %q", want)
 		}
@@ -113,19 +113,19 @@ func TestGalleryPageGroupsItemsBySectionWithoutTheBundle(t *testing.T) {
 	if strings.Contains(body, `rel="next"`) {
 		t.Error("the oldest item of a section has no older one; the unsorted item is in another section")
 	}
-	if rec := e.Do("GET", "/g/lab/shots/999999", cookie, nil); rec.Code != http.StatusNotFound {
+	if rec := e.Do("GET", "/projects/lab/g/shots/999999", cookie, nil); rec.Code != http.StatusNotFound {
 		t.Errorf("missing item: status %d", rec.Code)
 	}
 	// A chat channel is no gallery.
-	if rec := e.Do("GET", "/g/lab/dut1", cookie, nil); rec.Code != http.StatusNotFound {
-		t.Errorf("/g/lab/dut1: status %d", rec.Code)
+	if rec := e.Do("GET", "/projects/lab/g/dut1", cookie, nil); rec.Code != http.StatusNotFound {
+		t.Errorf("/projects/lab/g/dut1: status %d", rec.Code)
 	}
 
 	// The chat list leads to the grid, the conversation header back to it.
-	if body := e.Do("GET", "/", cookie, nil).Body.String(); !strings.Contains(body, `href="/g/lab/shots" data-chat="chan:lab/shots"`) {
+	if body := e.Do("GET", "/", cookie, nil).Body.String(); !strings.Contains(body, `href="/projects/lab/g/shots" data-chat="chan:lab/shots"`) {
 		t.Error("the chat list row of a gallery does not lead to its grid")
 	}
-	if body := e.Do("GET", "/c/lab/shots", cookie, nil).Body.String(); !strings.Contains(body, `href="/g/lab/shots"`) {
+	if body := e.Do("GET", "/projects/lab/c/shots", cookie, nil).Body.String(); !strings.Contains(body, `href="/projects/lab/g/shots"`) {
 		t.Error("the conversation of a gallery does not link to its grid")
 	}
 }
@@ -199,8 +199,8 @@ func TestProjectPageMakesAndTurnsGalleries(t *testing.T) {
 	if err != nil || !ch.Gallery() {
 		t.Fatalf("lab/screens = %+v, %v", ch, err)
 	}
-	body := e.Do("GET", "/projects/lab", cookie, nil).Body.String()
-	for _, want := range []string{`data-channel="screens" data-kind="gallery"`, `href="/g/lab/screens"`, `action="/projects/lab/channels/screens/kind"`, "Make it a chat", `action="/projects/lab/channels/dut1/kind"`} {
+	body := e.Do("GET", "/projects/lab/settings", cookie, nil).Body.String()
+	for _, want := range []string{`data-channel="screens" data-kind="gallery"`, `href="/projects/lab/g/screens"`, `action="/projects/lab/channels/screens/kind"`, "Make it a chat", `action="/projects/lab/channels/dut1/kind"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("project page lacks %q", want)
 		}
@@ -225,15 +225,15 @@ func TestChatsShowGalleryRefsAsCards(t *testing.T) {
 	seedGallery(e)
 	cookie := e.Admin()
 	items := galleryShots.items
-	body := e.Do("GET", "/c/lab/dut1", cookie, nil).Body.String()
+	body := e.Do("GET", "/projects/lab/c/dut1", cookie, nil).Body.String()
 	for _, want := range []string{
-		"before and after the fix:", fmt.Sprintf(`<a class="gallery-ref" href="/g/lab/shots/%d" data-state="ok">`, items[0]), `alt="boot splash"`,
-		"#lab/shots / Unsorted", `<a class="gallery-ref" href="/g/lab/shots?section=login&#43;flow" data-state="ok" data-kind="section">`,
+		"before and after the fix:", fmt.Sprintf(`<a class="gallery-ref" href="/projects/lab/g/shots/%d" data-state="ok">`, items[0]), `alt="boot splash"`,
+		"#lab/shots / Unsorted", `<a class="gallery-ref" href="/projects/lab/g/shots?section=login&#43;flow" data-state="ok" data-kind="section">`,
 		"2 images in #lab/shots", `data-full="/blob/`,
 		// The composer offers the project's gallery.
 		`data-action="gallery-picker"`, `data-component="GalleryPicker"`, `data-gallery="lab/shots"`,
 		// The chat list's entry for the project's galleries.
-		`<a class="chip small" href="/g/lab">`,
+		`<a class="chip small" href="/projects/lab/g">`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("chat page lacks %q", want)
@@ -243,19 +243,19 @@ func TestChatsShowGalleryRefsAsCards(t *testing.T) {
 		t.Error("the ref text shows next to its card")
 	}
 	// A gallery's own composer and a direct chat's have no picker.
-	for _, path := range []string{"/c/lab/shots", "/dm/codex-build"} {
+	for _, path := range []string{"/projects/lab/c/shots", "/dm/codex-build"} {
 		if strings.Contains(e.Do("GET", path, cookie, nil).Body.String(), `data-component="GalleryPicker"`) {
 			t.Errorf("%s offers the gallery picker", path)
 		}
 	}
 
 	// The project's galleries page.
-	body = e.Do("GET", "/g/lab", cookie, nil).Body.String()
-	if !strings.Contains(body, `href="/g/lab/shots"`) || !strings.Contains(body, "3 images in 2 sections") {
+	body = e.Do("GET", "/projects/lab/g", cookie, nil).Body.String()
+	if !strings.Contains(body, `href="/projects/lab/g/shots"`) || !strings.Contains(body, "3 images in 2 sections") {
 		t.Errorf("galleries page:\n%s", body)
 	}
 	// The item page tells how to point at it.
-	if body = e.Do("GET", fmt.Sprintf("/g/lab/shots/%d", items[0]), cookie, nil).Body.String(); !strings.Contains(body, fmt.Sprintf("[[lab/shots#%d]]", items[0])) {
+	if body = e.Do("GET", fmt.Sprintf("/projects/lab/g/shots/%d", items[0]), cookie, nil).Body.String(); !strings.Contains(body, fmt.Sprintf("[[lab/shots#%d]]", items[0])) {
 		t.Error("the item page does not give its ref")
 	}
 

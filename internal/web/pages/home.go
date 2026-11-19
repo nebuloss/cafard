@@ -203,7 +203,7 @@ func (s *Site) chatList(ctx context.Context, p auth.Principal, all, archived boo
 			g.Sinks = append(g.Sinks, SinkLinkView{Name: k, Href: "/live?" + url.Values{"streams": {"*:" + pr.Name + "/" + k}}.Encode()})
 		}
 		if len(pr.Galleries) > 0 {
-			g.Galleries = "/g/" + url.PathEscape(pr.Name)
+			g.Galleries = view.GalleriesHref(pr.Name)
 		}
 		v.Projects = append(v.Projects, g)
 	}
