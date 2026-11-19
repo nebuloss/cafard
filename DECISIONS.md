@@ -3,6 +3,36 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-19: screenshots by path through `cafard mcp`, and `cafard send`
+
+Asked for by the user: an agent's screenshot is a file on disk, and
+writing megabytes of base64 into a tool call is impractical.
+
+- **The stdio proxy reads the files, the server never does.** `cafard mcp`
+  adds `image_paths` to the `send` tool's input schema when the remote's
+  `send` takes `images`, and rewrites each call: the files become
+  `images` entries, and the paths are removed before the call is
+  forwarded. The remote's `/mcp` is unchanged and refuses the argument
+  (its strict decoding), since it cannot read the agent's disk. Only
+  images pass (the type is sniffed with the blob store's rules), so the
+  argument cannot be used to ship other files off the agent's machine.
+- **Limits are the server's inline ones, hard-coded:** 6 images, 10 MiB
+  each (`messaging.MaxAgentImages` and the inline limit). The proxy cannot
+  read the server's configuration; it checks the same numbers to fail
+  before uploading, and the server still decides.
+- **`cafard send` uses the HTTP API, not MCP.** It posts the multipart
+  form of `POST /api/messages` with `Accept: application/json`, so files
+  go through the same path as the web UI (10 files of 20 MiB by default)
+  and need no base64. It prints `seq N in #chat` and the link
+  `server + ChatHref(chat) + #mN`, built with the same helper as the
+  pages so a change of chat URLs follows.
+- **Image-only messages get a preview label.** A chat row showed
+  `agent: ` and nothing; the preview text is now `[1 image]` or
+  `[N images]` when the message has no text (server side and in the live
+  update of the chat list). A message with text keeps its text alone, so
+  the rendered fixtures do not change. Unread counts already counted
+  messages whatever their text; there are no other notifications.
+
 ## 2026-11-17: admin password and split interfaces
 
 Asked for by the user, so cafard can sit in a DMZ, and to make admin access

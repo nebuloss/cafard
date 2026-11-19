@@ -43,7 +43,7 @@ func (c *Config) Validate() error {
 }
 
 // Instructions is the guide sent to every client at initialisation.
-const Instructions = `Call whoami and list_channels first. When you work on a device or a test, use its channel: pass channel= to read, wait_for and search instead of listing streams, and post your findings there. Create a channel bound to the device for a new task if none fits. Keep the next_seq cursor from every read and pass it back as since_seq. Use wait_for instead of polling read. Check inbox at the start of a task and whenever you wait: the human drops photos and notes there, and other agents send results. Use ask_human when you need a physical action. Claim a device before driving it and release it after. Do not send acknowledgements or thanks to other agents.`
+const Instructions = `Call whoami and list_channels first. When you work on a device or a test, use its channel: pass channel= to read, wait_for and search instead of listing streams, and post your findings there. Create a channel bound to the device for a new task if none fits. Keep the next_seq cursor from every read and pass it back as since_seq. Use wait_for instead of polling read. Check inbox at the start of a task and whenever you wait: the human drops photos and notes there, and other agents send results. Use ask_human when you need a physical action. Claim a device before driving it and release it after. To share a screenshot, attach it to send: through the cafard mcp stdio proxy pass its file path in image_paths; over HTTP pass base64 images, or run cafard send --image FILE TEXT in a shell. Do not send acknowledgements or thanks to other agents.`
 
 // Call is what a tool handler gets besides its arguments.
 type Call struct {

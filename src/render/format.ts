@@ -64,6 +64,12 @@ export function previewText(p: { readonly sender?: string; readonly text: string
   return p.sender === undefined || p.sender === '' ? p.text : `${p.sender}: ${p.text}`;
 }
 
+/** What a message with images and no text shows as its preview, like messaging.ImagesLabel. */
+export function imagesLabel(n: number): string {
+  if (n === 0) return '';
+  return n === 1 ? '[1 image]' : `[${n} images]`;
+}
+
 /** A line count, like pages.LinesText. */
 export function linesText(n: number, openEnded: boolean): string {
   return `${n === 1 ? '1 line' : `${n} lines`}${openEnded ? ' so far' : ''}`;

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/nebuloss/cafard/internal/dto"
 )
 
 // Options configure a proxy.
@@ -174,12 +176,24 @@ func (p *Proxy) build(ctx context.Context, remote *mcp.ClientSession) error {
 		opts.SubscribeHandler = p.subscribe
 		opts.UnsubscribeHandler = p.unsubscribe
 	}
-	p.local = mcp.NewServer(info, opts)
-
+	var tools []*mcp.Tool
+	paths := false
 	for tool, err := range remote.Tools(ctx, nil) {
 		if err != nil {
 			return fmt.Errorf("listing the remote tools: %w", err)
 		}
+		// The remote cannot read this machine's disk, so the proxy
+		// offers file paths for images and reads them itself.
+		if t, ok := withImagePaths(tool); ok {
+			tool, paths = t, true
+		}
+		tools = append(tools, tool)
+	}
+	if paths {
+		opts.Instructions = joinInstructions(opts.Instructions)
+	}
+	p.local = mcp.NewServer(info, opts)
+	for _, tool := range tools {
 		p.local.AddTool(tool, p.callTool)
 	}
 	if init != nil && init.Capabilities != nil && init.Capabilities.Resources != nil {
@@ -291,7 +305,14 @@ func (p *Proxy) current() *mcp.ClientSession {
 }
 
 func (p *Proxy) callTool(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	params := &mcp.CallToolParams{Meta: ownMeta(req.Params.Meta), Name: req.Params.Name, Arguments: req.Params.Arguments}
+	args := req.Params.Arguments
+	if req.Params.Name == sendTool {
+		var apiErr *dto.APIError
+		if args, apiErr = rewriteImagePaths(args); apiErr != nil {
+			return toolError(apiErr), nil
+		}
+	}
+	params := &mcp.CallToolParams{Meta: ownMeta(req.Params.Meta), Name: req.Params.Name, Arguments: args}
 	if token := req.Params.GetProgressToken(); token != nil && req.Session != nil {
 		// The remote sees the local token; its notifications are mapped
 		// back to the session that asked.

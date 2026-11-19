@@ -23,6 +23,7 @@ Commands:
   push      send stdin, a serial port or a file to a server
   term      a serial terminal that also pushes what it reads (Windows COM ports)
   mcp       a stdio MCP server that forwards to a remote cafard
+  send      post a message, with images, to a server
   token     create and list tokens
   passwd    set the admin password
   pair      print a one-time sign-in link for a person
@@ -67,6 +68,7 @@ var commands = map[string]command{
 	"pair":    cmdPair,
 	"term":    cmdTerm,
 	"mcp":     cmdMCP,
+	"send":    cmdSend,
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) error {

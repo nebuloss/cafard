@@ -816,6 +816,16 @@ A resource is a stream id.
 - **stdio**: `cafard mcp --server URL --token T` is a thin stdio MCP server
   that forwards every call to a remote cafard over HTTP. It never opens the
   database. It lets stdio-only clients use a cafard on another machine.
+  It adds one argument of its own: `send` takes `image_paths`, local
+  files the proxy reads, types by content and turns into `images`
+  (at most 6 of 10 MiB), so an agent attaches a screenshot by path
+  instead of writing base64. The paths never reach the server, and the
+  HTTP `/mcp` refuses them: it cannot read the agent's disk.
+- **Shell**, not MCP: `cafard send [--channel C | --to P] [--reply-to SEQ]
+  [--image FILE]... [TEXT | -]` posts through `POST /api/messages` with the
+  token (section 3.4 of CONTRACTS) and prints the seq and the message's
+  link in the web UI, for agents that would rather run a command, and for
+  scripts.
 
 ### Output rules (every tool that returns log text)
 
@@ -854,7 +864,7 @@ Agents pay for every token, so:
 |---|---|---|
 | `whoami` | | principal name, kind, scopes |
 | `list_principals` | `kind?` | name, kind, last_seen (who can be messaged) |
-| `send` | `text`, `to?` (principal = direct message, `@humans`, or none = broadcast; section 6), `channel?` (`general`, ignored for a direct message), `reply_to?`, `images?` (base64 + mime, at most 6), `logs?` (at most 5, section 6.2: `{stream\|channel, from_seq, to_seq?, grep?, min_severity?, title?}`) | `seq`, and per log attachment the resolved line count |
+| `send` | `text`, `to?` (principal = direct message, `@humans`, or none = broadcast; section 6), `channel?` (`general`, ignored for a direct message), `reply_to?`, `images?` (base64 + mime, at most 6; through `cafard mcp` also `image_paths?`, local files, section 7 Transports), `logs?` (at most 5, section 6.2: `{stream\|channel, from_seq, to_seq?, grep?, min_severity?, title?}`) | `seq`, and per log attachment the resolved line count |
 | `list_channels` | `include_archived?` (false) | name, title, topic, bound patterns and the streams they currently match (with status), followed or not, unread count, last activity |
 | `create_channel` | `name`, `title?`, `topic?`, `streams?` (patterns), `surface?` (`markers`) | the channel; the caller follows it |
 | `update_channel` | `name`, `rename?`, `title?`, `topic?`, `add_streams?`, `remove_streams?`, `surface?`, `archived?` | the channel after the change; writes a marker. `rename` is for the creator or an admin, runtime channels only |
@@ -917,7 +927,12 @@ Set the MCP `instructions` string to a short guide, roughly:
 > Check inbox at the start of a task and whenever you wait: the human drops
 > photos and notes there, and other agents send results. Use ask_human when
 > you need a physical action. Claim a device before driving it and release
-> it after. Do not send acknowledgements or thanks to other agents.
+> it after. To share a screenshot, attach it to send: through the cafard mcp
+> stdio proxy pass its file path in image_paths; over HTTP pass base64
+> images, or run cafard send --image FILE TEXT in a shell. Do not send
+> acknowledgements or thanks to other agents.
+
+`cafard mcp` appends a sentence of its own when it offers `image_paths`.
 
 ---
 

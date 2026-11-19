@@ -201,16 +201,23 @@ func (s *Service) preview(ctx context.Context, stream string) (*dto.ChatPreview,
 	var (
 		seq          int64
 		sender, text sql.NullString
+		images       int
 	)
-	err := s.db.QueryRowContext(ctx, `SELECT seq, sender, text FROM entries WHERE stream = ? AND kind = 'message' ORDER BY seq DESC LIMIT 1`, stream).
-		Scan(&seq, &sender, &text)
+	err := s.db.QueryRowContext(ctx, `SELECT seq, sender, text,
+		(SELECT count(*) FROM json_each(coalesce(attachments, '[]')) WHERE json_extract(value, '$.type') = 'image')
+		FROM entries WHERE stream = ? AND kind = 'message' ORDER BY seq DESC LIMIT 1`, stream).
+		Scan(&seq, &sender, &text, &images)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &dto.ChatPreview{Seq: seq, Sender: sender.String, Text: previewText(text.String, 140)}, nil
+	t := previewText(text.String, 140)
+	if t == "" {
+		t = ImagesLabel(images)
+	}
+	return &dto.ChatPreview{Seq: seq, Sender: sender.String, Text: t}, nil
 }
 
 // previewText is the first line of text, at most n runes.

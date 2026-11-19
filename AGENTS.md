@@ -20,7 +20,7 @@ and the remote exist (CONTRACTS.md section 7).
 What exists:
 - `cmd/cafard`: `serve`, `config`, `version`, `token create|list|revoke`,
   `passwd` (the admin password), `pair` (a sign-in link), `push`, `term`,
-  `mcp`.
+  `mcp`, `send`.
 - `internal/store` (migrations, entry queries, retention janitor),
   `writer`, `hub`, `status`, `textclean`, `auth` (tokens, sessions,
   pairings, the admin password and its in-memory sessions, bearer auth,
@@ -234,6 +234,11 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   (`io.modelcontextprotocol/...`): the remote refuses the client's
   protocol version. `ownMeta` strips them; keep it when adding a
   forwarded request.
+- **`cafard mcp` arguments of its own must be removed before forwarding.**
+  The server decodes tool arguments strictly (unknown fields are a
+  `bad_request`), so `image_paths` is rewritten into `images` and deleted
+  in the proxy (`internal/mcpproxy/images.go`); a new proxy-only argument
+  needs the same, and its schema entry added in `build`.
 - **Track G: a nil `*io.PipeWriter` in an `io.Writer` is not nil.** The
   term session converts it explicitly; copy that pattern.
 

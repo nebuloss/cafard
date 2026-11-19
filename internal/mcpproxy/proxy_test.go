@@ -2,6 +2,8 @@ package mcpproxy
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -10,19 +12,22 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/nebuloss/cafard/internal/dto"
 )
 
 // toyRemote is a small streamable HTTP MCP server standing in for cafard:
 // a tool that reports progress, a resource, and a bearer check.
 type toyRemote struct {
 	cancelled chan struct{}
+	sent      chan json.RawMessage // the arguments of each send
 	srv       *httptest.Server
 	handler   atomic.Pointer[http.Handler]
 	sessions  atomic.Int32
 }
 
 func newToyRemote(t *testing.T) *toyRemote {
-	r := &toyRemote{cancelled: make(chan struct{}, 1)}
+	r := &toyRemote{cancelled: make(chan struct{}, 1), sent: make(chan json.RawMessage, 8)}
 	r.reset()
 	r.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Header.Get("Authorization") != "Bearer cfd_toy" {
@@ -58,11 +63,22 @@ func (r *toyRemote) reset() {
 		r.cancelled <- struct{}{}
 		return nil, struct{}{}, ctx.Err()
 	})
+	mcp.AddTool(s, &mcp.Tool{Name: "send", Description: "sends"}, func(_ context.Context, req *mcp.CallToolRequest, in toySend) (*mcp.CallToolResult, struct{}, error) {
+		r.sent <- req.Params.Arguments
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("sent with %d images", len(in.Images))}}}, struct{}{}, nil
+	})
 	s.AddResource(&mcp.Resource{URI: "cafard://inbox", Name: "inbox"}, func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: "cafard://inbox", Text: "empty"}}}, nil
 	})
 	var h http.Handler = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { r.sessions.Add(1); return s }, nil)
 	r.handler.Store(&h)
+}
+
+type toySend struct {
+	Text   string            `json:"text"`
+	Images []dto.ImageUpload `json:"images,omitempty"`
+	// Section stands for any send argument the proxy does not know.
+	Section string `json:"section,omitempty"`
 }
 
 func connectThrough(t *testing.T, p *Proxy, opts *mcp.ClientOptions) *mcp.ClientSession {
@@ -96,7 +112,7 @@ func TestProgressReachesTheLocalClientWithItsOwnToken(t *testing.T) {
 		tokens = append(tokens, req.Params.ProgressToken)
 		mu.Unlock()
 	}})
-	if got := cs.InitializeResult().Instructions; got != "Call whoami first." {
+	if got := cs.InitializeResult().Instructions; got != "Call whoami first.\n\n"+Instructions {
 		t.Errorf("instructions = %q", got)
 	}
 	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Meta: mcp.Meta{"progressToken": "mine-7"}, Name: "slow"})

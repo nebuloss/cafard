@@ -506,6 +506,7 @@ type Chat = {
   unread: number; open_questions: number;
   last_activity?: string;
   preview?: { seq: number; sender?: string; text: string; event: boolean };
+  // preview.text of a message with images and no text is "[1 image]" or "[N images]"
 };
 type StreamRef = { id: string; status: StreamState };
 type StreamState = "connected" | "idle" | "down";
@@ -626,6 +627,13 @@ Every connection also receives `counts` and `stream_status`.
   content is the same sentence as `error.message` in section 3.2.
   Structured content is `{code, message, retry_after_s?}`, with the codes
   of section 3.2.
+- **`cafard mcp` adds `image_paths` to `send`** (a list of local file
+  paths, in its `tools/list` and its calls only). It reads each file,
+  sniffs a png, jpeg, webp or gif, and forwards `images: [{data, mime}]`
+  in its place: at most 6 images in all, 10 MiB each. A refused file is a
+  tool error in the shape above (`not_found`, `bad_request`, `too_large`)
+  and nothing is forwarded. The server's `/mcp` refuses `image_paths`
+  (`bad_request`, an unknown argument).
 - **Structured output.** Every tool that returns entries also returns
   `{next_seq, has_more, shown}` as structured content. The `Entry` DTO is
   used for any entry list in structured content.
