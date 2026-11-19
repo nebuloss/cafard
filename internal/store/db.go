@@ -90,20 +90,32 @@ func (s *Store) DB() *sql.DB { return s.db }
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// migrate applies every migration not recorded yet, in file name order,
-// each in its own transaction.
+// goMigrations are data migrations SQL cannot express well, run once each
+// in name order among the SQL files.
+var goMigrations = map[string]func(ctx context.Context, tx *sql.Tx) error{
+	"0071_projects_import": importIntoProjects,
+}
+
+// migrate applies every migration not recorded yet, SQL files and Go
+// steps, in name order, each in its own transaction.
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`); err != nil {
 		return err
 	}
-	names, err := fs.Glob(migrations, "migrations/*.sql")
+	files, err := fs.Glob(migrations, "migrations/*.sql")
 	if err != nil {
 		return err
 	}
+	var names []string
+	for _, f := range files {
+		names = append(names, filepath.Base(f))
+	}
+	for name := range goMigrations {
+		names = append(names, name)
+	}
 	sort.Strings(names)
-	for _, name := range names {
-		base := filepath.Base(name)
+	for _, base := range names {
 		var done int
 		if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE name = ?`, base).Scan(&done); err != nil {
 			return err
@@ -111,15 +123,19 @@ func (s *Store) migrate(ctx context.Context) error {
 		if done > 0 {
 			continue
 		}
-		body, err := migrations.ReadFile(name)
-		if err != nil {
-			return err
-		}
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
+		if step, ok := goMigrations[base]; ok {
+			err = step(ctx, tx)
+		} else {
+			var body []byte
+			if body, err = migrations.ReadFile("migrations/" + base); err == nil {
+				_, err = tx.ExecContext(ctx, string(body))
+			}
+		}
+		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("migration %s: %w", base, err)
 		}

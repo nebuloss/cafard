@@ -237,3 +237,37 @@ func TestJanitorDeletesUnreferencedBlobsAndTrimsBySize(t *testing.T) {
 		t.Error("an unreferenced blob is visible")
 	}
 }
+
+func TestBlobLimitPerProject(t *testing.T) {
+	b, clk, _ := newStore(t)
+	ctx := context.Background()
+	refer := func(stream, sha string) {
+		t.Helper()
+		if _, err := b.st.WriteBatch(ctx, []store.Entry{{Stream: stream, Kind: store.KindMessage, Text: "x", Severity: 6, Sender: "a", TS: clk.Now(),
+			Attachments: []store.Attachment{{Type: dto.AttachmentLog, SnapshotSHA256: sha}}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old, _ := b.PutText(ctx, "an old lab snapshot")
+	clk.Advance(time.Minute)
+	newer, _ := b.PutText(ctx, "a newer lab snapshot")
+	other, _ := b.PutText(ctx, "a snapshot of another project")
+	direct, _ := b.PutText(ctx, "a snapshot in a direct message")
+	refer("chan:lab/general", old)
+	refer("chan:lab/general", newer)
+	refer("chan:other/general", other)
+	refer("dm:a~b", direct)
+	limits := func(context.Context) (map[string]store.Limits, error) {
+		return map[string]store.Limits{"lab": {BlobsMaxBytes: 25}, "other": {}}, nil
+	}
+	for _, task := range b.Tasks(1, limits) {
+		if err := task.Run(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for sha, want := range map[string]error{old: ErrNotFound, newer: nil, other: nil, direct: ErrNotFound} {
+		if _, err := b.Stat(ctx, sha); err != want {
+			t.Errorf("%s: %v, want %v", sha[:8], err, want)
+		}
+	}
+}

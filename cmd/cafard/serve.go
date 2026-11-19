@@ -26,6 +26,7 @@ import (
 	"github.com/nebuloss/cafard/internal/ingest/syslog"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/messaging"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/web"
@@ -90,25 +91,31 @@ type app struct {
 // else to the public one.
 func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) {
 	clk := clock.System{}
+	projs, err := projects.New(context.Background(), st.DB(), clk, cfg.Retention.Limits(), log.With("component", "projects"))
+	if err != nil {
+		return nil, err
+	}
 	tokens := auth.NewTokens(st.DB(), clk)
 	admin := auth.NewAdmin(st.DB(), clk)
 	h := hub.New(nil)
 	stat := status.New(clk)
 	w := writer.New(st, h, stat, clk, log.With("component", "writer"), writer.Options{})
 	jan := store.NewJanitor(st, w.Exec, cfg.Retention, clk, log.With("component", "janitor"))
+	jan.SetProjects(projs.Limits)
 	d := deps.Deps{
-		Server:  serverSettings(cfg),
-		Store:   st,
-		Writer:  w,
-		Hub:     h,
-		Status:  stat,
-		Auth:    &auth.TokenAuthenticator{Tokens: tokens, Sessions: auth.NewSessions(st.DB(), clk).Lookup, Admin: admin},
-		Tokens:  tokens,
-		Admin:   admin,
-		Janitor: jan,
-		Clock:   clk,
-		Log:     log,
-		Version: version,
+		Server:   serverSettings(cfg),
+		Store:    st,
+		Writer:   w,
+		Hub:      h,
+		Status:   stat,
+		Auth:     &auth.TokenAuthenticator{Tokens: tokens, Sessions: auth.NewSessions(st.DB(), clk).Lookup, Admin: admin},
+		Tokens:   tokens,
+		Admin:    admin,
+		Janitor:  jan,
+		Projects: projs,
+		Clock:    clk,
+		Log:      log,
+		Version:  version,
 	}
 
 	mux := http.NewServeMux()

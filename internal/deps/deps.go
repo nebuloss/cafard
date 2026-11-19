@@ -14,6 +14,7 @@ import (
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/hub"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
@@ -30,8 +31,9 @@ type Deps struct {
 	Tokens    *auth.Tokens
 	Admin     *auth.Admin // nil in tests without the admin account
 	Janitor   *store.Janitor
-	Blobs     BlobStore // nil in tests without messaging
-	Messaging Messaging // nil in tests without messaging
+	Projects  *projects.Service // projects, sinks, grants and Access
+	Blobs     BlobStore         // nil in tests without messaging
+	Messaging Messaging         // nil in tests without messaging
 	Clock     clock.Clock
 	Log       *slog.Logger
 	Version   string

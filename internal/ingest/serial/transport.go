@@ -97,7 +97,7 @@ func OpenLocalRW(p Port) (io.ReadWriteCloser, error) {
 // OpenLocal opens p.Device with p's line settings. DTR and RTS come up
 // asserted, as with any terminal program.
 func OpenLocal(p Port) (*LocalPort, error) {
-	p.setDefaults()
+	p.SetDefaults()
 	mode := bugserial.Mode{BaudRate: p.Baud, DataBits: p.DataBits}
 	switch p.Parity {
 	case "odd":
@@ -174,7 +174,7 @@ type rfc2217Port struct {
 // newRFC2217 negotiates COM-PORT-OPTION on conn and sends p's line
 // settings. A peer that refuses is kept as plain Telnet.
 func newRFC2217(ctx context.Context, conn io.ReadWriteCloser, p Port, ev Events) (*rfc2217Port, error) {
-	p.setDefaults()
+	p.SetDefaults()
 	var parity byte
 	switch p.Parity {
 	case "none":

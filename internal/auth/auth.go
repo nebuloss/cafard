@@ -94,6 +94,9 @@ type Principal struct {
 	Scopes    ScopeSet
 	TokenID   int64 // 0 for a session
 	SessionID int64 // 0 for a bearer token
+	// Sink is "project/sink" for a sink token, which writes only there and
+	// reads nothing; "" otherwise.
+	Sink string
 }
 
 func (p Principal) Has(scope Scope) bool { return p.Scopes.Has(scope) }

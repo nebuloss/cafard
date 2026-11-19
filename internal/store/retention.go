@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -53,18 +54,38 @@ func (r *Retention) Validate() error {
 	return nil
 }
 
-// maxAge is the age limit for one stream; 0 means none.
-func (r *Retention) maxAge(stream string) time.Duration {
+// Limits are the four retention limits of a project, or of everything
+// outside projects; 0 means none.
+type Limits struct {
+	LinesMaxAge    time.Duration
+	LinesMaxBytes  int64
+	MessagesMaxAge time.Duration
+	BlobsMaxBytes  int64
+}
+
+// Limits are the config's values: the defaults of a new project and the
+// limits of what is outside projects.
+func (r *Retention) Limits() Limits {
+	return Limits{LinesMaxAge: r.LinesMaxAge, LinesMaxBytes: int64(r.LinesMaxBytes),
+		MessagesMaxAge: r.MessagesMaxAge, BlobsMaxBytes: int64(r.BlobsMaxBytes)}
+}
+
+// maxAge is the age limit for one stream under lim; 0 means none. A
+// retention.streams override wins over the project's line age.
+func (r *Retention) maxAge(stream string, lim Limits) time.Duration {
 	if IsMessageStream(stream) {
-		return r.MessagesMaxAge
+		return lim.MessagesMaxAge
 	}
 	for _, s := range r.Streams {
 		if ok, _ := path.Match(s.Pattern, stream); ok || s.Pattern == stream {
 			return s.LinesMaxAge
 		}
 	}
-	return r.LinesMaxAge
+	return lim.LinesMaxAge
 }
+
+// ProjectLimits returns the limits of every project, by name.
+type ProjectLimits func(ctx context.Context) (map[string]Limits, error)
 
 // Exec runs fn inside the writer, in a transaction of its own.
 type Exec func(ctx context.Context, fn func(ctx context.Context, tx *sql.Tx) error) error
@@ -78,12 +99,13 @@ type Task struct {
 
 // Janitor applies retention every Every.
 type Janitor struct {
-	store *Store
-	exec  Exec
-	ret   Retention
-	clock clock.Clock
-	log   *slog.Logger
-	tasks []Task
+	store    *Store
+	exec     Exec
+	ret      Retention
+	projects ProjectLimits
+	clock    clock.Clock
+	log      *slog.Logger
+	tasks    []Task
 
 	Every time.Duration
 	Chunk int
@@ -93,6 +115,10 @@ type Janitor struct {
 func NewJanitor(st *Store, exec Exec, ret Retention, c clock.Clock, log *slog.Logger) *Janitor {
 	return &Janitor{store: st, exec: exec, ret: ret, clock: c, log: log, Every: 10 * time.Minute, Chunk: 5000}
 }
+
+// SetProjects gives the janitor each project's limits; without it every
+// stream follows the config's.
+func (j *Janitor) SetProjects(f ProjectLimits) { j.projects = f }
 
 // Add registers a task that runs after the entry passes.
 func (j *Janitor) Add(t Task) { j.tasks = append(j.tasks, t) }
@@ -140,9 +166,30 @@ func (j *Janitor) PassEntries(ctx context.Context) (PassResult, error) {
 	if err != nil {
 		return res, err
 	}
+	projects := map[string]Limits{}
+	if j.projects != nil {
+		if projects, err = j.projects(ctx); err != nil {
+			return res, err
+		}
+	}
+	outside := j.ret.Limits()
+	// Log streams by the size limit that applies to them: their project's,
+	// or the config's for what is outside projects.
+	bySize := map[string][]string{}
 	now := j.clock.Now()
 	for _, s := range streams {
-		age := j.ret.maxAge(s.ID)
+		lim, ok := projects[ProjectOf(s.ID)]
+		if !ok {
+			lim = outside
+		}
+		if !IsMessageStream(s.ID) {
+			key := ""
+			if ok {
+				key = ProjectOf(s.ID)
+			}
+			bySize[key] = append(bySize[key], s.ID)
+		}
+		age := j.ret.maxAge(s.ID, lim)
 		if age <= 0 {
 			continue
 		}
@@ -153,8 +200,15 @@ func (j *Janitor) PassEntries(ctx context.Context) (PassResult, error) {
 			return res, err
 		}
 	}
-	if j.ret.LinesMaxBytes > 0 {
-		n, err := j.trimLines(ctx, int64(j.ret.LinesMaxBytes))
+	for key, ids := range bySize {
+		limit := outside.LinesMaxBytes
+		if key != "" {
+			limit = projects[key].LinesMaxBytes
+		}
+		if limit <= 0 {
+			continue
+		}
+		n, err := j.trimLines(ctx, ids, limit)
 		res.BySize += n
 		if err != nil {
 			return res, err
@@ -169,19 +223,27 @@ const entryOverhead = 64
 // deviceWhere keeps the log streams, leaving messages out.
 const deviceWhere = `stream NOT LIKE 'chan:%' AND stream NOT LIKE 'dm:%'`
 
-// trimLines deletes the oldest device-stream entries until their size is
-// under limit.
-func (j *Janitor) trimLines(ctx context.Context, limit int64) (int64, error) {
+// inStreams keeps the entries of the streams in the JSON array bound
+// first, so a long list is one parameter.
+const inStreams = `stream IN (SELECT value FROM json_each(?))`
+
+// trimLines deletes the oldest entries of the log streams ids until their
+// size is under limit.
+func (j *Janitor) trimLines(ctx context.Context, ids []string, limit int64) (int64, error) {
+	list, err := json.Marshal(ids)
+	if err != nil {
+		return 0, err
+	}
 	var total int64
-	if err := j.store.db.QueryRowContext(ctx, `SELECT coalesce(sum(length(CAST(text AS BLOB)) + ?), 0) FROM entries WHERE `+deviceWhere,
-		entryOverhead).Scan(&total); err != nil {
+	if err := j.store.db.QueryRowContext(ctx, `SELECT coalesce(sum(length(CAST(text AS BLOB)) + ?), 0) FROM entries WHERE `+inStreams,
+		entryOverhead, string(list)).Scan(&total); err != nil {
 		return 0, err
 	}
 	excess := total - limit
 	if excess <= 0 {
 		return 0, nil
 	}
-	rows, err := j.store.db.QueryContext(ctx, `SELECT seq, length(CAST(text AS BLOB)) + ? FROM entries WHERE `+deviceWhere+` ORDER BY seq`, entryOverhead)
+	rows, err := j.store.db.QueryContext(ctx, `SELECT seq, length(CAST(text AS BLOB)) + ? FROM entries WHERE `+inStreams+` ORDER BY seq`, entryOverhead, string(list))
 	if err != nil {
 		return 0, err
 	}
@@ -203,7 +265,7 @@ func (j *Janitor) trimLines(ctx context.Context, limit int64) (int64, error) {
 		return 0, err
 	}
 	return j.deleteChunks(ctx, `DELETE FROM entries WHERE seq IN
-		(SELECT seq FROM entries WHERE `+deviceWhere+` AND seq <= ? ORDER BY seq LIMIT ?)`, cutoff)
+		(SELECT seq FROM entries WHERE `+inStreams+` AND seq <= ? ORDER BY seq LIMIT ?)`, string(list), cutoff)
 }
 
 // deleteChunks repeats a DELETE ending in "LIMIT ?" until it deletes

@@ -88,7 +88,8 @@ func TestMigrationsAreRecordedAndReopenIsANoop(t *testing.T) {
 		if err := st.DB().QueryRow(`SELECT min(name), count(*) FROM schema_migrations`).Scan(&first, &count); err != nil {
 			t.Fatal(err)
 		}
-		if first != "0001_0_core.sql" || count != len(migrationFiles(t)) {
+		// The files, and the Go step that moves an old install into projects.
+		if first != "0001_0_core.sql" || count != len(migrationFiles(t))+1 {
 			t.Errorf("migrations = %d from %s", count, first)
 		}
 		st.Close()

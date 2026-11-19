@@ -96,7 +96,8 @@ among the options the brief left open, with their reasons:
   in the migration, before the writer starts; the text and the FTS index
   are untouched, and seq order is unchanged. This is the one write to
   entries outside the writer, like the FTS rebuild of 0050, and it costs a
-  rewrite of the stream index: a few minutes on a large database, logged.
+  rewrite of the stream index: the first start of this version may take a
+  few minutes on a large database before it listens.
   Bindings, follows, claims and the `stream`, `streams` and `channel` of
   log attachments are rewritten too. A sink is made for every old log
   stream name that is a valid sink name, with the address as its source

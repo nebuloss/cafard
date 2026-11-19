@@ -52,6 +52,30 @@ func IsMessageStream(stream string) bool {
 	return strings.HasPrefix(stream, "chan:") || strings.HasPrefix(stream, "dm:")
 }
 
+// ProjectOf is the project a stream belongs to: "lab" for serial:lab/dut1
+// and chan:lab/x; "" for a direct conversation and an id without one.
+func ProjectOf(stream string) string {
+	kind, rest, ok := strings.Cut(stream, ":")
+	if !ok || kind == "dm" {
+		return ""
+	}
+	project, _, ok := strings.Cut(rest, "/")
+	if !ok {
+		return ""
+	}
+	return project
+}
+
+// LocalName is what follows the project in a stream id: the sink of
+// serial:lab/dut1, the channel of chan:lab/x; "" without a project.
+func LocalName(stream string) string {
+	if ProjectOf(stream) == "" {
+		return ""
+	}
+	_, rest, _ := strings.Cut(stream, "/")
+	return rest
+}
+
 // Attachment is one typed attachment of a message, stored as JSON in
 // entries.attachments. Type is "image" or "log".
 type Attachment struct {

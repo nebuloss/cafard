@@ -48,6 +48,7 @@ type TokenRow struct {
 	Kind      string
 	Label     string
 	Scopes    ScopeSet
+	Sink      string // "project/sink" of a sink token
 	CreatedAt time.Time
 	LastUsed  *time.Time
 }
@@ -170,6 +171,16 @@ func (t *Tokens) Principals(ctx context.Context, kind string) ([]PrincipalRow, e
 // CreateToken mints a token for an existing principal and returns it in
 // clear, once. Only its hash is stored.
 func (t *Tokens) CreateToken(ctx context.Context, principal, label string, scopes ScopeSet) (TokenRow, string, error) {
+	return t.createToken(ctx, principal, label, scopes, 0, "")
+}
+
+// CreateSinkToken mints a token that writes into one sink only (sinks.id
+// sinkID, named ref), for a device principal: scope ingest, no grants.
+func (t *Tokens) CreateSinkToken(ctx context.Context, principal, label string, sinkID int64, ref string) (TokenRow, string, error) {
+	return t.createToken(ctx, principal, label, NewScopeSet(ScopeIngest), sinkID, ref)
+}
+
+func (t *Tokens) createToken(ctx context.Context, principal, label string, scopes ScopeSet, sinkID int64, ref string) (TokenRow, string, error) {
 	if len(scopes) == 0 {
 		return TokenRow{}, "", errors.New("a token needs at least one scope")
 	}
@@ -185,8 +196,12 @@ func (t *Tokens) CreateToken(ctx context.Context, principal, label string, scope
 		return TokenRow{}, "", err
 	}
 	now := t.clock.Now().UTC()
-	res, err := t.db.ExecContext(ctx, `INSERT INTO tokens(hash, principal, label, scopes, created_at) VALUES (?, ?, ?, ?, ?)`,
-		HashToken(secret), principal, label, scopes.String(), now.UnixNano())
+	var sink any
+	if sinkID != 0 {
+		sink = sinkID
+	}
+	res, err := t.db.ExecContext(ctx, `INSERT INTO tokens(hash, principal, label, scopes, created_at, sink) VALUES (?, ?, ?, ?, ?, ?)`,
+		HashToken(secret), principal, label, scopes.String(), now.UnixNano(), sink)
 	if err != nil {
 		return TokenRow{}, "", err
 	}
@@ -194,13 +209,14 @@ func (t *Tokens) CreateToken(ctx context.Context, principal, label string, scope
 	if err != nil {
 		return TokenRow{}, "", err
 	}
-	return TokenRow{ID: id, Principal: principal, Kind: p.Kind, Label: label, Scopes: scopes, CreatedAt: now}, secret, nil
+	return TokenRow{ID: id, Principal: principal, Kind: p.Kind, Label: label, Scopes: scopes, Sink: ref, CreatedAt: now}, secret, nil
 }
 
 // ListTokens lists tokens, newest first, optionally of one principal.
 func (t *Tokens) ListTokens(ctx context.Context, principal string) ([]TokenRow, error) {
-	rows, err := t.db.QueryContext(ctx, `SELECT t.id, t.principal, p.kind, coalesce(t.label, ''), t.scopes, t.created_at, t.last_used
-		FROM tokens t JOIN principals p ON p.name = t.principal
+	rows, err := t.db.QueryContext(ctx, `SELECT t.id, t.principal, p.kind, coalesce(t.label, ''), t.scopes, t.created_at, t.last_used,
+		coalesce(k.project || '/' || k.name, '')
+		FROM tokens t JOIN principals p ON p.name = t.principal LEFT JOIN sinks k ON k.id = t.sink
 		WHERE ? = '' OR t.principal = ? ORDER BY t.id DESC`, principal, principal)
 	if err != nil {
 		return nil, err
@@ -214,7 +230,7 @@ func (t *Tokens) ListTokens(ctx context.Context, principal string) ([]TokenRow, 
 			created  int64
 			lastUsed sql.NullInt64
 		)
-		if err := rows.Scan(&tr.ID, &tr.Principal, &tr.Kind, &tr.Label, &scopes, &created, &lastUsed); err != nil {
+		if err := rows.Scan(&tr.ID, &tr.Principal, &tr.Kind, &tr.Label, &scopes, &created, &lastUsed, &tr.Sink); err != nil {
 			return nil, err
 		}
 		tr.Scopes, _ = ParseScopes(scopes)
@@ -253,9 +269,9 @@ func (t *Tokens) Lookup(ctx context.Context, token string) (Principal, error) {
 		p      Principal
 		scopes string
 	)
-	err := t.db.QueryRowContext(ctx, `SELECT t.id, t.principal, p.kind, t.scopes FROM tokens t
-		JOIN principals p ON p.name = t.principal WHERE t.hash = ?`, HashToken(token)).
-		Scan(&p.TokenID, &p.Name, &p.Kind, &scopes)
+	err := t.db.QueryRowContext(ctx, `SELECT t.id, t.principal, p.kind, t.scopes, coalesce(k.project || '/' || k.name, '') FROM tokens t
+		JOIN principals p ON p.name = t.principal LEFT JOIN sinks k ON k.id = t.sink WHERE t.hash = ?`, HashToken(token)).
+		Scan(&p.TokenID, &p.Name, &p.Kind, &scopes, &p.Sink)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Principal{}, ErrInvalid
 	}

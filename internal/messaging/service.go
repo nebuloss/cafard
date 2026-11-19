@@ -20,6 +20,7 @@ import (
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/hub"
 	"github.com/nebuloss/cafard/internal/mcpserver"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/ratelimit"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
@@ -46,17 +47,18 @@ type StagedLookup func(ctx context.Context, p auth.Principal, id string) ([]dto.
 
 // Service implements deps.Messaging.
 type Service struct {
-	st     *store.Store
-	db     *sql.DB
-	w      writer.Writer
-	exec   Execer
-	hub    hub.Hub
-	status statusSnapshot
-	tokens *auth.Tokens
-	blobs  *blob.Store
-	clock  clock.Clock
-	log    *slog.Logger
-	opts   Options
+	st       *store.Store
+	db       *sql.DB
+	w        writer.Writer
+	exec     Execer
+	hub      hub.Hub
+	status   statusSnapshot
+	tokens   *auth.Tokens
+	projects *projects.Service // nil in tests without projects
+	blobs    *blob.Store
+	clock    clock.Clock
+	log      *slog.Logger
+	opts     Options
 
 	sendLimit   *ratelimit.Limiter
 	createLimit *ratelimit.Limiter
@@ -90,7 +92,7 @@ func New(ctx context.Context, d deps.Deps, o Options) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{
-		st: d.Store, db: d.Store.DB(), w: d.Writer, exec: exec, hub: d.Hub, tokens: d.Tokens, blobs: blobs,
+		st: d.Store, db: d.Store.DB(), w: d.Writer, exec: exec, hub: d.Hub, tokens: d.Tokens, projects: d.Projects, blobs: blobs,
 		clock: d.Clock, log: d.Log.With("component", "messaging"), opts: o,
 		sendLimit:   ratelimit.New(d.Clock, float64(o.Config.RatePerMinute)/60, float64(o.Config.Burst)),
 		createLimit: ratelimit.New(d.Clock, float64(o.Config.ChannelCreatePerHour)/3600, float64(o.Config.ChannelCreatePerHour)),
@@ -127,7 +129,11 @@ func (s *Service) JanitorTasks() []store.Task {
 		{Name: "expired claims", Run: func(ctx context.Context) error { _, err := s.ExpireClaims(ctx); return err }},
 		{Name: "follows of deleted chats", Run: s.deleteOrphanFollows},
 	}
-	return append(tasks, s.blobs.Tasks(s.opts.BlobsMaxBytes)...)
+	var limits store.ProjectLimits
+	if s.projects != nil {
+		limits = s.projects.Limits
+	}
+	return append(tasks, s.blobs.Tasks(s.opts.BlobsMaxBytes, limits)...)
 }
 
 // Start runs the auto-archive loop and the resource notifications until

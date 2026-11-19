@@ -340,14 +340,17 @@ func (s *Service) SinkForAddr(ip netip.Addr) (Sink, bool)           // syslog, n
 func (s *Service) SinkForIngest(ctx context.Context, p auth.Principal, name string) (Sink, bool) // HTTP, OTLP
 func (s *Service) SerialPorts() []serial.Port      // what the serial manager runs
 func (s *Service) OnSinksChanged(f func())         // after a sink is created, changed or deleted
+
+// internal/store
 func ProjectOf(stream string) string               // "lab" for serial:lab/dut1 and chan:lab/x; "" for dm: and unprefixed ids
+func LocalName(stream string) string               // "dut1" for serial:lab/dut1
 ```
 
 - Grants are cached per principal and credential; every write through the
   service drops the cache, and entries also expire after 5 s so grants
   added from the CLI (another process) apply without a restart.
-- `ProjectOf` is the only parser of stream ids into projects; everything
-  that checks access goes through `Access.Can`.
+- `store.ProjectOf` is the only parser of stream ids into projects;
+  everything that checks access goes through `Access.Can`.
 
 ---
 
