@@ -4,6 +4,7 @@ package status
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -34,6 +35,10 @@ type Registry interface {
 	Seen(stream string, ts time.Time)
 	SetConnected(stream string, up bool, reason string)
 	Dropped(stream string, n int)
+	// Unrouted counts n entries of a transport that reached no sink and
+	// were not stored.
+	Unrouted(transport string, n int)
+	UnroutedCounts() map[string]int64
 	SetLineState(stream string, ls LineState)
 	Snapshot() []dto.Stream
 	Watch(buffer int) (<-chan dto.Stream, func())
@@ -72,13 +77,14 @@ type Memory struct {
 	clock    clock.Clock
 	sources  map[string]*source
 	watchers map[chan dto.Stream]struct{}
+	unrouted map[string]int64
 }
 
 var _ Registry = (*Memory)(nil)
 
 // New returns an empty registry.
 func New(c clock.Clock) *Memory {
-	return &Memory{clock: c, sources: map[string]*source{}, watchers: map[chan dto.Stream]struct{}{}}
+	return &Memory{clock: c, sources: map[string]*source{}, watchers: map[chan dto.Stream]struct{}{}, unrouted: map[string]int64{}}
 }
 
 func inferTransport(stream string) string {
@@ -155,6 +161,20 @@ func (m *Memory) Dropped(stream string, n int) {
 	s := m.get(stream)
 	s.dropped += int64(n)
 	m.changed(s)
+}
+
+// Unrouted counts entries that reached no sink, by transport.
+func (m *Memory) Unrouted(transport string, n int) {
+	m.mu.Lock()
+	m.unrouted[transport] += int64(n)
+	m.mu.Unlock()
+}
+
+// UnroutedCounts are the Unrouted totals since start.
+func (m *Memory) UnroutedCounts() map[string]int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return maps.Clone(m.unrouted)
 }
 
 // SetLineState records the modem lines of a serial port.

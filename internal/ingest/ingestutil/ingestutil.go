@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
@@ -105,6 +106,43 @@ func SubmitLossy(ctx context.Context, d deps.Deps, log *slog.Logger, e store.Ent
 			log.Debug("entry refused", "stream", e.Stream, "err", err)
 		}
 	}
+}
+
+// unroutedLogEvery bounds the debug lines about logs no sink wants: a
+// stray sender on the LAN must not fill the journal.
+const unroutedLogEvery = time.Minute
+
+// Unrouted drops the logs of one transport that reached no sink: it
+// counts them in the status, and says so at debug level at most once a
+// minute, with how many went since.
+type Unrouted struct {
+	Status    status.Registry
+	Clock     clock.Clock
+	Log       *slog.Logger
+	Transport string
+
+	mu     sync.Mutex
+	last   time.Time
+	missed int
+}
+
+// Drop counts n entries; args describe the last of them for the log line.
+func (u *Unrouted) Drop(n int, args ...any) {
+	if n <= 0 {
+		return
+	}
+	u.Status.Unrouted(u.Transport, n)
+	now := u.Clock.Now()
+	u.mu.Lock()
+	u.missed += n
+	if !u.last.IsZero() && now.Sub(u.last) < unroutedLogEvery {
+		u.mu.Unlock()
+		return
+	}
+	missed := u.missed
+	u.last, u.missed = now, 0
+	u.mu.Unlock()
+	u.Log.Debug("logs reached no sink and were dropped", append([]any{"transport", u.Transport, "entries", missed}, args...)...)
 }
 
 // Allowlist is a set of source prefixes. An empty list allows everyone.

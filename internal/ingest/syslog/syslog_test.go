@@ -105,12 +105,12 @@ func FuzzFraming(f *testing.F) {
 
 func TestMessageEntries(t *testing.T) {
 	m := Parse([]byte("<11>1 2026-11-16T10:00:00Z - app 7 ID1 [a b=\"c\"] line one\nline two\n"), now, time.UTC)
-	es := MessageEntries(m, testIP, now)
+	es := MessageEntries(m, testIP, now, "syslog:lab/dut1")
 	if len(es) != 2 {
 		t.Fatalf("%d entries", len(es))
 	}
 	e := es[0]
-	if e.Stream != "syslog:192.0.2.7" || e.Host != "192.0.2.7" || e.App != "app" || e.Severity != 3 || e.Text != "line one" || es[1].Text != "line two" {
+	if e.Stream != "syslog:lab/dut1" || e.Host != "192.0.2.7" || e.App != "app" || e.Severity != 3 || e.Text != "line one" || es[1].Text != "line two" {
 		t.Errorf("entry %+v", e)
 	}
 	if e.SrcTS == nil || !e.SrcTS.Equal(time.Date(2026, 11, 16, 10, 0, 0, 0, time.UTC)) {
@@ -127,13 +127,13 @@ func TestMessageEntries(t *testing.T) {
 		t.Errorf("sd %s", e.Meta)
 	}
 
-	raw := MessageEntries(Parse([]byte("no pri at all"), now, time.UTC), testIP, now)
-	if raw[0].Severity != store.DefaultSeverity || raw[0].Text != "no pri at all" || raw[0].Stream != "syslog:192.0.2.7" {
+	raw := MessageEntries(Parse([]byte("no pri at all"), now, time.UTC), testIP, now, "syslog:lab/dut1")
+	if raw[0].Severity != store.DefaultSeverity || raw[0].Text != "no pri at all" || raw[0].Host != "192.0.2.7" {
 		t.Errorf("raw %+v", raw[0])
 	}
 
-	weird := MessageEntries(Parse([]byte("<13>1 - h*st?[x] a - - - x"), now, time.UTC), testIP, now)
-	if err := store.ValidateStreamID(weird[0].Stream); err != nil {
+	weird := MessageEntries(Parse([]byte("<13>1 - h*st?[x] a - - - x"), now, time.UTC), testIP, now, "syslog:lab/dut1")
+	if err := store.ValidateStreamID("syslog:" + weird[0].Host); err != nil {
 		t.Errorf("hostile hostname: %v", err)
 	}
 
@@ -141,7 +141,7 @@ func TestMessageEntries(t *testing.T) {
 	for i := range 200 {
 		big.SD[fmt.Sprintf("id%03d", i)] = map[string]string{"k": strings.Repeat("v", 40)}
 	}
-	be := MessageEntries(big, testIP, now)[0]
+	be := MessageEntries(big, testIP, now, "syslog:lab/dut1")[0]
 	if len(be.Meta) > store.MaxMetaBytes || !json.Valid(be.Meta) || !strings.Contains(string(be.Meta), `"truncated":true`) {
 		t.Errorf("meta of %d bytes, valid %v", len(be.Meta), json.Valid(be.Meta))
 	}
@@ -156,13 +156,21 @@ type harness struct {
 	done   chan error
 }
 
-func startSyslog(t *testing.T, allow []string, prep func(*ingesttest.Writer)) *harness {
+// local is the sink the test senders, all on 127.0.0.1, land in.
+const local = "syslog:lab/local"
+
+func startSyslog(t *testing.T, allow []string, prep func(*ingesttest.Writer), sinks ...string) *harness {
 	t.Helper()
 	h := &harness{w: ingesttest.NewWriter(), st: ingesttest.NewStatus(), done: make(chan error, 1)}
 	if prep != nil {
 		prep(h.w)
 	}
-	s, err := New(ingesttest.Deps(h.w, h.st), allow)
+	if len(sinks) == 0 {
+		sinks = []string{"lab/local=127.0.0.1"}
+	}
+	d := ingesttest.Deps(h.w, h.st)
+	d.Projects = ingesttest.NewSinks(t, sinks...).Service
+	s, err := New(d, allow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,27 +221,20 @@ func TestUDPAndTCPListeners(t *testing.T) {
 	es := h.w.Wait(3, 5*time.Second)
 	got := map[string]string{}
 	for _, e := range es {
-		got[e.Stream] += e.Text + "|"
+		if e.Stream != local {
+			t.Errorf("entry in %s", e.Stream)
+		}
+		got[e.Host] += e.Text + "|"
 	}
-	if got["syslog:dut1"] != "over udp|" || got["syslog:dut2"] != "x|" || got["syslog:127.0.0.1"] != "not a frame|" {
+	if got["dut1"] != "over udp|" || got["dut2"] != "x|" || got["127.0.0.1"] != "not a frame|" {
 		t.Fatalf("entries %v", got)
 	}
-	// The TCP peer went away: its streams are down; UDP streams never are.
+	// The TCP peer went away: its sink's stream is down.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		var up, known bool
-		var transport string
-		h.st.Get(func(s *ingesttest.Status) {
-			up, known = s.Connected["syslog:dut2"]
-			transport = s.Declared["syslog:dut2"]
-			if _, ok := s.Connected["syslog:dut1"]; ok {
-				t.Error("a UDP stream was marked connected or down")
-			}
-		})
+		h.st.Get(func(s *ingesttest.Status) { up, known = s.Connected[local] })
 		if known && !up {
-			if transport != "tcp" {
-				t.Errorf("transport %q", transport)
-			}
 			break
 		}
 		if time.Now().After(deadline) {
@@ -251,7 +252,7 @@ func TestUDPDropsAreCounted(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		var n int
-		h.st.Get(func(s *ingesttest.Status) { n = s.Drops["syslog:lossy"] })
+		h.st.Get(func(s *ingesttest.Status) { n = s.Drops[local] })
 		if n == 5 {
 			break
 		}
@@ -283,6 +284,27 @@ func TestAllowlist(t *testing.T) {
 	send(t, "udp", h2.udp, "<11>welcome")
 	if es := h2.w.Wait(1, 5*time.Second); len(es) != 1 {
 		t.Fatal("allowed source refused")
+	}
+}
+
+func TestSendersNoSinkListsAreDropped(t *testing.T) {
+	h := startSyslog(t, nil, nil, "lab/far=10.0.0.0/8")
+	send(t, "udp", h.udp, "<11>1 - dut1 app - - - nobody wants this")
+	send(t, "tcp", h.tcp, "<11>1 - dut1 app - - - nor this\n")
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var n int
+		h.st.Get(func(s *ingesttest.Status) { n = s.Unrouteds["syslog"] })
+		if n == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("unrouted = %d, want 2", n)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if es := h.w.Entries(); len(es) != 0 {
+		t.Fatalf("entries from an unlisted sender: %v", es)
 	}
 }
 

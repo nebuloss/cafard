@@ -15,7 +15,6 @@ import (
 	"github.com/nebuloss/cafard/internal/ingest/serial"
 	"github.com/nebuloss/cafard/internal/ingest/serial/rfc2217"
 	"github.com/nebuloss/cafard/internal/ingest/serial/rfc2217/rfc2217test"
-	"github.com/nebuloss/cafard/internal/messaging"
 	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/testutil"
 )
@@ -52,8 +51,11 @@ func TestTwoAgentsContendForASerialPort(t *testing.T) {
 			{Name: "ro", TCP: roAddr},
 			{Name: "dead", RFC2217: dead, Writable: true},
 		}
-		c.Channels.List = append(c.Channels.List, messaging.ChannelConfig{Name: projects.Imported + "/general"})
 	})
+	// The old serial list became sinks of the project imported, once.
+	if !strings.Contains(s.logs.String(), "the serial list of the config is imported") {
+		t.Errorf("no warning about the serial list:\n%s", s.logs.String())
+	}
 	driver := []auth.Scope{auth.ScopeRead, auth.ScopeMessage, auth.ScopeSerialWrite}
 	tokA := s.tokenOnly("agent-a", auth.KindAgent, driver...)
 	tokB := s.tokenOnly("agent-b", auth.KindAgent, driver...)

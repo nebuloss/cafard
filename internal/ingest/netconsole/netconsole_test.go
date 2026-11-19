@@ -49,16 +49,19 @@ func TestSplitBody(t *testing.T) {
 var (
 	ip1 = netip.MustParseAddr("10.0.50.42")
 	ip2 = netip.MustParseAddr("10.0.50.43")
+	ip3 = netip.MustParseAddr("192.0.2.1")
 )
 
-func newServer(t *testing.T) (*Server, *ingesttest.Writer, *ingesttest.Status) {
+// newServer routes ip1 to the sink dut1 and the rest of its /24 to bench.
+func newServer(t testing.TB, sinks ...string) (*Server, *ingesttest.Writer, *ingesttest.Status) {
 	t.Helper()
 	w, st := ingesttest.NewWriter(), ingesttest.NewStatus()
-	s, err := New(ingesttest.Deps(w, st), map[string]string{"10.0.50.42": "dut1"})
-	if err != nil {
-		t.Fatal(err)
+	if len(sinks) == 0 {
+		sinks = []string{"lab/dut1=10.0.50.42", "lab/bench=10.0.50.0/24"}
 	}
-	return s, w, st
+	d := ingesttest.Deps(w, st)
+	d.Projects = ingesttest.NewSinks(t, sinks...).Service
+	return New(d), w, st
 }
 
 func TestHandle(t *testing.T) {
@@ -77,7 +80,7 @@ func TestHandle(t *testing.T) {
 	if len(es) != 3 {
 		t.Fatalf("entries %+v", es)
 	}
-	if es[0].Stream != "netconsole:dut1" || es[0].Severity != 3 || es[0].Text != "eth0: link down" || es[0].App != "kernel" {
+	if es[0].Stream != "netconsole:lab/dut1" || es[0].Severity != 3 || es[0].Text != "eth0: link down" || es[0].App != "kernel" {
 		t.Errorf("extended %+v", es[0])
 	}
 	var meta map[string]any
@@ -85,7 +88,7 @@ func TestHandle(t *testing.T) {
 	if meta["seq"] != float64(812) || meta["ts_usec"] != float64(90123456) || meta["dict"].(map[string]any)["SUBSYSTEM"] != "net" || meta["source_ip"] != "10.0.50.42" {
 		t.Errorf("meta %s", es[0].Meta)
 	}
-	if es[1].Stream != "netconsole:10.0.50.43" || es[1].Text != "[    1.0] Booting Linux" || es[1].Severity != 6 {
+	if es[1].Stream != "netconsole:lab/bench" || es[1].Host != "10.0.50.43" || es[1].Text != "[    1.0] Booting Linux" || es[1].Severity != 6 {
 		t.Errorf("plain %+v", es[1])
 	}
 	if es[2].Text != "first half second half" || es[2].Severity != 4 {
@@ -109,7 +112,7 @@ func TestHandle(t *testing.T) {
 		t.Fatalf("stale fragment: %+v", es)
 	}
 	st.Get(func(s *ingesttest.Status) {
-		if s.Declared["netconsole:dut1"] != "udp" {
+		if s.Declared["netconsole:lab/dut1"] != "udp" {
 			t.Errorf("declared %v", s.Declared)
 		}
 	})
@@ -122,18 +125,29 @@ func TestDropsAreCounted(t *testing.T) {
 		s.Handle(context.Background(), []byte("6,1,1,-;x"), ip1, time.Now())
 	}
 	st.Get(func(s *ingesttest.Status) {
-		if s.Drops["netconsole:dut1"] != 3 {
+		if s.Drops["netconsole:lab/dut1"] != 3 {
 			t.Errorf("drops %v", s.Drops)
 		}
 	})
 }
 
-func TestListener(t *testing.T) {
-	w, st := ingesttest.NewWriter(), ingesttest.NewStatus()
-	s, err := New(ingesttest.Deps(w, st), map[string]string{"127.0.0.1": "vm"})
-	if err != nil {
-		t.Fatal(err)
+func TestSendersNoSinkListsAreDropped(t *testing.T) {
+	s, w, st := newServer(t)
+	s.Handle(context.Background(), []byte("6,1,1,-;who is this"), ip3, time.Now())
+	s.Handle(context.Background(), []byte("a partial line"), ip3, time.Now())
+	s.tick(context.Background(), time.Now().Add(time.Minute))
+	if es := w.Entries(); len(es) != 0 {
+		t.Fatalf("entries from an unlisted sender: %+v", es)
 	}
+	st.Get(func(s *ingesttest.Status) {
+		if s.Unrouteds["netconsole"] != 2 {
+			t.Errorf("unrouted %v", s.Unrouteds)
+		}
+	})
+}
+
+func TestListener(t *testing.T) {
+	s, w, _ := newServer(t, "lab/vm=127.0.0.1")
 	bound := make(chan net.Addr, 1)
 	s.Bound = func(a net.Addr) { bound <- a }
 	ctx, cancel := context.WithCancel(context.Background())
@@ -147,7 +161,7 @@ func TestListener(t *testing.T) {
 	c.Write([]byte("6,1,1,-;hello"))
 	c.Write([]byte("partial without newline"))
 	c.Close()
-	if es := w.Wait(2, 5*time.Second); len(es) != 2 || es[0].Stream != "netconsole:vm" || es[1].Text != "partial without newline" {
+	if es := w.Wait(2, 5*time.Second); len(es) != 2 || es[0].Stream != "netconsole:lab/vm" || es[1].Text != "partial without newline" {
 		t.Fatalf("entries %+v", es)
 	}
 	cancel()
@@ -177,8 +191,8 @@ func FuzzHandle(f *testing.F) {
 	f.Add([]byte("6,416,1758426,-;hello\n KEY=v\n"))
 	f.Add([]byte("4,9,10,-,ncfrag=11/22;second half"))
 	f.Add([]byte("plain\rline\n"))
+	s, w, _ := newServer(f)
 	f.Fuzz(func(t *testing.T, b []byte) {
-		s, w, _ := newServer(t)
 		s.Handle(context.Background(), b, ip1, time.Now())
 		s.flushAll(context.Background())
 		for _, e := range w.Entries() {

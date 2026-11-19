@@ -78,23 +78,26 @@ func New(d deps.Deps, allow []string) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("syslog.allow: %w", err)
 	}
+	log := d.Log.With("component", "syslog")
 	return &Server{
-		d:     d,
-		allow: al,
-		log:   d.Log.With("component", "syslog"),
-		udp:   ingestutil.Declarer{Status: d.Status, Transport: "udp"},
-		tcp:   ingestutil.Declarer{Status: d.Status, Transport: "tcp"},
-		peers: map[string]int{},
+		d:        d,
+		allow:    al,
+		log:      log,
+		udp:      ingestutil.Declarer{Status: d.Status, Transport: "udp"},
+		tcp:      ingestutil.Declarer{Status: d.Status, Transport: "tcp"},
+		unrouted: &ingestutil.Unrouted{Status: d.Status, Clock: d.Clock, Log: log, Transport: "syslog"},
+		peers:    map[string]int{},
 	}, nil
 }
 
 // Server is the two listeners.
 type Server struct {
-	d     deps.Deps
-	allow ingestutil.Allowlist
-	log   *slog.Logger
-	udp   ingestutil.Declarer
-	tcp   ingestutil.Declarer
+	d        deps.Deps
+	allow    ingestutil.Allowlist
+	log      *slog.Logger
+	udp      ingestutil.Declarer
+	tcp      ingestutil.Declarer
+	unrouted *ingestutil.Unrouted
 
 	mu    sync.Mutex
 	peers map[string]int // TCP connections per stream, for SetConnected
@@ -155,20 +158,24 @@ func (s *Server) Run(ctx context.Context, udpAddr, tcpAddr string) error {
 	return nil
 }
 
-// entries turns one message from ip into entries, one per line of its text.
+// entries turns one message from ip into entries in the syslog stream of
+// the sink listing ip, one per line of its text; none when no sink does.
 func (s *Server) entries(b []byte, ip netip.Addr, at time.Time) []store.Entry {
+	k, ok := s.d.Projects.SinkForAddr(ip)
+	if !ok {
+		s.unrouted.Drop(1, "source", ingestutil.AddrName(ip))
+		return nil
+	}
 	m := Parse(b, s.d.Clock.Now(), time.Local)
-	return MessageEntries(m, ip, at)
+	return MessageEntries(m, ip, at, k.Stream("syslog"))
 }
 
-// MessageEntries maps a parsed message to entries: stream
-// syslog:<hostname, else source IP>, one entry per line of its text.
-func MessageEntries(m Message, ip netip.Addr, at time.Time) []store.Entry {
-	name := ingestutil.StreamName(m.Hostname)
-	host := name
-	if name == "" {
-		name = ingestutil.AddrName(ip)
-		host = name
+// MessageEntries maps a parsed message to entries of stream, one per line
+// of its text; the host is the message's hostname, else the source IP.
+func MessageEntries(m Message, ip netip.Addr, at time.Time, stream string) []store.Entry {
+	host := ingestutil.StreamName(m.Hostname)
+	if host == "" {
+		host = ingestutil.AddrName(ip)
 	}
 	var meta ingestutil.Meta
 	if m.Facility >= 0 {
@@ -187,7 +194,7 @@ func MessageEntries(m Message, ip netip.Addr, at time.Time) []store.Entry {
 		out[i] = store.Entry{
 			TS:       at,
 			SrcTS:    m.Time,
-			Stream:   "syslog:" + name,
+			Stream:   stream,
 			Kind:     store.KindLine,
 			Severity: m.Severity,
 			Host:     host,

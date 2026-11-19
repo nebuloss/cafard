@@ -16,9 +16,9 @@ func TestSearchFollowsChannelsAndNeverLeaksADirectMessage(t *testing.T) {
 	_, a := s.agent("agent-a")
 	_, b := s.agent("agent-b")
 	_, c := s.agent("agent-c")
-	call(t, a, "create_channel", map[string]any{"name": "dut1", "streams": []string{"serial:lab/dut1"}})
-	s.ingest("serial:lab/dut1", "\x1b[33musb 1-1: USB disconnect, device number 2\x1b[0m\nboot ok\n")
-	s.ingest("syslog:lab/bench", "usb hub on the bench\n")
+	call(t, a, "create_channel", map[string]any{"name": "dut1", "streams": []string{"push:lab/dut1"}})
+	s.ingest("push:lab/dut1", "\x1b[33musb 1-1: USB disconnect, device number 2\x1b[0m\nboot ok\n")
+	s.ingest("push:lab/bench", "usb hub on the bench\n")
 	call(t, a, "send", map[string]any{"text": "usb looks flaky on dut1", "channel": "dut1"})
 	call(t, a, "send", map[string]any{"text": "usb secret for b only", "to": "agent-b"})
 

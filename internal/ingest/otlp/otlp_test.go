@@ -21,6 +21,8 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 
+	"github.com/nebuloss/cafard/internal/auth"
+	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/ingest/ingestutil/ingesttest"
 	"github.com/nebuloss/cafard/internal/store"
 )
@@ -240,8 +242,23 @@ type call struct {
 	body            []byte
 }
 
+// collector sends every request: it may write into the sinks of lab.
+var collector = auth.Principal{Name: "collector", Kind: auth.KindAgent, Scopes: auth.NewScopeSet(auth.ScopeIngest), TokenID: 1}
+
+// testDeps are the fakes, with the sinks checkout and db1 in lab where
+// collector may write.
+func testDeps(t *testing.T, w *ingesttest.Writer, st *ingesttest.Status) deps.Deps {
+	t.Helper()
+	d := ingesttest.Deps(w, st)
+	sinks := ingesttest.NewSinks(t, "lab/checkout", "lab/db1")
+	sinks.Member(t, collector.Name, "lab")
+	d.Projects = sinks.Service
+	return d
+}
+
 func do(h http.Handler, c call) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(http.MethodPost, "/v1/logs", bytes.NewReader(c.body))
+	r = r.WithContext(auth.WithPrincipal(r.Context(), collector))
 	r.Header.Set("Content-Type", c.ctype)
 	if c.encoding != "" {
 		r.Header.Set("Content-Encoding", c.encoding)
@@ -267,19 +284,21 @@ func TestRequestsLandAsEntries(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			w, st := ingesttest.NewWriter(), ingesttest.NewStatus()
-			rec := do(NewHandler(ingesttest.Deps(w, st), 8<<20), tt.c)
+			rec := do(NewHandler(testDeps(t, w, st), 8<<20), tt.c)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status %d %s", rec.Code, rec.Body)
 			}
-			wantType, wantBody := "application/x-protobuf", ""
-			if strings.HasPrefix(tt.c.ctype, "application/json") {
-				wantType, wantBody = "application/json", "{}"
+			// The record with neither service.name nor host.name reaches no sink.
+			asJSON := strings.HasPrefix(tt.c.ctype, "application/json")
+			wantType, wantBody := "application/x-protobuf", string(encodeResponse(false, 1, noSinkNote(1)))
+			if asJSON {
+				wantType, wantBody = "application/json", string(encodeResponse(true, 1, noSinkNote(1)))
 			}
 			if rec.Header().Get("Content-Type") != wantType || rec.Body.String() != wantBody {
 				t.Errorf("response %q %q", rec.Header().Get("Content-Type"), rec.Body)
 			}
 			es := w.Entries()
-			if len(es) != 5 {
+			if len(es) != 4 {
 				t.Fatalf("%d entries: %+v", len(es), es)
 			}
 			type want struct {
@@ -288,11 +307,10 @@ func TestRequestsLandAsEntries(t *testing.T) {
 				src                     int64
 			}
 			for i, wt := range []want{
-				{"otlp:checkout", "payment failed", "web1", "checkout", 3, 1763287200000000000},
-				{"otlp:checkout", "retrying", "web1", "checkout", 3, 1763287200000000000},
-				{"otlp:checkout", `{"a":"b"}`, "web1", "checkout", 6, 1763287201000000000},
-				{"otlp:db1", "slow query", "db1", "", 4, 0},
-				{"otlp:unknown", "who am i", "", "", 6, 0},
+				{"otlp:lab/checkout", "payment failed", "web1", "checkout", 3, 1763287200000000000},
+				{"otlp:lab/checkout", "retrying", "web1", "checkout", 3, 1763287200000000000},
+				{"otlp:lab/checkout", `{"a":"b"}`, "web1", "checkout", 6, 1763287201000000000},
+				{"otlp:lab/db1", "slow query", "db1", "", 4, 0},
 			} {
 				e := es[i]
 				if e.Stream != wt.stream || e.Text != wt.text || e.Host != wt.host || e.App != wt.app || e.Severity != wt.sev {
@@ -315,8 +333,8 @@ func TestRequestsLandAsEntries(t *testing.T) {
 				t.Errorf("invalid ids kept: %s", es[3].Meta)
 			}
 			st.Get(func(s *ingesttest.Status) {
-				if s.Declared["otlp:checkout"] != "otlp" {
-					t.Errorf("declared %v", s.Declared)
+				if s.Declared["otlp:lab/checkout"] != "otlp" || s.Unrouteds["otlp"] != 1 {
+					t.Errorf("declared %v, unrouted %v", s.Declared, s.Unrouteds)
 				}
 			})
 		})
@@ -325,16 +343,16 @@ func TestRequestsLandAsEntries(t *testing.T) {
 
 func TestConcatenatedJSONRequests(t *testing.T) {
 	w := ingesttest.NewWriter()
-	body := sampleJSON + "\n" + `{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"next"},"traceId":"0102030405060708090a0b0c0d0e0f10"}]}]}]}` + "\n"
-	rec := do(newHandler(w), call{"application/json", "", []byte(body)})
+	body := sampleJSON + "\n" + `{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"checkout"}}]},"scopeLogs":[{"logRecords":[{"body":{"stringValue":"next"},"traceId":"0102030405060708090a0b0c0d0e0f10"}]}]}]}` + "\n"
+	rec := do(newHandler(t, w), call{"application/json", "", []byte(body)})
 	es := w.Entries()
-	if rec.Code != http.StatusOK || len(es) != 6 || es[5].Text != "next" || !strings.Contains(string(es[5].Meta), "0102030405060708090a0b0c0d0e0f10") {
+	if rec.Code != http.StatusOK || len(es) != 5 || es[4].Text != "next" || !strings.Contains(string(es[4].Meta), "0102030405060708090a0b0c0d0e0f10") {
 		t.Fatalf("status %d entries %+v", rec.Code, es)
 	}
 	if !strings.Contains(string(es[0].Meta), "5b8efff798038103d269b633813fc60c") {
 		t.Errorf("first request lost its ids: %s", es[0].Meta)
 	}
-	if rec := do(newHandler(w), call{"application/json", "", []byte("  ")}); rec.Code != http.StatusBadRequest {
+	if rec := do(newHandler(t, w), call{"application/json", "", []byte("  ")}); rec.Code != http.StatusBadRequest {
 		t.Errorf("empty body: status %d", rec.Code)
 	}
 }
@@ -342,19 +360,20 @@ func TestConcatenatedJSONRequests(t *testing.T) {
 func TestPartialSuccess(t *testing.T) {
 	w := ingesttest.NewWriter()
 	w.Refuse = func(e store.Entry) error {
-		if e.Stream == "otlp:db1" {
+		if e.Stream == "otlp:lab/db1" {
 			return io.ErrUnexpectedEOF
 		}
 		return nil
 	}
-	h := newHandler(w)
+	h := newHandler(t, w)
 	pb, _ := proto.Marshal(sampleLogs())
+	note := "1 log records were refused. " + noSinkNote(1)
 	rec := do(h, call{"application/x-protobuf", "", pb})
-	if rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), encodeResponse(false, 1, "1 log records were refused.")) {
+	if rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), encodeResponse(false, 2, note)) {
 		t.Fatalf("status %d body %x", rec.Code, rec.Body.Bytes())
 	}
 	rec = do(h, call{"application/json", "", []byte(sampleJSON)})
-	if rec.Code != http.StatusOK || rec.Body.String() != `{"partialSuccess":{"errorMessage":"1 log records were refused.","rejectedLogRecords":"1"}}` {
+	if rec.Code != http.StatusOK || rec.Body.String() != `{"partialSuccess":{"errorMessage":"`+note+`","rejectedLogRecords":"2"}}` {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body)
 	}
 }
@@ -362,7 +381,7 @@ func TestPartialSuccess(t *testing.T) {
 func TestBusyWriter(t *testing.T) {
 	w := ingesttest.NewWriter()
 	w.SetFull(true)
-	h := newHandler(w)
+	h := newHandler(t, w)
 	h.wait = 50 * time.Millisecond
 	start := time.Now()
 	rec := do(h, call{"application/json", "", []byte(sampleJSON)})
@@ -382,7 +401,7 @@ func TestBusyWriter(t *testing.T) {
 	// Room for two entries: the first record (two lines) is stored, the rest refused.
 	w2 := ingesttest.NewWriter()
 	w2.Limit = 2
-	h2 := newHandler(w2)
+	h2 := newHandler(t, w2)
 	h2.wait = 20 * time.Millisecond
 	rec = do(h2, call{"application/json", "", []byte(sampleJSON)})
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"rejectedLogRecords":"3"`) {
@@ -393,14 +412,14 @@ func TestBusyWriter(t *testing.T) {
 	w3 := ingesttest.NewWriter()
 	w3.SetFull(true)
 	go func() { time.Sleep(30 * time.Millisecond); w3.SetFull(false) }()
-	rec = do(newHandler(w3), call{"application/json", "", []byte(sampleJSON)})
-	if rec.Code != http.StatusOK || len(w3.Entries()) != 5 {
+	rec = do(newHandler(t, w3), call{"application/json", "", []byte(sampleJSON)})
+	if rec.Code != http.StatusOK || len(w3.Entries()) != 4 {
 		t.Fatalf("status %d, %d entries", rec.Code, len(w3.Entries()))
 	}
 }
 
 func TestRefusals(t *testing.T) {
-	h := NewHandler(ingesttest.Deps(ingesttest.NewWriter(), ingesttest.NewStatus()), 1<<20)
+	h := NewHandler(testDeps(t, ingesttest.NewWriter(), ingesttest.NewStatus()), 1<<20)
 	big := bytes.Repeat([]byte(" "), 1<<20+1)
 	tests := []struct {
 		name string
@@ -471,10 +490,10 @@ func FuzzDecodeProtobuf(f *testing.F) {
 
 func checkRecords(t *testing.T, recs []record) {
 	for _, r := range recs {
+		if strings.ContainsAny(r.sink, "*?[\\ ") {
+			t.Fatalf("sink name %q", r.sink)
+		}
 		for _, e := range r.entries {
-			if err := store.ValidateStreamID(e.Stream); err != nil {
-				t.Fatal(err)
-			}
 			if len(e.Meta) > store.MaxMetaBytes || (len(e.Meta) > 0 && !json.Valid(e.Meta)) || strings.ContainsAny(e.Text, "\r\n") {
 				t.Fatalf("entry %+v", e)
 			}
@@ -483,6 +502,6 @@ func checkRecords(t *testing.T, recs []record) {
 }
 
 // newHandler is the handler on w with an 8 MiB body limit.
-func newHandler(w *ingesttest.Writer) *Handler {
-	return NewHandler(ingesttest.Deps(w, ingesttest.NewStatus()), 8<<20)
+func newHandler(t *testing.T, w *ingesttest.Writer) *Handler {
+	return NewHandler(testDeps(t, w, ingesttest.NewStatus()), 8<<20)
 }

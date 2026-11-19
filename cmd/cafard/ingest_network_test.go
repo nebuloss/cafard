@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -99,7 +100,7 @@ func checkEntry(t *testing.T, e store.Entry, text string, sev int, src time.Time
 }
 
 func TestSyslogOverUDPAndTCPLands(t *testing.T) {
-	s := startServer(t, func(c *config.Config) { c.Syslog.UDP, c.Syslog.TCP = "127.0.0.1:0", "127.0.0.1:0" })
+	s := startServerWith(t, append(slices.Clone(testSinks), "local=127.0.0.1"), func(c *config.Config) { c.Syslog.UDP, c.Syslog.TCP = "127.0.0.1:0", "127.0.0.1:0" })
 	udpAddr, tcpAddr := s.listening("syslog", "udp"), s.listening("syslog", "tcp")
 
 	uc, err := net.Dial("udp", udpAddr)
@@ -128,9 +129,17 @@ func TestSyslogOverUDPAndTCPLands(t *testing.T) {
 	}
 	tc.Close()
 
-	got := s.waitEntries("syslog:dut1", 1)
-	checkEntry(t, got[0], "hello over udp", 3, time.Date(2026, 11, 16, 10, 0, 0, 123e6, time.UTC))
-	got = s.waitEntries("syslog:dut2", 2)
+	// Both hosts send from 127.0.0.1, the address of the sink local.
+	all := s.waitEntries("syslog:lab/local", 3)
+	byHost := map[string][]store.Entry{}
+	for _, e := range all {
+		byHost[e.Host] = append(byHost[e.Host], e)
+	}
+	if len(byHost["dut1"]) != 1 || len(byHost["dut2"]) != 2 {
+		t.Fatalf("entries by host = %v", byHost)
+	}
+	checkEntry(t, byHost["dut1"][0], "hello over udp", 3, time.Date(2026, 11, 16, 10, 0, 0, 123e6, time.UTC))
+	got := byHost["dut2"]
 	checkEntry(t, got[0], "hello", 5, time.Date(2026, 11, 16, 10, 0, 0, 5e8, time.UTC))
 	checkEntry(t, got[1], "second line", 4, time.Time{})
 	if got[1].App != "kernel" || got[1].SrcTS == nil {
@@ -142,7 +151,9 @@ func TestSyslogOverUDPAndTCPLands(t *testing.T) {
 	}
 }
 
-func TestNetconsoleLandsUnderItsConfiguredName(t *testing.T) {
+// netconsole.names is imported once into a sink of the project imported,
+// with a warning to take it out of the file.
+func TestNetconsoleLandsInTheSinkItsOldNameBecame(t *testing.T) {
 	s := startServer(t, func(c *config.Config) {
 		c.Netconsole.UDP = "127.0.0.1:0"
 		c.Netconsole.Names = map[string]string{"127.0.0.1": "vm1"}
@@ -161,7 +172,10 @@ func TestNetconsoleLandsUnderItsConfiguredName(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got := s.waitEntries("netconsole:vm1", 2)
+	got := s.waitEntries("netconsole:imported/vm1", 2)
+	if !strings.Contains(s.logs.String(), "netconsole.names in the config is imported") {
+		t.Errorf("no warning about netconsole.names:\n%s", s.logs.String())
+	}
 	checkEntry(t, got[0], "e1000e: eth0 NIC Link is Down", 3, time.Time{})
 	checkEntry(t, got[1], "[   12.345678] plain line", 6, time.Time{})
 	var meta map[string]any
@@ -186,7 +200,7 @@ func TestOTLPJSONLands(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || string(b) != "{}" || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		t.Fatalf("status %d %q %s", resp.StatusCode, resp.Header.Get("Content-Type"), b)
 	}
-	got := s.waitEntries("otlp:checkout", 1)
+	got := s.waitEntries("otlp:lab/checkout", 1)
 	checkEntry(t, got[0], "payment failed", 3, time.Unix(0, 1763287200000000000))
 	if got[0].Host != "web1" || got[0].App != "checkout" {
 		t.Errorf("host %q app %q", got[0].Host, got[0].App)
@@ -201,5 +215,11 @@ func TestOTLPJSONLands(t *testing.T) {
 	}
 	if resp := s.post(tok, "/v1/traces", "application/json", "{}"); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("/v1/traces: status %d, want 404", resp.StatusCode)
+	}
+	// Without a grant on lab, the record reaches no sink and is rejected.
+	resp = s.post(s.tokenOnly("stranger", auth.KindDevice, auth.ScopeIngest), "/v1/logs", "application/json", body)
+	b, _ = io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(b), `"rejectedLogRecords":"1"`) || !strings.Contains(string(b), "no sink") {
+		t.Errorf("unrouted = %d %s", resp.StatusCode, b)
 	}
 }

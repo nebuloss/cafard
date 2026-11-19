@@ -332,6 +332,8 @@ func fixtures() []fixture {
 			},
 		}},
 		{"log_accepted", LogAccepted{Accepted: 1000, LastSeq: 49211, Dropped: 12}},
+		{"stream_list", StreamList{Streams: []Stream{{ID: "syslog:lab/bench-pi", Kind: "syslog", Transport: "udp", Project: "lab", Sink: "bench-pi",
+			Status: StreamIdle, LastSeq: 48120, RatePerMin: 0.5}}, Unrouted: map[string]int64{"syslog": 31, "http": 2}}},
 		{"project", Project{
 			Name:      "lab",
 			Title:     "Lab bench",

@@ -22,7 +22,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/config"
-	"github.com/nebuloss/cafard/internal/messaging"
+	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/push"
 	"github.com/nebuloss/cafard/internal/store"
@@ -49,16 +49,26 @@ type server struct {
 
 var passwordLine = regexp.MustCompile(`(?m)^\s+([0-9a-f]{36})$`)
 
-// testProject is the project every test server has (its config lists
-// its #general), where token grants its principals.
+// testProject is the project every test server has, with testSinks,
+// where token grants its principals.
 const testProject = "lab"
 
+// testSinks are the sinks of testProject the tests write logs into.
+var testSinks = []string{"bench", "box", "checkout", "dut", "dut1", "dut1-bmc", "dut2", "proxied", "seq", "x"}
+
 func startServer(t *testing.T, opts ...func(*config.Config)) *server {
+	t.Helper()
+	return startServerWith(t, testSinks, opts...)
+}
+
+// startServerWith starts a server whose testProject has sinks, given as
+// "name" or "name=sources" (IPs and CIDRs).
+func startServerWith(t *testing.T, sinks []string, opts ...func(*config.Config)) *server {
 	t.Helper()
 	cfg := testConfig()
 	cfg.HTTPListen = "127.0.0.1:0"
 	cfg.DataDir = t.TempDir()
-	cfg.Channels.List = append(cfg.Channels.List, messaging.ChannelConfig{Name: testProject + "/general"})
+	seedProject(t, cfg.DataDir, sinks)
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -100,6 +110,35 @@ func startServer(t *testing.T, opts ...func(*config.Config)) *server {
 		}
 	})
 	return s
+}
+
+// seedProject makes testProject and its sinks before the server starts,
+// as the admin would on the project page.
+func seedProject(t *testing.T, dir string, sinks []string) {
+	t.Helper()
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(dir, store.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	projs, err := projects.New(ctx, st.DB(), clock.System{}, store.Limits{}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := projs.Create(ctx, testProject, ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range sinks {
+		name, sources, _ := strings.Cut(spec, "=")
+		k := projects.Sink{Project: testProject, Name: name}
+		if k.Sources, err = projects.ParseSources(sources); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := projs.SaveSink(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 type syncBuffer struct {
@@ -348,8 +387,8 @@ func TestLogToolsReadMarkAndContext(t *testing.T) {
 	s := startServer(t)
 	cs := s.mcp(s.admin)
 	body := `{"text":"\u001b[31mred error\u001b[0m","severity":"err","stream":"serial:lab/dut1","ts":"2026-11-16T10:00:00Z"}
-{"text":"plain","stream":"serial:lab/dut1"}
-{"text":"other","stream":"syslog:lab/box"}
+{"text":"plain","stream":"lab/dut1"}
+{"text":"other","stream":"box"}
 `
 	if resp := s.post(s.admin, "/api/log", "application/x-ndjson", body); resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
@@ -362,12 +401,12 @@ func TestLogToolsReadMarkAndContext(t *testing.T) {
 	}
 
 	text, out = call(t, cs, "list_streams", nil)
-	if !strings.Contains(text, "serial:lab/dut1") || !strings.Contains(text, "syslog:lab/box") {
+	if !strings.Contains(text, "push:lab/dut1") || !strings.Contains(text, "push:lab/box") {
 		t.Errorf("list_streams = %q", text)
 	}
 	_ = out
 
-	text, out = call(t, cs, "read", map[string]any{"streams": []string{"serial:*/*"}, "since_seq": 0})
+	text, out = call(t, cs, "read", map[string]any{"streams": []string{"push:lab/dut1"}, "since_seq": 0})
 	if strings.Contains(text, "\x1b") || !strings.Contains(text, "ERR red error") || strings.Contains(text, "other") {
 		t.Errorf("read = %q", text)
 	}
@@ -381,7 +420,7 @@ func TestLogToolsReadMarkAndContext(t *testing.T) {
 		t.Errorf("read min_severity = %q", text)
 	}
 
-	_, out = call(t, cs, "mark", map[string]any{"stream": "serial:lab/dut1", "label": "test 42 starts"})
+	_, out = call(t, cs, "mark", map[string]any{"stream": "push:lab/dut1", "label": "test 42 starts"})
 	markSeq := out["seq"].(float64)
 	text, _ = call(t, cs, "context", map[string]any{"seq": markSeq, "before": 1, "after": 0})
 	if !strings.Contains(text, "admin: test 42 starts") || !strings.Contains(text, "plain") {
@@ -482,6 +521,66 @@ func TestLogIngestNeedsTheIngestScope(t *testing.T) {
 	}
 	if resp := s.post(s.admin, "/api/log", "application/x-ndjson", `{"stream":"a"}`); resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("ndjson without text: %d", resp.StatusCode)
+	}
+	if n := s.count("push:lab/x"); n != 3 {
+		t.Errorf("%d lines in push:lab/x, want 3", n)
+	}
+}
+
+func TestLogsLandInTheirSinkOrAreDropped(t *testing.T) {
+	s := startServer(t)
+	accepted := func(token, path, ctype, body string) (acc dto.LogAccepted) {
+		t.Helper()
+		resp := s.post(token, path, ctype, body)
+		if err := json.NewDecoder(resp.Body).Decode(&acc); err != nil || resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: %d %v", path, resp.StatusCode, err)
+		}
+		return acc
+	}
+	// A grant holder names the sink; a name no sink has is dropped, not an error.
+	if acc := accepted(s.admin, "/api/log", "application/x-ndjson", `{"text":"in","stream":"dut2"}`+"\n"+`{"text":"out","stream":"nowhere"}`); acc.Accepted != 1 || acc.Dropped != 1 {
+		t.Errorf("mixed = %+v", acc)
+	}
+	// A token without a grant reaches no sink.
+	loner := s.tokenOnly("loner", auth.KindDevice, auth.ScopeIngest)
+	if acc := accepted(loner, "/api/log?stream=lab/dut2", "text/plain", "x\n"); acc.Accepted != 0 || acc.Dropped != 1 {
+		t.Errorf("no grant = %+v", acc)
+	}
+	// A sink token writes into its sink whatever it names, and needs no stream.
+	k, err := projects.New(context.Background(), s.db().DB(), clock.System{}, store.Limits{}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink, err := k.Sink(context.Background(), testProject, "bench")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens := auth.NewTokens(s.db().DB(), clock.System{})
+	if _, err := tokens.EnsurePrincipal(context.Background(), "bench-pi", auth.KindDevice); err != nil {
+		t.Fatal(err)
+	}
+	_, secret, err := tokens.CreateSinkToken(context.Background(), "bench-pi", "test", sink.ID, sink.Ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acc := accepted(secret, "/api/log?stream=lab/dut2", "text/plain", "one\n"); acc.Accepted != 1 {
+		t.Errorf("sink token naming another sink = %+v", acc)
+	}
+	if acc := accepted(secret, "/api/log", "text/plain", "two\n"); acc.Accepted != 1 {
+		t.Errorf("sink token without a stream = %+v", acc)
+	}
+	if n, m := s.count("push:lab/bench"), s.count("push:lab/dut2"); n != 2 || m != 1 {
+		t.Errorf("bench has %d lines, dut2 %d; want 2 and 1", n, m)
+	}
+	// A sink token reads nothing.
+	resp := s.post(secret, "/mcp", "application/json", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
+	if resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a sink token opened MCP: %d", resp.StatusCode)
+	}
+	var list dto.StreamList
+	_, b := s.browser(s.session(), "GET", "/api/streams", "", nil, true)
+	if err := json.Unmarshal(b, &list); err != nil || list.Unrouted["http"] != 2 {
+		t.Errorf("unrouted for the admin = %v %v", list.Unrouted, err)
 	}
 }
 

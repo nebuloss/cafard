@@ -1,0 +1,20 @@
+{
+  "streams": [
+    {
+      "id": "syslog:lab/bench-pi",
+      "kind": "syslog",
+      "transport": "udp",
+      "labels": {},
+      "project": "lab",
+      "sink": "bench-pi",
+      "status": "idle",
+      "last_seq": 48120,
+      "rate_per_min": 0.5,
+      "dropped": 0
+    }
+  ],
+  "unrouted": {
+    "http": 2,
+    "syslog": 31
+  }
+}

@@ -101,11 +101,7 @@ func newTools(m *Manager) *tools {
 func (t *tools) gate(ctx context.Context, p auth.Principal, stream string) (*Handle, error) {
 	h, err := t.m.Lookup(stream)
 	if err != nil {
-		names := make([]string, 0, len(t.m.ports))
-		for _, h := range t.m.ports {
-			names = append(names, h.Stream())
-		}
-		return nil, dto.Errorf(dto.CodeNotFound, "There is no serial port with stream %q; the configured ones are %s.", stream, strings.Join(names, ", "))
+		return nil, dto.Errorf(dto.CodeNotFound, "There is no serial port with stream %q; the ports are %s.", stream, strings.Join(t.m.Streams(), ", "))
 	}
 	if !h.Writable() {
 		return nil, dto.Errorf(dto.CodeForbidden, "%s is read-only: the admin must make the serial port of sink %s writable before agents may drive it.",

@@ -97,7 +97,7 @@ func FuzzParse(f *testing.F) {
 		if m.Format == FormatRaw && string(m.Text) != string(b) {
 			t.Fatal("raw text must be the whole input")
 		}
-		for _, e := range MessageEntries(m, testIP, now) {
+		for _, e := range MessageEntries(m, testIP, now, "syslog:lab/x") {
 			if strings.ContainsAny(e.Text, "\n\r") {
 				t.Fatalf("entry text %q has a line break", e.Text)
 			}

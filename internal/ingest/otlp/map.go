@@ -57,7 +57,9 @@ func severityText(text string) int {
 }
 
 // record is the entries one log record became, for partial success.
+// sink is the name it asks for: service.name, else host.name.
 type record struct {
+	sink    string
 	entries []store.Entry
 }
 
@@ -72,10 +74,6 @@ func mapRecords(d decoded, now time.Time) []record {
 		if name == "" {
 			name = ingestutil.StreamName(host)
 		}
-		if name == "" {
-			name = "unknown"
-		}
-		stream := "otlp:" + name
 		resource := attrMap(resAttrs)
 		for si, sl := range rl.GetScopeLogs() {
 			scope := sl.GetScope()
@@ -99,10 +97,10 @@ func mapRecords(d decoded, now time.Time) []record {
 				lines := ingestutil.SplitLines([]byte(text))
 				src := srcTime(lr)
 				sev := Severity(lr.GetSeverityNumber(), lr.GetSeverityText())
-				rec := record{entries: make([]store.Entry, len(lines))}
+				rec := record{sink: name, entries: make([]store.Entry, len(lines))}
 				for i, line := range lines {
 					rec.entries[i] = store.Entry{
-						TS: now, SrcTS: src, Stream: stream, Kind: store.KindLine, Severity: sev,
+						TS: now, SrcTS: src, Kind: store.KindLine, Severity: sev,
 						Host: ingestutil.StreamName(host), App: ingestutil.StreamName(service),
 						Text: line, Meta: raw,
 					}

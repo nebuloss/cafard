@@ -83,24 +83,78 @@ With `admin_listen` set, the admin pages (sign-in, Agents, Pair) move to
 that address and answer 404 on `http_listen`, which can then face a DMZ
 (`deploy/README.md`, "DMZ: split interfaces").
 
-## Sending logs
+## Projects, sinks and grants
+
+cafard is organised like Discord. A **project** (`lab`) holds its chats
+(`#lab/general`, made with it, and the channels made in it) and its log
+**sinks** (`lab/dut1`), and has its own retention. A sink's logs are in
+one stream per transport: `serial:lab/dut1`, `syslog:lab/dut1`,
+`netconsole:lab/dut1`, `push:lab/dut1`, `otlp:lab/dut1`. The admin makes
+projects and sinks on the admin interface.
+
+Who sees what is decided by **grants**: a principal (agent or person) gets
+scopes (`read`, `message`, `ingest`, `serial_write`) on a whole project or
+on one channel of it. A channel grant also covers the log streams the
+channel is bound to. Without a grant a principal sees nothing: no chat, no
+log, no other principal. A token's or a session's own scopes are a cap on
+top of that, and decide which MCP tools it is offered. The admin session
+sees everything. Direct messages stay outside projects and need the two
+principals to share a project.
 
 ```sh
-journalctl -f | cafard push --server http://10.0.50.2:8790 --token cfd_... --stream laptop
-echo "hello" | curl -H "Authorization: Bearer cfd_..." --data-binary @- \
-  "http://10.0.50.2:8790/api/log?stream=laptop&severity=info"
+cafard token create --name claude-laptop --kind agent --scopes read,message \
+  --grant lab=read,message                # the whole project
+cafard token create --name helper --kind agent --scopes read,message \
+  --grant lab:dut1=read,message           # one channel and its bound logs
+cafard pair --name alice-phone --grant lab=read,message
+cafard token create --name bench-pi --sink lab/bench   # writes into one sink only
 ```
+
+An install from before projects keeps everything in a project named
+`imported` (see `deploy/README.md`, "Upgrading to projects").
+
+## Sending logs
+
+Logs go into the **sinks** of a project (see "Projects, sinks and
+grants"). Logs no sink takes are dropped: they are counted per transport
+on the Sources page (admin only) and in `GET /api/streams`, with a debug
+log line at most once a minute, and never stored.
+
+The simplest is a sink token, made on the project page or with
+
+```sh
+cafard token create --name bench-pi --sink lab/bench
+```
+
+It writes into `push:lab/bench` (and `otlp:lab/bench` for OTLP) whatever
+stream it names, and reads nothing:
+
+```sh
+journalctl -f | cafard push --server http://10.0.50.2:8790 --token cfd_... --stream bench
+echo "hello" | curl -H "Authorization: Bearer cfd_..." --data-binary @- \
+  "http://10.0.50.2:8790/api/log?severity=info"
+```
+
+A token whose principal has an `ingest` grant on a project may instead
+name the sink: `--stream bench` (a sink only one of its projects has) or
+`--stream lab/bench`; a kind prefix such as `serial:` is ignored. A name no
+sink of theirs has is dropped, and the answer says how many were:
+`{"accepted": 0, "last_seq": 0, "dropped": 3}`. That is not an error, so
+`cafard push` does not retry it forever.
 
 `--server` and `--token` may also come from `CAFARD_SERVER` and
 `CAFARD_TOKEN`. The body is plain text (one entry per line) or
 `application/x-ndjson` with `{text, ts?, severity?, host?, app?, stream?}`
-per line. A stream name without a kind becomes `push:<name>`.
+per line.
 
 ## Network sources: syslog, netconsole, OTLP
 
 **Anyone on the LAN can write syslog and netconsole lines.** Both protocols
-are unauthenticated by nature. `syslog.allow` narrows who may send syslog;
-nothing can stop a host from claiming another host's name.
+are unauthenticated by nature. Each sink lists the source addresses (IPs
+or CIDRs) whose syslog and netconsole datagrams land in it, on the project
+page; the most specific prefix wins, then the oldest sink, so a `/32`
+inside another sink's `/24` can go elsewhere. Datagrams from any other
+address are dropped and counted. `syslog.allow` still filters first.
 
 ```yaml
 syslog:
@@ -109,11 +163,15 @@ syslog:
   allow: ["10.0.50.0/24"]      # optional, CIDRs or addresses; file-only
 netconsole:
   udp: ":6666"
-  names: { "10.0.50.42": dut1 } # file-only
 otlp:
   enabled: true
   max_body_mib: 8
 ```
+
+`netconsole.names` still loads in this version, but only to be imported:
+at start, each entry not imported before becomes the source address of the
+sink of that name in the project `imported`, and a warning says to remove
+the key from the file.
 
 ### Syslog
 
@@ -121,8 +179,9 @@ RFC 5424 and RFC 3164 over UDP and TCP, port 5514 by default (514 needs
 privileges). TCP takes RFC 6587 octet counting or newline-delimited
 messages, picked from the first byte of each connection. A line that does
 not parse is kept whole at severity 6. Lines land in
-`syslog:<hostname in the message, else the source IP>`, with the facility,
-proc id, msg id and structured data in the entry's `meta`.
+`syslog:<project>/<sink>` of the sink listing the sender's address; the
+hostname in the message (else the source IP) is the entry's host, and the
+facility, proc id, msg id and structured data go to its `meta`.
 
 ```sh
 logger -n 10.0.50.2 -P 5514 -T hello                # TCP
@@ -131,16 +190,18 @@ logger -n 10.0.50.2 -P 5514 -d hello                # UDP
 ```
 
 rsyslog forwarding: `*.* @@10.0.50.2:5514` (TCP) or `*.* @10.0.50.2:5514`
-(UDP). A TCP stream shows as down once its last connection closes (each
-`logger -T` run is one connection); UDP streams are only ever idle. UDP
-lines are dropped, and counted on the stream, when the server cannot keep up.
+(UDP). A sink's syslog stream shows as down once its last TCP connection
+closes (each `logger -T` run is one connection); with UDP alone it is only
+ever idle. UDP lines are dropped, and counted on the stream, when the
+server cannot keep up.
 
 ### Netconsole
 
 The kernel log over UDP port 6666, in the plain and the extended format
 (`<level>,<seq>,<ts>,<flags>;msg` with its ` KEY=value` lines, which go to
-`meta`). Lines land in `netconsole:<name from netconsole.names, else the
-source IP>`. On the device's kernel command line:
+`meta`). Lines land in `netconsole:<project>/<sink>` of the sink listing
+the sender's address, with the address as the entry's host. On the
+device's kernel command line:
 
 ```
 netconsole=@/,6666@<server-ip>/      # plain
@@ -152,10 +213,12 @@ Add `loglevel=7` (or `dmesg -n 8`) to get debug messages too.
 
 ### OpenTelemetry logs (OTLP/HTTP)
 
-`POST /v1/logs`, protobuf or JSON, optionally gzip, with a bearer token
-that has the `ingest` scope (`cafard token create --name collector --kind
-device --scopes ingest`). Records land in `otlp:<service.name, else
-host.name, else unknown>`. The severity number maps to syslog levels
+`POST /v1/logs`, protobuf or JSON, optionally gzip, with a sink token
+(`cafard token create --name collector --sink lab/web`), whose records all
+land in `otlp:lab/web`; or with a token whose principal has an `ingest`
+grant, whose records land in the sink named by `service.name`, else
+`host.name`. Records that reach no sink are rejected in the standard
+`partial_success`, with a sentence saying why. The severity number maps to syslog levels
 (the text is used when the number is unset), `time_unix_nano` (else the
 observed time) becomes the source time, and attributes, trace and span ids
 go to `meta`. Bodies are limited to `otlp.max_body_mib` after
@@ -220,9 +283,19 @@ OpenTelemetry SDKs: `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://10.0.50.2:8790/v1/l
 `OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer cfd_..."`.
 ## Serial consoles
 
-List the ports in `/etc/cafard.yaml` (the `serial:` list is file-only).
-Each one becomes the stream `serial:<name>`; lines end on `\n`, `\r\n` or
-a lone `\r`, and a prompt with no newline is sent after 500 ms.
+A sink may have one serial port, set on its project's page on the admin
+interface: a local device, an RFC 2217 server or a raw TCP serial server,
+with its line settings and whether agents may drive it. It is read into
+`serial:<project>/<sink>`; lines end on `\n`, `\r\n` or a lone `\r`, and
+a prompt with no newline is sent after 500 ms. Saving the sink opens,
+reopens or closes the port at once, no restart needed; removing it writes
+`serial: port removed` in the stream.
+
+The `serial:` list of `/etc/cafard.yaml` still loads in this version, but
+only to be imported: at start, each port not imported before becomes the
+port of the sink of its name in the project `imported` (so `dut1` reads
+into `serial:imported/dut1`), and a warning says to remove the list. Its
+fields are the ones of the form:
 
 ```yaml
 serial:
@@ -316,31 +389,26 @@ off` keeps lines in memory only.
 
 An agent can type into a console and drive its DTR and RTS lines (to
 reset a board, or hold it in its boot loader) with `serial_write` and
-`serial_control`. Three gates guard both tools:
+`serial_control`. Four gates guard both tools:
 
-1. the port has `writable: true` in `cafard.yaml` (ports are read-only
-   by default);
+1. the sink's port is writable (the "agents may drive it" box on the
+   project page; ports are read-only by default);
 2. the agent's token has the `serial_write` scope; tokens without it are
-   not even offered the tools. Claiming needs `message` too:
-   `cafard token create --name bench-agent --kind agent --scopes read,message,serial_write`;
-3. the agent holds the claim on the port's stream, so two agents never
+   not even offered the tools. Claiming needs `message` too;
+3. the agent has a `serial_write` grant on the project, or on a channel
+   bound to the port's stream:
+   `cafard token create --name bench-agent --kind agent --scopes read,message,serial_write --grant lab=read,message,serial_write`;
+4. the agent holds the claim on the port's stream, so two agents never
    drive the same board at once.
-
-```yaml
-serial:
-  - name: dut1
-    device: /dev/serial/by-id/usb-FTDI_FT232R_A1B2C3-if00-port0
-    writable: true
-```
 
 A typical session, as MCP calls:
 
 ```text
-claim          {resource: "serial:dut1", ttl_s: 600, note: "flashing"}
-serial_control {stream: "serial:dut1", pulse: {line: "dtr", ms: 100}}   # reset
-wait_for       {pattern: "U-Boot", streams: ["serial:dut1"]}
-serial_write   {stream: "serial:dut1", data: "printenv"}               # sends printenv\r
-release        {resource: "serial:dut1"}
+claim          {resource: "serial:lab/dut1", ttl_s: 600, note: "flashing"}
+serial_control {stream: "serial:lab/dut1", pulse: {line: "dtr", ms: 100}}   # reset
+wait_for       {pattern: "U-Boot", streams: ["serial:lab/dut1"]}
+serial_write   {stream: "serial:lab/dut1", data: "printenv"}               # sends printenv\r
+release        {resource: "serial:lab/dut1"}
 ```
 
 `serial_write` appends `newline` (default `\r`, what Enter sends; `""` for

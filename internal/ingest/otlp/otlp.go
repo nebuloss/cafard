@@ -62,15 +62,17 @@ func Register(mux *http.ServeMux, _ *mcpserver.Server, d deps.Deps, cfg *Config)
 
 // Handler serves POST /v1/logs. It does no authentication itself.
 type Handler struct {
-	d       deps.Deps
-	maxBody int
-	declare ingestutil.Declarer
-	wait    time.Duration
+	d        deps.Deps
+	maxBody  int
+	declare  ingestutil.Declarer
+	unrouted *ingestutil.Unrouted
+	wait     time.Duration
 }
 
 // NewHandler returns the handler with a body limit in bytes.
 func NewHandler(d deps.Deps, maxBody int) *Handler {
-	return &Handler{d: d, maxBody: maxBody, declare: ingestutil.Declarer{Status: d.Status, Transport: "otlp"}, wait: WriterWait}
+	return &Handler{d: d, maxBody: maxBody, declare: ingestutil.Declarer{Status: d.Status, Transport: "otlp"},
+		unrouted: &ingestutil.Unrouted{Status: d.Status, Clock: d.Clock, Log: d.Log, Transport: "otlp"}, wait: WriterWait}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -105,21 +107,60 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	records := mapRecords(dec, h.d.Clock.Now())
+	p, _ := auth.PrincipalFrom(r.Context())
+	records, unrouted := h.route(r.Context(), p, mapRecords(dec, h.d.Clock.Now()))
 	queued, rejected, busy := h.submit(r.Context(), records)
 	if busy && queued == 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(RetryAfter))
 		writeStatus(w, asJSON, http.StatusServiceUnavailable, codeUnavailable, "cafard is busy writing; retry later.")
 		return
 	}
-	var note string
+	var notes []string
 	switch {
 	case busy:
-		note = fmt.Sprintf("cafard is busy writing; %d log records were not stored.", rejected)
+		notes = append(notes, fmt.Sprintf("cafard is busy writing; %d log records were not stored.", rejected))
 	case rejected > 0:
-		note = fmt.Sprintf("%d log records were refused.", rejected)
+		notes = append(notes, fmt.Sprintf("%d log records were refused.", rejected))
 	}
-	writeBody(w, asJSON, http.StatusOK, encodeResponse(asJSON, int64(rejected), note))
+	if unrouted > 0 {
+		notes = append(notes, noSinkNote(unrouted))
+	}
+	writeBody(w, asJSON, http.StatusOK, encodeResponse(asJSON, int64(rejected+unrouted), strings.Join(notes, " ")))
+}
+
+func noSinkNote(n int) string {
+	return fmt.Sprintf("%d log records reached no sink: the token is not a sink token, and service.name (else host.name) names no sink it may write into.", n)
+}
+
+// route points each record at the otlp stream of its sink (PLAN section
+// 4, "Projects, sinks and grants") and drops, counting them, those no
+// sink takes.
+func (h *Handler) route(ctx context.Context, p auth.Principal, records []record) ([]record, int) {
+	streams := map[string]string{} // sink name asked for to stream id, "" when unrouted
+	kept := records[:0]
+	unrouted, lines := 0, 0
+	var lastMiss string
+	for _, rec := range records {
+		id, ok := streams[rec.sink]
+		if !ok {
+			if k, found := h.d.Projects.SinkForIngest(ctx, p, rec.sink); found {
+				id = k.Stream("otlp")
+			}
+			streams[rec.sink] = id
+		}
+		if id == "" {
+			unrouted++
+			lines += len(rec.entries)
+			lastMiss = rec.sink
+			continue
+		}
+		for i := range rec.entries {
+			rec.entries[i].Stream = id
+		}
+		kept = append(kept, rec)
+	}
+	h.unrouted.Drop(lines, "principal", p.Name, "service", lastMiss)
+	return kept, unrouted
 }
 
 // readBody returns the decompressed body, or an HTTP status and a message.

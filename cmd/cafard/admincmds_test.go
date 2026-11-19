@@ -103,6 +103,26 @@ func TestTokenAndPairGrantProjects(t *testing.T) {
 		t.Errorf("grants = %+v %v", gs, err)
 	}
 
+	if _, err := projs.SaveSink(ctx, projects.Sink{Project: "lab", Name: "dut1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runWithStdin(t, "", "token", "create", "--name", "bench", "--sink", "lab/nope", "-data-dir", dir); err == nil {
+		t.Error("a token for a sink that does not exist")
+	}
+	if _, _, err := runWithStdin(t, "", "token", "create", "--name", "bench", "--sink", "lab/dut1", "--scopes", "read", "-data-dir", dir); err == nil {
+		t.Error("a sink token that reads")
+	}
+	secret, msg, err := runWithStdin(t, "", "token", "create", "--name", "bench", "--sink", "lab/dut1", "-data-dir", dir)
+	if err != nil || !strings.Contains(msg, "sink lab/dut1 only") {
+		t.Fatalf("sink token = %q %v", msg, err)
+	}
+	if p, err := auth.NewTokens(st.DB(), clock.System{}).Lookup(ctx, strings.TrimSpace(secret)); err != nil || p.Sink != "lab/dut1" || p.Kind != auth.KindDevice {
+		t.Errorf("sink token principal = %+v %v", p, err)
+	}
+	if list, _, err := runWithStdin(t, "", "token", "list", "--name", "bench", "-data-dir", dir); err != nil || !strings.Contains(list, "ingest (sink lab/dut1)") {
+		t.Errorf("token list = %q %v", list, err)
+	}
+
 	out, _, err := runWithStdin(t, "", "pair", "--name", "phone", "--grant", "lab=read", "-data-dir", dir)
 	if err != nil {
 		t.Fatal(err)

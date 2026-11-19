@@ -69,6 +69,11 @@ among the options the brief left open, with their reasons:
   `dropped`, not an error: `cafard push` spools and retries on errors, and
   a line no sink wants would retry forever. OTLP answers the standard
   `partial_success` with the records rejected and a sentence saying why.
+  Counting is per entry for HTTP and OTLP (the response's `dropped` and
+  `rejectedLogRecords` count lines and records), per message for syslog
+  and per datagram for netconsole, which drops an unknown sender before
+  it costs reassembly state. A message stream named in `POST /api/log`
+  (`chan:x`) stays a 400: that is a mistake, not a log for nobody.
 - **Source addresses** are per sink, IPs or CIDRs, shared by syslog and
   netconsole. The most specific prefix wins, then the oldest sink, so a
   `/32` inside a sink's `/24` can go elsewhere. `syslog.allow` still
@@ -78,8 +83,14 @@ among the options the brief left open, with their reasons:
   `internal/projects` (`SerialPort`; `serial.Port` is an alias), because
   serial imports deps, which holds the projects service. The manager
   reconciles on every sink change: a new port starts, a removed one stops
-  with a "port removed" marker, a changed one restarts. The hardware
-  fakes and tests are unchanged.
+  with a "port removed" marker, a changed one restarts ("port settings
+  changed"). The hardware fakes and tests are unchanged. `serial_write`
+  and `serial_control` are now registered even when no sink has a port:
+  tools cannot be added once `/mcp` is mounted, and a port may appear at
+  run time.
+- **Syslog over UDP and TCP share the sink's `syslog:` stream**, so the
+  stream shows down once its last TCP connection closes even when UDP
+  senders still write; the hostname in the message is the entry's host.
 - **Retention per project.** Four nullable columns; a new project copies
   the config's `retention:` values, and NULL (only the migrated project)
   is filled from the config at the next start, since a SQL migration

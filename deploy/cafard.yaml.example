@@ -53,6 +53,9 @@ secure: false
 # session ids, message text or image contents.
 log_level: info
 
+# These are the limits of what is outside projects (direct messages and
+# their images), and the values a new project starts with; each project's
+# own limits are set on its page of the admin interface.
 retention:
   # Log lines older than this are deleted (0 keeps them forever).
   lines_max_age: 336h
@@ -64,7 +67,7 @@ retention:
   blobs_max_bytes: 5GB
   # Per-stream line age overrides; the first matching pattern wins.
   # streams:
-  #   - pattern: "serial:*"
+  #   - pattern: "serial:*/*"
   #     lines_max_age: 720h
 
 mcp:
@@ -73,9 +76,11 @@ mcp:
   allowed_origins: []
 
 # --- syslog -----------------------------------------------------------------
-# Anyone who can reach these ports can write lines; restrict with allow.
-# Port 514 needs CAP_NET_BIND_SERVICE (see the systemd unit). An empty
-# address turns a listener off.
+# A sender's lines land in the sink of a project that lists its address
+# (set on the project page); lines from any other address are dropped and
+# counted on Sources. allow filters before that. Port 514 needs
+# CAP_NET_BIND_SERVICE (see the systemd unit). An empty address turns a
+# listener off.
 syslog:
   udp: ":5514"
   tcp: ":5514"
@@ -83,12 +88,17 @@ syslog:
 
 # --- netconsole -------------------------------------------------------------
 # Kernel command line: netconsole=@/,6666@<server-ip>/
+# Senders are routed to sinks by address, as for syslog.
 netconsole:
   udp: ":6666"
+  # Deprecated: each entry is imported once, at start, as the address of a
+  # sink of that name in the project imported. Remove it afterwards; the
+  # sink's addresses are set on the project page.
   # names: { "10.0.50.42": dut1 }
 
 # --- otlp -------------------------------------------------------------------
-# POST /v1/logs, OTLP/HTTP protobuf or JSON, with an ingest token.
+# POST /v1/logs, OTLP/HTTP protobuf or JSON, with a sink token, or with
+# an ingest grant and service.name (else host.name) naming the sink.
 otlp:
   enabled: true
   max_body_mib: 8
@@ -109,16 +119,21 @@ images:
 # --- channels ---------------------------------------------------------------
 # Config channels cannot be renamed or deleted; their title, topic, bindings
 # and surface can be edited until the next start.
-# Reapplied at every start.
+# Reapplied at every start. A name is project/channel (the project is made
+# when missing), or a bare name in the project imported. Bindings stay in
+# the channel's project.
 # channels:
-#   - name: general                 # may set title and topic only
+#   - name: lab/general             # may set title and topic only
 #     topic: anything not about one device
-#   - name: dut1
+#   - name: lab/dut1
 #     title: DUT 1 (x86 test board)
-#     streams: [serial:dut1, netconsole:dut1, "syslog:dut1*"]
+#     streams: [serial:lab/dut1, netconsole:lab/dut1, "syslog:lab/dut1*"]
 #     surface: markers
 
 # --- serial -----------------------------------------------------------------
+# Deprecated: serial ports are set per sink on the project page now. At
+# start, each port listed here is imported once as the port of the sink of
+# its name in the project imported, and a warning says to remove the list.
 # One entry per port: device (local), rfc2217 (host:port, line settings set
 # from here) or tcp (raw, settings fixed on the far end). See README.md.
 # The cafard user is in the dialout group, and the systemd unit allows

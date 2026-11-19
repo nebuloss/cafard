@@ -34,31 +34,27 @@ const commitChunk = 1000
 
 // Register mounts POST /api/log. It has no background work.
 func Register(mux *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (func(context.Context) error, error) {
-	h := &handler{d: d}
+	h := &handler{d: d, unrouted: &ingestutil.Unrouted{Status: d.Status, Clock: d.Clock, Log: d.Log, Transport: "http"}}
 	mux.Handle("POST /api/log", auth.Require(auth.BearerOnly{Next: d.Auth}, auth.ScopeIngest, h))
 	return nil, nil
 }
 
-type handler struct{ d deps.Deps }
+type handler struct {
+	d        deps.Deps
+	unrouted *ingestutil.Unrouted
+}
 
-// streamID turns a name into a stream id: "push:<name>" unless the name
-// already has a kind prefix. Message streams are refused.
-func streamID(name string) (string, error) {
+// sinkName checks a stream name a request gives: it names a sink, and a
+// message stream is refused rather than dropped, since that is a mistake.
+func sinkName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", errors.New("a stream name is required (?stream=<name>)")
+		return "", errors.New("a stream name is required (?stream=<sink>)")
 	}
-	id := name
-	if !strings.Contains(name, ":") {
-		id = "push:" + name
+	if store.IsMessageStream(name) {
+		return "", fmt.Errorf("stream %q holds messages; post them to /api/messages", name)
 	}
-	if store.IsMessageStream(id) {
-		return "", fmt.Errorf("stream %q holds messages; post them to /api/messages", id)
-	}
-	if err := store.ValidateStreamID(id); err != nil {
-		return "", err
-	}
-	return id, nil
+	return name, nil
 }
 
 type defaults struct {
@@ -70,13 +66,14 @@ type defaults struct {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	def := defaults{host: q.Get("host"), app: q.Get("app"), severity: store.DefaultSeverity}
+	p, _ := auth.PrincipalFrom(r.Context())
 	if s := q.Get("stream"); s != "" {
-		id, err := streamID(s)
+		name, err := sinkName(s)
 		if err != nil {
 			dto.WriteError(w, dto.Errorf(dto.CodeBadRequest, "%v.", err))
 			return
 		}
-		def.stream = id
+		def.stream = name
 	}
 	if s := q.Get("severity"); s != "" {
 		sev, err := store.ParseSeverity(s)
@@ -106,9 +103,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 	switch ctype {
 	case "application/x-ndjson", "application/jsonl", "application/jsonlines":
-		entries, err = parseNDJSON(body, def, now)
+		entries, err = parseNDJSON(body, def, now, p.Sink != "")
 	case "", "text/plain":
-		if def.stream == "" {
+		if def.stream == "" && p.Sink == "" {
 			err = dto.Errorf(dto.CodeBadRequest, "A plain text body needs ?stream=<name>.")
 			break
 		}
@@ -121,17 +118,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	declared := map[string]bool{}
-	for _, e := range entries {
-		if !declared[e.Stream] {
-			declared[e.Stream] = true
-			transport := "http"
-			if store.StreamKind(e.Stream) == "push" {
-				transport = "push"
-			}
-			h.d.Status.Declare(status.Source{Stream: e.Stream, Transport: transport})
-		}
-	}
+	entries, dropped := h.route(r.Context(), p, entries)
 
 	var last int64
 	for start := 0; start < len(entries); start += commitChunk {
@@ -146,7 +133,36 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	dto.WriteJSON(w, http.StatusOK, dto.LogAccepted{Accepted: len(entries), LastSeq: last})
+	dto.WriteJSON(w, http.StatusOK, dto.LogAccepted{Accepted: len(entries), LastSeq: last, Dropped: dropped})
+}
+
+// route points each entry at the push stream of its sink (PLAN section 4,
+// "Projects, sinks and grants") and drops those no sink takes. A dropped
+// line is not an error: cafard push would spool and retry it forever.
+func (h *handler) route(ctx context.Context, p auth.Principal, entries []store.Entry) ([]store.Entry, int) {
+	streams := map[string]string{} // name asked for to stream id, "" when unrouted
+	kept := entries[:0]
+	dropped := 0
+	var lastMiss string
+	for _, e := range entries {
+		id, ok := streams[e.Stream]
+		if !ok {
+			if k, found := h.d.Projects.SinkForIngest(ctx, p, e.Stream); found {
+				id = k.Stream("push")
+				h.d.Status.Declare(status.Source{Stream: id, Transport: "push"})
+			}
+			streams[e.Stream] = id
+		}
+		if id == "" {
+			dropped++
+			lastMiss = e.Stream
+			continue
+		}
+		e.Stream = id
+		kept = append(kept, e)
+	}
+	h.unrouted.Drop(dropped, "principal", p.Name, "stream", ingestutil.StreamName(lastMiss))
+	return kept, dropped
 }
 
 func writeErr(w http.ResponseWriter, err error) {
@@ -197,7 +213,9 @@ type ndjsonLine struct {
 	Stream   string          `json:"stream"`
 }
 
-func parseNDJSON(body io.Reader, def defaults, now time.Time) ([]store.Entry, error) {
+// parseNDJSON reads one JSON object per line; a line needs a stream
+// unless the token is a sink token (anySink).
+func parseNDJSON(body io.Reader, def defaults, now time.Time, anySink bool) ([]store.Entry, error) {
 	var entries []store.Entry
 	sc := bufio.NewScanner(body)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
@@ -222,13 +240,13 @@ func parseNDJSON(body io.Reader, def defaults, now time.Time) ([]store.Entry, er
 		}
 		d := def
 		if l.Stream != "" {
-			id, err := streamID(l.Stream)
+			name, err := sinkName(l.Stream)
 			if err != nil {
 				return nil, dto.Errorf(dto.CodeBadRequest, "Line %d: %v.", n, err)
 			}
-			d.stream = id
+			d.stream = name
 		}
-		if d.stream == "" {
+		if d.stream == "" && !anySink {
 			return nil, dto.Errorf(dto.CodeBadRequest, "Line %d has no \"stream\" and the request has no ?stream=.", n)
 		}
 		if l.Host != "" {

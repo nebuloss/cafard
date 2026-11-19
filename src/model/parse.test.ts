@@ -56,7 +56,7 @@ const parsers: Record<string, (raw: unknown) => unknown> = {
 // Fixtures the bundle never reads: request bodies, and what only programs
 // receive.
 const notYet = new Set([
-  'channel_create', 'channel_update', 'send_request', 'log_accepted', 'token_create', 'pairing_create', 'mark_create',
+  'channel_create', 'channel_update', 'send_request', 'log_accepted', 'stream_list', 'token_create', 'pairing_create', 'mark_create',
   'chat_prefs', 'chat_read', 'ack_request',
 ]);
 

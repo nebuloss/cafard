@@ -137,6 +137,15 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 		return nil, err
 	}
 	d.Messaging, d.Blobs = msg, msg.Blobs()
+	// After messaging, which gives a new project its #general, and before
+	// serial.Register, which runs the ports of the sinks.
+	warnings, err := projs.ImportConfig(context.Background(), cfg.Serial.Ports, cfg.Netconsole.Names)
+	if err != nil {
+		return nil, fmt.Errorf("importing the serial list and netconsole.names: %w", err)
+	}
+	for _, w := range warnings {
+		log.Warn(w)
+	}
 	mcp := mcpserver.New(d, cfg.MCP)
 	a := &app{deps: d, writer: w, status: stat, janitor: jan}
 	// One line per feature: Register(mux, mcp, deps[, its config section]).
@@ -145,7 +154,7 @@ func build(cfg *config.Config, st *store.Store, log *slog.Logger) (*app, error) 
 		func() (func(context.Context) error, error) { return syslog.Register(mux, mcp, d, &cfg.Syslog) },
 		func() (func(context.Context) error, error) { return netconsole.Register(mux, mcp, d, &cfg.Netconsole) },
 		func() (func(context.Context) error, error) { return otlp.Register(mux, mcp, d, &cfg.OTLP) },
-		func() (func(context.Context) error, error) { return serial.Register(mux, mcp, d, &cfg.Serial) },
+		func() (func(context.Context) error, error) { return serial.Register(mux, mcp, d) },
 		func() (func(context.Context) error, error) { return api.RegisterMessages(mux, mcp, d, msg) },
 		func() (func(context.Context) error, error) { return web.Register(mux, adminMux, mcp, d) },
 	} {

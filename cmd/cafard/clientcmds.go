@@ -25,6 +25,7 @@ import (
 const tokenUsage = `Usage:
   cafard token create --name NAME --kind agent|human|device --scopes read,message
                       [--grant PROJECT[:CHANNEL]=SCOPES ...] [--label TEXT]
+  cafard token create --name NAME --sink PROJECT/SINK [--label TEXT]
   cafard token list [--name NAME]
   cafard token revoke ID
 
@@ -32,8 +33,10 @@ The token is printed once; only its hash is stored. Scopes: ingest, read,
 message, serial_write. No token carries admin: the admin signs in with the
 password (cafard passwd). The scopes are a cap: the token reaches only what
 its principal is granted, and --grant (repeatable) adds such grants, on a
-whole project (lab=read,message) or on one channel (lab:dut1=read). The
-configuration flags (-data-dir, -config) are accepted too.
+whole project (lab=read,message) or on one channel (lab:dut1=read).
+--sink makes a device token that writes logs into that sink only (POST
+/api/log, cafard push, OTLP), whatever stream it names, and reads nothing.
+The configuration flags (-data-dir, -config) are accepted too.
 `
 
 func cmdToken(ctx context.Context, e env, args []string) error {
@@ -51,6 +54,7 @@ func cmdToken(ctx context.Context, e env, args []string) error {
 	kind := set.String("kind", "agent", "principal kind: agent, human or device")
 	scopes := set.String("scopes", "", "comma separated scopes")
 	label := set.String("label", "", "what the token is for")
+	sink := set.String("sink", "", "PROJECT/SINK the token writes into, and nothing else")
 	var grants []projects.Grant
 	set.Func("grant", "PROJECT[:CHANNEL]=SCOPES given to the principal (repeatable)", func(v string) error {
 		g, err := projects.ParseGrant(v)
@@ -80,6 +84,9 @@ func cmdToken(ctx context.Context, e env, args []string) error {
 	case "create":
 		if set.NArg() > 0 {
 			return fmt.Errorf("unexpected argument %q", set.Arg(0))
+		}
+		if *sink != "" {
+			return createSinkToken(ctx, e, cfg, st, tokens, *name, *kind, *scopes, *label, *sink, grants)
 		}
 		if *name == "" || *scopes == "" {
 			return fmt.Errorf("create needs --name and --scopes")
@@ -122,7 +129,11 @@ func cmdToken(ctx context.Context, e env, args []string) error {
 			if r.LastUsed != nil {
 				last = r.LastUsed.Format(time.DateTime)
 			}
-			fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Principal, r.Kind, strings.Join(r.Scopes.Strings(), ","), r.Label, r.CreatedAt.Format(time.DateTime), last)
+			scopes := strings.Join(r.Scopes.Strings(), ",")
+			if r.Sink != "" {
+				scopes += " (sink " + r.Sink + ")"
+			}
+			fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Principal, r.Kind, scopes, r.Label, r.CreatedAt.Format(time.DateTime), last)
 		}
 		return tw.Flush()
 	case "revoke":
@@ -307,4 +318,41 @@ func grantsNote(gs []projects.Grant) string {
 		return ""
 	}
 	return ", grants " + strings.ReplaceAll(projects.FormatGrants(gs), " ", ", ")
+}
+
+// createSinkToken is token create --sink: a device token bound to a sink.
+func createSinkToken(ctx context.Context, e env, cfg *config.Config, st *store.Store, tokens *auth.Tokens,
+	name, kind, scopes, label, ref string, grants []projects.Grant) error {
+	switch {
+	case name == "":
+		return errors.New("create needs --name")
+	case len(grants) > 0:
+		return errors.New("a sink token takes no --grant: it writes into its sink and reads nothing")
+	case scopes != "" && scopes != string(auth.ScopeIngest):
+		return errors.New("a sink token has the ingest scope only")
+	case kind != auth.KindAgent && kind != auth.KindDevice:
+		return errors.New("a sink token belongs to a device")
+	}
+	project, sinkName, ok := projects.SplitRef(ref)
+	if !ok {
+		return fmt.Errorf("--sink %q is not PROJECT/SINK", ref)
+	}
+	projs, err := cliProjects(ctx, cfg, st)
+	if err != nil {
+		return err
+	}
+	k, err := projs.Sink(ctx, project, sinkName)
+	if err != nil {
+		return fmt.Errorf("sink %s: %w", ref, err)
+	}
+	if _, err := tokens.EnsurePrincipal(ctx, name, auth.KindDevice); err != nil {
+		return err
+	}
+	tr, secret, err := tokens.CreateSinkToken(ctx, name, label, k.ID, k.Ref())
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(e.stderr, "token %d for %s (%s), writes into sink %s only. It is shown once:\n", tr.ID, tr.Principal, tr.Kind, k.Ref())
+	fmt.Fprintln(e.stdout, secret)
+	return nil
 }

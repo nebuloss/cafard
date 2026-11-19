@@ -6,12 +6,18 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
+	"testing"
 	"time"
 
+	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/clock"
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/writer"
@@ -114,6 +120,7 @@ type Status struct {
 	mu        sync.Mutex
 	Declared  map[string]string // stream to transport
 	Drops     map[string]int
+	Unrouteds map[string]int // by transport
 	Connected map[string]bool
 	Reasons   map[string]string
 }
@@ -122,7 +129,7 @@ var _ status.Registry = (*Status)(nil)
 
 // NewStatus returns an empty registry.
 func NewStatus() *Status {
-	return &Status{Declared: map[string]string{}, Drops: map[string]int{}, Connected: map[string]bool{}, Reasons: map[string]string{}}
+	return &Status{Declared: map[string]string{}, Drops: map[string]int{}, Unrouteds: map[string]int{}, Connected: map[string]bool{}, Reasons: map[string]string{}}
 }
 
 func (s *Status) Declare(src status.Source) {
@@ -142,6 +149,20 @@ func (s *Status) Dropped(stream string, n int) {
 	s.Drops[stream] += n
 	s.mu.Unlock()
 }
+func (s *Status) Unrouted(transport string, n int) {
+	s.mu.Lock()
+	s.Unrouteds[transport] += n
+	s.mu.Unlock()
+}
+func (s *Status) UnroutedCounts() map[string]int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]int64{}
+	for k, v := range s.Unrouteds {
+		out[k] = int64(v)
+	}
+	return out
+}
 func (s *Status) SetLineState(string, status.LineState) {}
 func (s *Status) Snapshot() []dto.Stream                { return nil }
 func (s *Status) Watch(int) (<-chan dto.Stream, func()) {
@@ -158,4 +179,67 @@ func (s *Status) Get(f func(s *Status)) {
 // Deps returns deps with the fakes, a system clock and a silent log.
 func Deps(w *Writer, st *Status) deps.Deps {
 	return deps.Deps{Writer: w, Status: st, Clock: clock.System{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+}
+
+// Sinks is a projects service over a store of its own.
+type Sinks struct {
+	*projects.Service
+	store *store.Store
+}
+
+// NewSinks holds sinks given as "project/sink", or
+// "project/sink=10.0.0.0/8,10.1.2.3" with source addresses; their
+// projects are made too.
+func NewSinks(t testing.TB, sinks ...string) Sinks {
+	t.Helper()
+	ctx := context.Background()
+	// Not t.TempDir: a fuzz seed's name has a '#', which a database path may not.
+	dir, err := os.MkdirTemp("", "cafard-sinks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, filepath.Join(dir, store.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close(); os.RemoveAll(dir) })
+	pr, err := projects.New(ctx, st.DB(), clock.System{}, store.Limits{}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range sinks {
+		ref, sources, _ := strings.Cut(spec, "=")
+		project, name, ok := projects.SplitRef(ref)
+		if !ok {
+			t.Fatalf("sink %q is not project/sink", spec)
+		}
+		if _, err := pr.Ensure(ctx, project, ""); err != nil {
+			t.Fatal(err)
+		}
+		k := projects.Sink{Project: project, Name: name}
+		if k.Sources, err = projects.ParseSources(sources); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pr.SaveSink(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return Sinks{Service: pr, store: st}
+}
+
+// Member is an agent granted ingest on the whole of project, holding a
+// token with that scope.
+func (s Sinks) Member(t testing.TB, name, project string) auth.Principal {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := s.Ensure(ctx, project, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := auth.NewTokens(s.store.DB(), clock.System{}).EnsurePrincipal(ctx, name, auth.KindAgent); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddGrants(ctx, projects.Grant{Principal: name, Project: project, Scopes: auth.NewScopeSet(auth.ScopeIngest)}); err != nil {
+		t.Fatal(err)
+	}
+	return auth.Principal{Name: name, Kind: auth.KindAgent, Scopes: auth.NewScopeSet(auth.ScopeIngest), TokenID: 1}
 }

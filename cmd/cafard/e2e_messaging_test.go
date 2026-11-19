@@ -312,9 +312,9 @@ func TestASpammingAgentIsRateLimited(t *testing.T) {
 func TestChannelBoundToAStreamDrivesTheLogTools(t *testing.T) {
 	s := startServer(t)
 	_, a := s.agent("agent-a")
-	s.ingest("serial:lab/dut1", "booting\n")
-	s.ingest("serial:lab/dut2", "other board\n")
-	_, out := call(t, a, "create_channel", map[string]any{"name": "run-42", "streams": []string{"serial:lab/dut1"}})
+	s.ingest("push:lab/dut1", "booting\n")
+	s.ingest("push:lab/dut2", "other board\n")
+	_, out := call(t, a, "create_channel", map[string]any{"name": "run-42", "streams": []string{"push:lab/dut1"}})
 	if out["channel"].(map[string]any)["followed"] != true {
 		t.Errorf("creator does not follow: %v", out)
 	}
@@ -325,11 +325,11 @@ func TestChannelBoundToAStreamDrivesTheLogTools(t *testing.T) {
 		got <- out
 	}()
 	time.Sleep(300 * time.Millisecond)
-	s.ingest("serial:lab/dut2", "dut2 login: \n")
-	s.ingest("serial:lab/dut1", "dut1 login: \n")
+	s.ingest("push:lab/dut2", "dut2 login: \n")
+	s.ingest("push:lab/dut1", "dut1 login: \n")
 	select {
 	case out := <-got:
-		if out["matched"] != true || out["streams"].([]any)[0] != "serial:lab/dut1" {
+		if out["matched"] != true || out["streams"].([]any)[0] != "push:lab/dut1" {
 			t.Errorf("wait_for = %v", out)
 		}
 	case <-time.After(15 * time.Second):
@@ -345,7 +345,7 @@ func TestChannelBoundToAStreamDrivesTheLogTools(t *testing.T) {
 	if _, out := call(t, a, "list_streams", map[string]any{"channel": "run-42"}); len(out["streams"].([]any)) != 1 {
 		t.Errorf("list_streams channel= %v", out)
 	}
-	call(t, a, "claim", map[string]any{"resource": "serial:lab/dut2"})
+	call(t, a, "claim", map[string]any{"resource": "push:lab/dut2"})
 	if _, out := call(t, a, "list_claims", map[string]any{"channel": "run-42"}); len(out["claims"].([]any)) != 0 {
 		t.Errorf("list_claims channel= %v", out)
 	}
@@ -354,11 +354,11 @@ func TestChannelBoundToAStreamDrivesTheLogTools(t *testing.T) {
 		t.Errorf("unknown channel sentence = %q", text)
 	}
 	// Binding changes leave a marker in the chat.
-	call(t, a, "update_channel", map[string]any{"name": "run-42", "add_streams": []string{"serial:lab/dut2"}})
-	if text, _ := call(t, a, "channel_timeline", map[string]any{"channel": "run-42"}); !strings.Contains(text, "agent-a bound serial:lab/dut2") {
+	call(t, a, "update_channel", map[string]any{"name": "run-42", "add_streams": []string{"push:lab/dut2"}})
+	if text, _ := call(t, a, "channel_timeline", map[string]any{"channel": "run-42"}); !strings.Contains(text, "agent-a bound push:lab/dut2") {
 		t.Errorf("timeline = %q", text)
 	}
-	if text, _ := call(t, a, "list_channels", nil); !strings.Contains(text, "#lab/run-42") || !strings.Contains(text, "serial:lab/dut1 (") {
+	if text, _ := call(t, a, "list_channels", nil); !strings.Contains(text, "#lab/run-42") || !strings.Contains(text, "push:lab/dut1 (") {
 		t.Errorf("list_channels = %q", text)
 	}
 }
@@ -366,14 +366,14 @@ func TestChannelBoundToAStreamDrivesTheLogTools(t *testing.T) {
 func TestGlobBindingPicksUpAStreamCreatedLater(t *testing.T) {
 	s := startServer(t)
 	_, a := s.agent("agent-a")
-	call(t, a, "create_channel", map[string]any{"name": "dut1", "streams": []string{"syslog:lab/dut1*"}})
+	call(t, a, "create_channel", map[string]any{"name": "dut1", "streams": []string{"push:lab/dut1*"}})
 	got := make(chan map[string]any, 1)
 	go func() {
 		_, out := call(t, a, "wait_for", map[string]any{"pattern": "hello", "channel": "dut1", "timeout_s": 20})
 		got <- out
 	}()
 	time.Sleep(300 * time.Millisecond)
-	s.ingest("syslog:lab/dut1-bmc", "hello from a new stream\n")
+	s.ingest("push:lab/dut1-bmc", "hello from a new stream\n")
 	select {
 	case out := <-got:
 		if out["matched"] != true {
@@ -382,7 +382,7 @@ func TestGlobBindingPicksUpAStreamCreatedLater(t *testing.T) {
 	case <-time.After(15 * time.Second):
 		t.Fatal("a stream created after the binding did not release wait_for")
 	}
-	if text, _ := call(t, a, "read", map[string]any{"channel": "dut1", "since_seq": 0}); !strings.Contains(text, "syslog:lab/dut1-bmc") {
+	if text, _ := call(t, a, "read", map[string]any{"channel": "dut1", "since_seq": 0}); !strings.Contains(text, "push:lab/dut1-bmc") {
 		t.Errorf("read = %q", text)
 	}
 }
@@ -395,13 +395,13 @@ func TestLogAttachmentOf73LinesSurvivesRetention(t *testing.T) {
 	for i := 1; i <= 73; i++ {
 		fmt.Fprintf(&body, "boot line %d\n", i)
 	}
-	s.ingest("serial:lab/dut1", body.String())
-	_, page := call(t, a, "read", map[string]any{"streams": []string{"serial:lab/dut1"}, "since_seq": 0})
+	s.ingest("push:lab/dut1", body.String())
+	_, page := call(t, a, "read", map[string]any{"streams": []string{"push:lab/dut1"}, "since_seq": 0})
 	next := num(page["next_seq"])
 	from, to := next-73, next-1
 	_, out := call(t, a, "send", map[string]any{"text": "failure on boot 3", "to": "agent-b", "logs": []any{
-		map[string]any{"stream": "serial:lab/dut1", "from_seq": from, "to_seq": to, "title": "boot 3"},
-		map[string]any{"stream": "serial:lab/dut1", "from_seq": from},
+		map[string]any{"stream": "push:lab/dut1", "from_seq": from, "to_seq": to, "title": "boot 3"},
+		map[string]any{"stream": "push:lab/dut1", "from_seq": from},
 	}})
 	logs := out["logs"].([]any)
 	if num(logs[0].(map[string]any)["lines"]) != 73 || logs[0].(map[string]any)["snapshot"] != true {
@@ -414,10 +414,10 @@ func TestLogAttachmentOf73LinesSurvivesRetention(t *testing.T) {
 	}
 
 	// Retention deletes the stream's lines.
-	if _, err := s.db().DB().Exec(`DELETE FROM entries WHERE stream = 'serial:lab/dut1'`); err != nil {
+	if _, err := s.db().DB().Exec(`DELETE FROM entries WHERE stream = 'push:lab/dut1'`); err != nil {
 		t.Fatal(err)
 	}
-	if text, _ := call(t, b, "read", map[string]any{"streams": []string{"serial:lab/dut1"}, "since_seq": 0}); !strings.Contains(text, "No entries") {
+	if text, _ := call(t, b, "read", map[string]any{"streams": []string{"push:lab/dut1"}, "since_seq": 0}); !strings.Contains(text, "No entries") {
 		t.Fatalf("lines still there: %q", text)
 	}
 	text, _ = call(t, b, "get_message", map[string]any{"seq": seq, "ack": false})
@@ -434,12 +434,12 @@ func TestLogAttachmentOf73LinesSurvivesRetention(t *testing.T) {
 	}
 
 	// The open-ended attachment keeps delivering new lines.
-	s.ingest("serial:lab/dut1", "after the send 1\nafter the send 2\n")
+	s.ingest("push:lab/dut1", "after the send 1\nafter the send 2\n")
 	text, out = call(t, b, "get_log_attachment", map[string]any{"seq": seq, "index": 1, "since_seq": to + 1})
 	if !strings.Contains(text, "after the send 2") || num(out["shown"]) != 2 {
 		t.Errorf("open-ended = %q %v", text, out)
 	}
-	s.ingest("serial:lab/dut1", "after the send 3\n")
+	s.ingest("push:lab/dut1", "after the send 3\n")
 	text, _ = call(t, b, "get_log_attachment", map[string]any{"seq": seq, "index": 1, "since_seq": num(out["next_seq"])})
 	if !strings.Contains(text, "after the send 3") || strings.Contains(text, "after the send 2") {
 		t.Errorf("open-ended continued = %q", text)
@@ -454,9 +454,9 @@ func TestClaimsAreExclusiveAndLeaveMarkers(t *testing.T) {
 	s := startServer(t)
 	_, a := s.agent("agent-a")
 	_, b := s.agent("agent-b")
-	s.ingest("serial:lab/dut1", "idle\n")
-	call(t, a, "claim", map[string]any{"resource": "serial:lab/dut1", "note": "flashing"})
-	text := callFails(t, b, "claim", map[string]any{"resource": "serial:lab/dut1"}, "conflict")
+	s.ingest("push:lab/dut1", "idle\n")
+	call(t, a, "claim", map[string]any{"resource": "push:lab/dut1", "note": "flashing"})
+	text := callFails(t, b, "claim", map[string]any{"resource": "push:lab/dut1"}, "conflict")
 	if !strings.Contains(text, "agent-a") {
 		t.Errorf("conflict sentence = %q", text)
 	}
@@ -464,13 +464,13 @@ func TestClaimsAreExclusiveAndLeaveMarkers(t *testing.T) {
 		out["streams"].([]any)[0].(map[string]any)["claim"].(map[string]any)["principal"] != "agent-a" {
 		t.Errorf("list_streams = %q", text)
 	}
-	call(t, a, "release", map[string]any{"resource": "serial:lab/dut1"})
-	call(t, b, "claim", map[string]any{"resource": "serial:lab/dut1", "ttl_s": 1})
-	callFails(t, a, "claim", map[string]any{"resource": "serial:lab/dut1"}, "conflict")
+	call(t, a, "release", map[string]any{"resource": "push:lab/dut1"})
+	call(t, b, "claim", map[string]any{"resource": "push:lab/dut1", "ttl_s": 1})
+	callFails(t, a, "claim", map[string]any{"resource": "push:lab/dut1"}, "conflict")
 	time.Sleep(1200 * time.Millisecond)
-	call(t, a, "claim", map[string]any{"resource": "serial:lab/dut1"})
-	text, _ = call(t, a, "read", map[string]any{"streams": []string{"serial:lab/dut1"}, "since_seq": 0})
-	for _, want := range []string{"agent-a claimed serial:lab/dut1", "agent-a released serial:lab/dut1", "agent-b claimed serial:lab/dut1 for 1s", "claim of agent-b on serial:lab/dut1 expired"} {
+	call(t, a, "claim", map[string]any{"resource": "push:lab/dut1"})
+	text, _ = call(t, a, "read", map[string]any{"streams": []string{"push:lab/dut1"}, "since_seq": 0})
+	for _, want := range []string{"agent-a claimed push:lab/dut1", "agent-a released push:lab/dut1", "agent-b claimed push:lab/dut1 for 1s", "claim of agent-b on push:lab/dut1 expired"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("markers lack %q:\n%s", want, text)
 		}
@@ -564,9 +564,9 @@ func TestInboxSubscriptionNotifiesOnlyItsPrincipal(t *testing.T) {
 	if err != nil || !strings.Contains(res.Contents[0].Text, "for b only") {
 		t.Errorf("inbox resource = %v %v", res, err)
 	}
-	s.ingest("serial:lab/dut1", "x\n")
-	res, err = b.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "cafard://stream/serial:lab/dut1"})
-	if err != nil || !strings.Contains(res.Contents[0].Text, "serial:lab/dut1 INFO x") {
+	s.ingest("push:lab/dut1", "x\n")
+	res, err = b.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "cafard://stream/push:lab/dut1"})
+	if err != nil || !strings.Contains(res.Contents[0].Text, "push:lab/dut1 INFO x") {
 		t.Errorf("stream resource = %v %v", res, err)
 	}
 	res, err = b.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "cafard://channel/general"})

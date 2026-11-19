@@ -11,12 +11,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/nebuloss/cafard/internal/deps"
 	"github.com/nebuloss/cafard/internal/mcpserver"
-	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/textclean"
@@ -30,36 +30,26 @@ type Options struct {
 	TickEvery  time.Duration // how often a partial line is checked, default 100 ms
 }
 
-// Manager runs every configured port.
+// Manager runs the serial ports of the sinks, and follows their changes.
 type Manager struct {
-	d        deps.Deps
-	opts     Options
-	log      *slog.Logger
-	ports    []*Handle
+	d    deps.Deps
+	opts Options
+	log  *slog.Logger
+
+	mu       sync.Mutex
+	ctx      context.Context // the run context, once Run started
 	byStream map[string]*Handle
+	wg       sync.WaitGroup
 }
 
-// Register declares the configured ports and adds the serial_write and
+// Register runs the ports of the sinks and adds the serial_write and
 // serial_control tools; start reads the ports until the context ends.
-// Without ports there are no tools: they could only fail.
-func Register(_ *http.ServeMux, s *mcpserver.Server, d deps.Deps, cfg *Config) (func(context.Context) error, error) {
-	if cfg == nil || len(cfg.Ports) == 0 {
-		return nil, nil
-	}
-	c := Config{Ports: append([]Port(nil), cfg.Ports...)}
-	c.SetDefaults()
-	if err := c.Validate(); err != nil {
-		return nil, fmt.Errorf("serial: %w", err)
-	}
-	// The listed ports are the ones the import makes sinks of in the
-	// project imported, so their streams are already named there.
-	for i := range c.Ports {
-		c.Ports[i].Name = projects.Imported + "/" + c.Ports[i].Name
-	}
-	m, err := New(d, &c, Options{})
-	if err != nil {
-		return nil, err
-	}
+// The tools are there even before any sink has a port: one may get one
+// at run time, and tools cannot be added once /mcp is mounted.
+func Register(_ *http.ServeMux, s *mcpserver.Server, d deps.Deps) (func(context.Context) error, error) {
+	m := newManager(d, Options{})
+	m.Reconcile(d.Projects.SerialPorts())
+	d.Projects.OnSinksChanged(func() { m.Reconcile(d.Projects.SerialPorts()) })
 	if s != nil {
 		registerTools(s, m)
 	}
@@ -73,6 +63,14 @@ func New(d deps.Deps, cfg *Config, opts Options) (*Manager, error) {
 	if err := c.validate(true); err != nil {
 		return nil, fmt.Errorf("serial: %w", err)
 	}
+	m := newManager(d, opts)
+	for _, p := range c.Ports {
+		m.add(p)
+	}
+	return m, nil
+}
+
+func newManager(d deps.Deps, opts Options) *Manager {
 	if opts.Factory == nil {
 		opts.Factory = Open
 	}
@@ -89,46 +87,116 @@ func New(d deps.Deps, cfg *Config, opts Options) (*Manager, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	m := &Manager{d: d, opts: opts, log: log.With("component", "serial"), byStream: map[string]*Handle{}}
-	for _, p := range c.Ports {
-		h := &Handle{m: m, port: p, stream: p.Stream(), transport: p.Transport(), writable: p.Writable, baud: p.Baud,
-			log: m.log.With("stream", p.Stream())}
-		m.ports = append(m.ports, h)
-		m.byStream[p.Stream()] = h
-		d.Status.Declare(status.Source{Stream: p.Stream(), Transport: p.Transport()})
+	return &Manager{d: d, opts: opts, log: log.With("component", "serial"), byStream: map[string]*Handle{}}
+}
+
+// add declares p and, once Run started, opens it. m.mu is held, or Run
+// has not started.
+func (m *Manager) add(p Port) {
+	h := &Handle{m: m, port: p, stream: p.Stream(), transport: p.Transport(), writable: p.Writable, baud: p.Baud,
+		log: m.log.With("stream", p.Stream())}
+	m.byStream[h.stream] = h
+	m.d.Status.Declare(status.Source{Stream: h.stream, Transport: h.transport})
+	if m.ctx != nil && m.ctx.Err() == nil {
+		m.start(h)
 	}
-	return m, nil
+}
+
+func (m *Manager) start(h *Handle) {
+	ctx, cancel := context.WithCancel(m.ctx)
+	h.cancel, h.done = cancel, make(chan struct{})
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		defer close(h.done)
+		h.run(ctx)
+	}()
+}
+
+// Reconcile makes the running ports those of ports: a new one opens, one
+// that is gone stops with a marker saying so, a changed one reopens with
+// its new settings. A port that does not validate is logged and skipped.
+func (m *Manager) Reconcile(ports []Port) {
+	want := map[string]Port{}
+	for _, p := range ports {
+		p.SetDefaults()
+		if err := p.Validate(); err != nil {
+			m.log.Error("serial port skipped", "err", err)
+			continue
+		}
+		want[p.Stream()] = p
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for stream, h := range m.byStream {
+		p, keep := want[stream]
+		if keep && p == h.port {
+			continue
+		}
+		reason := "port removed"
+		if keep {
+			reason = "port settings changed"
+		}
+		if h.cancel != nil {
+			h.cancel()
+			<-h.done
+		}
+		delete(m.byStream, stream)
+		m.d.Status.SetConnected(stream, false, reason)
+		h.marker(nil, "removed", reason, store.DefaultSeverity)
+		h.log.Info("serial port stopped", "reason", reason)
+	}
+	for stream, p := range want {
+		if _, ok := m.byStream[stream]; !ok {
+			m.add(p)
+		}
+	}
 }
 
 // Run reads every port until ctx ends.
 func (m *Manager) Run(ctx context.Context) error {
-	var wg sync.WaitGroup
-	for _, h := range m.ports {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			h.run(ctx)
-		}()
+	m.mu.Lock()
+	m.ctx = ctx
+	for _, h := range m.byStream {
+		m.start(h)
 	}
-	wg.Wait()
+	m.mu.Unlock()
+	<-ctx.Done()
+	m.wg.Wait()
 	return nil
 }
 
-// Lookup finds a port by stream id ("serial:dut1").
+// Lookup finds a port by stream id ("serial:lab/dut1").
 func (m *Manager) Lookup(stream string) (*Handle, error) {
+	m.mu.Lock()
 	h, ok := m.byStream[stream]
+	m.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("%w: %q", ErrUnknownStream, stream)
 	}
 	return h, nil
 }
 
+// Streams are the streams of the running ports, sorted.
+func (m *Manager) Streams() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]string, 0, len(m.byStream))
+	for st := range m.byStream {
+		out = append(out, st)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Handle is one port at run time.
 type Handle struct {
-	m   *Manager
-	log *slog.Logger
-	ctx context.Context // the run context, for markers from link callbacks
-	ctl sync.Mutex      // one Write or Control at a time
+	m      *Manager
+	log    *slog.Logger
+	ctx    context.Context // the run context, for markers from link callbacks
+	cancel context.CancelFunc
+	done   chan struct{} // closed when run returns
+	ctl    sync.Mutex    // one Write or Control at a time
 
 	port              Port // as configured, never changed
 	stream, transport string

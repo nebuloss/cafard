@@ -113,6 +113,47 @@ sudo rc-service cafard restart        # or: systemctl restart cafard
 The old first-start token still works for `cafard push` and MCP, without
 admin; revoke it on the Agents page if nothing uses it.
 
+### Upgrading to projects
+
+The first start of a version with projects moves what the database holds
+into a project named `imported`, once, before it listens. On a large
+database this rewrites the stream index of every log line and can take a
+few minutes; let it finish (`rc-service cafard status`, or the journal,
+says when it listens). Nothing is lost:
+
+- every channel becomes `#imported/<name>`, with its messages, bindings,
+  follows and read state; every log stream `serial:dut1` becomes
+  `serial:imported/dut1` (the same for `syslog:`, `netconsole:`, `push:`,
+  `otlp:`), with its lines, claims and the log attachments pointing at it;
+- every old stream name that is a valid sink name becomes a sink of
+  `imported`; a syslog or netconsole stream named by an IP address gets
+  that address as the sink's source, so those senders keep landing in it;
+- every principal but `admin` gets a grant on the whole of `imported`
+  with the scopes its tokens and sessions had (people with neither get
+  `read` and `message`), so agents, phones and push clients keep working:
+  `cafard push --stream laptop` lands in `push:imported/laptop`, and an
+  OTLP exporter whose `service.name` was a stream name in the sink of that
+  name;
+- then, at every start, each port of the `serial:` list and each
+  `netconsole.names` entry not imported yet becomes the port, or a source
+  address, of the sink of its name in `imported`, and the log warns that
+  the keys can go. They still load in this version; remove them once the
+  project page shows the sinks. Each item is recorded when it is
+  imported, so a sink or port deleted on the project page does not come
+  back from the file.
+
+What needs the admin afterwards:
+
+- **Syslog from hosts that named themselves** (`syslog:dut1` from the
+  hostname in the message): the sink `imported/dut1` exists, but cafard
+  never recorded the sender's address, so its new lines are dropped until
+  the address is added to the sink on the project page. Sources shows how
+  many syslog lines no sink took.
+- A client that pushed with an explicit kind (`--stream serial:dut1`) now
+  lands in the sink's push stream, `push:imported/dut1`.
+- New agents and people see nothing until they get a grant (`cafard token
+  create --grant`, `cafard pair --grant`, or the project page).
+
 ## Configuration
 
 Edit `/etc/cafard.yaml`, check it, restart:

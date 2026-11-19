@@ -27,7 +27,9 @@ const DefaultAddr = ":6666"
 type Config struct {
 	// UDP is the listen address; empty disables netconsole.
 	UDP string `yaml:"udp"`
-	// Names maps source IP addresses to stream names.
+	// Names maps source IP addresses to stream names. Deprecated: at
+	// start each one is imported once as a source address of the sink of
+	// that name in the project imported, and sinks route from then on.
 	Names map[string]string `yaml:"names,omitempty"`
 }
 
@@ -39,23 +41,15 @@ func (c *Config) Validate() error {
 	if err := ingestutil.CheckListen(c.UDP); err != nil {
 		return fmt.Errorf("udp: %w", err)
 	}
-	_, err := parseNames(c.Names)
-	return err
-}
-
-func parseNames(in map[string]string) (map[netip.Addr]string, error) {
-	out := make(map[netip.Addr]string, len(in))
-	for k, v := range in {
-		ip, err := netip.ParseAddr(k)
-		if err != nil {
-			return nil, fmt.Errorf("names: %q is not an IP address", k)
+	for k, v := range c.Names {
+		if _, err := netip.ParseAddr(k); err != nil {
+			return fmt.Errorf("names: %q is not an IP address", k)
 		}
 		if v == "" || ingestutil.StreamName(v) != v {
-			return nil, fmt.Errorf("names: %q for %s must be non-empty, without spaces, control or glob characters", v, k)
+			return fmt.Errorf("names: %q for %s must be non-empty, without spaces, control or glob characters", v, k)
 		}
-		out[ip.Unmap()] = v
 	}
-	return out, nil
+	return nil
 }
 
 // Register prepares the listener; start binds it and serves until its
@@ -64,10 +58,7 @@ func Register(_ *http.ServeMux, _ *mcpserver.Server, d deps.Deps, cfg *Config) (
 	if cfg.UDP == "" {
 		return nil, nil
 	}
-	s, err := New(d, cfg.Names)
-	if err != nil {
-		return nil, err
-	}
+	s := New(d)
 	addr := cfg.UDP
 	return func(ctx context.Context) error { return s.Run(ctx, addr) }, nil
 }
@@ -75,10 +66,10 @@ func Register(_ *http.ServeMux, _ *mcpserver.Server, d deps.Deps, cfg *Config) (
 // Server is the UDP listener and the per-source reassembly state. Only
 // the reading goroutine touches that state.
 type Server struct {
-	d       deps.Deps
-	names   map[netip.Addr]string
-	log     *slog.Logger
-	declare ingestutil.Declarer
+	d        deps.Deps
+	log      *slog.Logger
+	declare  ingestutil.Declarer
+	unrouted *ingestutil.Unrouted
 
 	plain map[netip.Addr]*plainSource
 	frags map[fragKey]*fragBuf
@@ -114,18 +105,16 @@ const (
 	tickEvery   = 250 * time.Millisecond
 )
 
-// New builds the server; names maps IP addresses to stream names.
-func New(d deps.Deps, names map[string]string) (*Server, error) {
-	n, err := parseNames(names)
-	if err != nil {
-		return nil, fmt.Errorf("netconsole.%w", err)
-	}
+// New builds the server. A sender's sink is the one listing its address.
+func New(d deps.Deps) *Server {
+	log := d.Log.With("component", "netconsole")
 	return &Server{
-		d: d, names: n, log: d.Log.With("component", "netconsole"),
-		declare: ingestutil.Declarer{Status: d.Status, Transport: "udp"},
-		plain:   map[netip.Addr]*plainSource{},
-		frags:   map[fragKey]*fragBuf{},
-	}, nil
+		d: d, log: log,
+		declare:  ingestutil.Declarer{Status: d.Status, Transport: "udp"},
+		unrouted: &ingestutil.Unrouted{Status: d.Status, Clock: d.Clock, Log: log, Transport: "netconsole"},
+		plain:    map[netip.Addr]*plainSource{},
+		frags:    map[fragKey]*fragBuf{},
+	}
 }
 
 // Run binds addr and serves until ctx ends.
@@ -165,8 +154,13 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	}
 }
 
-// Handle processes one datagram from ip received at now.
+// Handle processes one datagram from ip received at now. A sender no
+// sink lists is dropped before it costs any reassembly state.
 func (s *Server) Handle(ctx context.Context, b []byte, ip netip.Addr, now time.Time) {
+	if _, ok := s.d.Projects.SinkForAddr(ip); !ok {
+		s.unrouted.Drop(1, "source", ingestutil.AddrName(ip))
+		return
+	}
 	rec, ok := ParseExtended(b)
 	if !ok {
 		src := s.plain[ip]
@@ -176,7 +170,9 @@ func (s *Server) Handle(ctx context.Context, b []byte, ip netip.Addr, now time.T
 			}
 			src = &plainSource{}
 			src.sp = textclean.NewSplitter(textclean.DefaultFlushAfter, textclean.MaxLineBytes, func(line string, at time.Time) {
-				s.submit(ctx, s.entry(ip, line, at, store.DefaultSeverity, nil))
+				if e, ok := s.entry(ip, line, at, store.DefaultSeverity, nil); ok {
+					s.submit(ctx, e)
+				}
 			})
 			s.plain[ip] = src
 		}
@@ -234,29 +230,29 @@ func (s *Server) record(ctx context.Context, ip netip.Addr, rec Record, body []b
 	meta.Add("dict", ingestutil.AnyMap(dict))
 	raw := meta.JSON()
 	for _, line := range ingestutil.SplitLines(text) {
-		s.submit(ctx, s.entry(ip, line, at, rec.Level, raw))
+		if e, ok := s.entry(ip, line, at, rec.Level, raw); ok {
+			s.submit(ctx, e)
+		}
 	}
 }
 
-// StreamName is the stream of a source: its configured name, else its IP.
-func (s *Server) StreamName(ip netip.Addr) string {
-	if n, ok := s.names[ip.Unmap()]; ok {
-		return n
+// entry is a line of ip in its sink's netconsole stream; the sink is
+// looked up again, since a partial line may wait while sinks change.
+func (s *Server) entry(ip netip.Addr, line string, at time.Time, sev int, meta []byte) (store.Entry, bool) {
+	k, ok := s.d.Projects.SinkForAddr(ip)
+	if !ok {
+		s.unrouted.Drop(1, "source", ingestutil.AddrName(ip))
+		return store.Entry{}, false
 	}
-	return ingestutil.AddrName(ip)
-}
-
-func (s *Server) entry(ip netip.Addr, line string, at time.Time, sev int, meta []byte) store.Entry {
-	name := s.StreamName(ip)
 	if meta == nil {
 		var m ingestutil.Meta
 		m.Add("source_ip", ingestutil.AddrName(ip))
 		meta = m.JSON()
 	}
 	return store.Entry{
-		TS: at, Stream: "netconsole:" + name, Kind: store.KindLine, Severity: sev,
-		Host: name, App: "kernel", Text: line, Meta: meta,
-	}
+		TS: at, Stream: k.Stream("netconsole"), Kind: store.KindLine, Severity: sev,
+		Host: ingestutil.AddrName(ip), App: "kernel", Text: line, Meta: meta,
+	}, true
 }
 
 func (s *Server) submit(ctx context.Context, e store.Entry) {

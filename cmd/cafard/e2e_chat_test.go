@@ -210,18 +210,18 @@ func TestALogRangeAttachedFromTheUIReachesAnAgent(t *testing.T) {
 		fmt.Fprintf(&nd, `{"text":"usb probe %02d","severity":%d}`+"\n", i, sev)
 		fmt.Fprintf(&nd, `{"text":"other line %02d","severity":3}`+"\n", i)
 	}
-	if resp := s.post(s.admin, "/api/log?stream=serial:lab/dut1", "application/x-ndjson", nd.String()); resp.StatusCode != http.StatusOK {
+	if resp := s.post(s.admin, "/api/log?stream=push:lab/dut1", "application/x-ndjson", nd.String()); resp.StatusCode != http.StatusOK {
 		t.Fatalf("ingest: %d", resp.StatusCode)
 	}
 	// What the logs pane shows with sev=3 and re=usb, as the UI reads it.
-	_, b := s.browser(cookie, "GET", "/api/entries?streams=serial:lab/dut1&sev=3&re=usb", "", nil, true)
+	_, b := s.browser(cookie, "GET", "/api/entries?streams=push:lab/dut1&sev=3&re=usb", "", nil, true)
 	var page dto.Page[dto.Entry]
 	if err := json.Unmarshal(b, &page); err != nil || len(page.Items) != 4 {
 		t.Fatalf("entries = %s", b)
 	}
 	from, to := page.Items[0].Seq, page.Items[len(page.Items)-1].Seq
 	sev := 3
-	logs, _ := json.Marshal([]dto.LogRequest{{Stream: "serial:lab/dut1", FromSeq: from, ToSeq: &to, Grep: "usb", MinSeverity: &sev, Title: "usb errors"}})
+	logs, _ := json.Marshal([]dto.LogRequest{{Stream: "push:lab/dut1", FromSeq: from, ToSeq: &to, Grep: "usb", MinSeverity: &sev, Title: "usb errors"}})
 	e := s.sendForm(cookie, map[string]string{"chat": "dm:codex-build", "text": "see these", "logs": string(logs)})
 	la := e.Attachments[0].Log
 	if la == nil || la.Lines != 4 || la.Grep != "usb" || la.MinSeverity == nil || *la.MinSeverity != 3 {
@@ -316,17 +316,17 @@ func TestAMarkerInABoundChannelIsInTheLogsAndTheChat(t *testing.T) {
 	s := startServer(t)
 	_, agent := s.agent("codex-build")
 	cookie := s.session()
-	s.ingest("serial:lab/dut1", "U-Boot 2024.04\n")
-	call(t, agent, "create_channel", map[string]any{"name": "run-42", "streams": []string{"serial:lab/dut1"}})
+	s.ingest("push:lab/dut1", "U-Boot 2024.04\n")
+	call(t, agent, "create_channel", map[string]any{"name": "run-42", "streams": []string{"push:lab/dut1"}})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	feed := s.events(ctx, cookie, "chat=chan:lab/run-42")
 	waitEvent(t, feed, "counts", func(ev webtest.Event) bool { return ev.Name == "counts" })
-	call(t, agent, "mark", map[string]any{"stream": "serial:lab/dut1", "label": "test 42 starts"})
-	s.ingest("serial:lab/dut1", "a line after the marker\n")
+	call(t, agent, "mark", map[string]any{"stream": "push:lab/dut1", "label": "test 42 starts"})
+	s.ingest("push:lab/dut1", "a line after the marker\n")
 	// The chat page's feed carries the marker and the bound stream's lines.
 	waitEvent(t, feed, "the marker", func(ev webtest.Event) bool {
-		return ev.Name == "entry" && strings.Contains(ev.Data, "test 42 starts") && strings.Contains(ev.Data, `"stream":"serial:lab/dut1"`)
+		return ev.Name == "entry" && strings.Contains(ev.Data, "test 42 starts") && strings.Contains(ev.Data, `"stream":"push:lab/dut1"`)
 	})
 	waitEvent(t, feed, "the line", func(ev webtest.Event) bool {
 		return ev.Name == "entry" && strings.Contains(ev.Data, "a line after the marker")

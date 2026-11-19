@@ -255,6 +255,13 @@ func (s Stream) MarshalJSON() ([]byte, error) {
 	return json.Marshal(p)
 }
 
+// StreamList answers GET /api/streams. Unrouted, for the admin only,
+// counts by transport the log entries that reached no sink since start.
+type StreamList struct {
+	Streams  []Stream         `json:"streams"`
+	Unrouted map[string]int64 `json:"unrouted,omitempty"`
+}
+
 // Claim is an exclusive hold on a stream.
 type Claim struct {
 	Principal string `json:"principal"`

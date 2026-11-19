@@ -489,3 +489,49 @@ func TestConfigValidation(t *testing.T) {
 		t.Errorf("duplicate names: %v", err)
 	}
 }
+
+func TestReconcileFollowsTheSinks(t *testing.T) {
+	e := newEnv()
+	o := newOpens()
+	m := startManager(t, e, nil, o.factory)
+	const stream = "serial:lab/dut1"
+	far := o.pipe(nil)
+	m.Reconcile([]Port{{Name: "lab/dut1", Device: "/dev/ttyUSB0"}, {Name: "lab/bad"}})
+	t.Cleanup(func() { (<-far).Close() })
+	h, err := m.Lookup(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Eventually(t, "connected", 3*time.Second, func() bool { ok, _ := h.Connected(); return ok })
+	if _, err := m.Lookup("serial:lab/bad"); err == nil {
+		t.Error("a port without an address runs")
+	}
+
+	// The same settings leave the port alone; new ones reopen it.
+	m.Reconcile([]Port{{Name: "lab/dut1", Device: "/dev/ttyUSB0"}})
+	if again, _ := m.Lookup(stream); again != h {
+		t.Error("an unchanged port was reopened")
+	}
+	far2 := o.pipe(nil)
+	m.Reconcile([]Port{{Name: "lab/dut1", Device: "/dev/ttyUSB0", Baud: 9600}})
+	t.Cleanup(func() { (<-far2).Close() })
+	h2, _ := m.Lookup(stream)
+	testutil.Eventually(t, "reopened", 3*time.Second, func() bool { ok, _ := h2.Connected(); return ok })
+	o.mu.Lock()
+	baud := o.calls[len(o.calls)-1].Baud
+	o.mu.Unlock()
+	if h2 == h || baud != 9600 {
+		t.Errorf("reopened with baud %d", baud)
+	}
+
+	m.Reconcile(nil)
+	if _, err := m.Lookup(stream); !errors.Is(err, ErrUnknownStream) {
+		t.Errorf("a removed port is still there: %v", err)
+	}
+	if !hasEntry(e.w, "serial: port settings changed") || !hasEntry(e.w, "serial: port removed") {
+		t.Errorf("markers = %q", texts(e.w))
+	}
+	if st, ok := e.st.Get(stream); !ok || st.Status != dto.StreamDown {
+		t.Errorf("status after removal = %+v", st)
+	}
+}

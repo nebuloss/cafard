@@ -93,7 +93,13 @@ func (a *API) streams(w http.ResponseWriter, r *http.Request, p auth.Principal) 
 	if project := r.URL.Query().Get("project"); project != "" {
 		list = slices.DeleteFunc(list, func(s dto.Stream) bool { return s.Project != project })
 	}
-	dto.WriteJSON(w, http.StatusOK, map[string][]dto.Stream{"streams": nonNil(list)})
+	out := dto.StreamList{Streams: nonNil(list)}
+	if p.Has(auth.ScopeAdmin) && a.d.Status != nil {
+		if u := a.d.Status.UnroutedCounts(); len(u) > 0 {
+			out.Unrouted = u
+		}
+	}
+	dto.WriteJSON(w, http.StatusOK, out)
 }
 
 // streamsMatch previews a glob: which streams a binding would show now.
