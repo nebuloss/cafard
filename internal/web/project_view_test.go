@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/nebuloss/cafard/internal/auth"
@@ -81,5 +82,60 @@ func TestAProjectOpensOnItsLatestChat(t *testing.T) {
 	}
 	if code, loc := open(bob, "lab"); code != http.StatusSeeOther || loc != "/projects/lab/c/dut1" {
 		t.Errorf("lab for bob: %d %s", code, loc)
+	}
+}
+
+// A sink's page shows that sink's streams; the overview every sink's.
+func TestAProjectsLogsShowItsSinks(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	seed(e)
+	cookie := e.Admin()
+	one := e.Do("GET", "/projects/lab/logs/dut1", cookie, nil).Body.String()
+	if !strings.Contains(one, "U-Boot 2024.04") || strings.Contains(one, "Started cafard push") || strings.Contains(one, `data-stream="syslog:lab/bench-pi"`) {
+		t.Error("the page of lab/dut1 shows another sink, or not its own")
+	}
+	all := e.Do("GET", "/projects/lab/logs", cookie, nil).Body.String()
+	if !strings.Contains(all, "U-Boot 2024.04") || !strings.Contains(all, "Started cafard push") {
+		t.Error("the logs of lab lack a sink")
+	}
+	// The filters stay on the page; Live has every one of them.
+	if !strings.Contains(all, `<a class="btn text" href="/projects/lab/logs">Reset</a>`) || !strings.Contains(all, `href="/live?streams=%2A%3Alab%2F%2A"`) {
+		t.Error("the logs of lab do not keep their filters at home, or lost the way to Live")
+	}
+	for _, path := range []string{"/projects/lab/logs/no*such", "/projects/nope/logs"} {
+		if rec := e.Do("GET", path, cookie, nil); rec.Code != http.StatusNotFound {
+			t.Errorf("%s: %d", path, rec.Code)
+		}
+	}
+}
+
+// Nobody but the admin sees admin items, and the admin sees them on the
+// admin interface only.
+func TestOnlyTheAdminSeesAdminItems(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	seed(e)
+	e.Principal("bob", auth.KindHuman, auth.ScopeRead, auth.ScopeMessage)
+	bob := e.Session("bob", auth.ScopeRead, auth.ScopeMessage)
+	for _, path := range []string{"/", "/projects/lab/c/dut1", "/projects/lab/logs", "/dm"} {
+		body := e.Do("GET", path, bob, nil).Body.String()
+		for _, admin := range []string{`href="/admin"`, `href="/projects/lab/settings"`, `action="/projects"`, `href="/agents"`, `href="/pair"`} {
+			if strings.Contains(body, admin) {
+				t.Errorf("%s shows bob %s", path, admin)
+			}
+		}
+	}
+	for _, path := range []string{"/admin", "/projects/lab/settings", "/projects"} {
+		if rec := e.Do("GET", path, bob, nil); rec.Code != http.StatusForbidden {
+			t.Errorf("%s for bob: %d", path, rec.Code)
+		}
+		if rec := e.DoPublic("GET", path, e.Admin(), nil); rec.Code != http.StatusNotFound && rec.Code != http.StatusSeeOther {
+			t.Errorf("%s on the public interface: %d", path, rec.Code)
+		}
+	}
+	home := e.Do("GET", "/", e.Admin(), nil).Body.String()
+	for _, want := range []string{`href="/admin"`, `action="/projects"`, "New project"} {
+		if !strings.Contains(home, want) {
+			t.Errorf("the admin's home lacks %q", want)
+		}
 	}
 }

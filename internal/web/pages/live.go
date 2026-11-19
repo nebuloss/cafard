@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,6 +30,8 @@ type sevOption struct {
 }
 
 type liveFilter struct {
+	Action                   string // where the form goes: /live, or a project's logs
+	Fixed                    bool   // the page picks the streams
 	Open                     bool
 	Active                   int
 	Streams, Re              string
@@ -68,58 +71,81 @@ var sevLabels = []sevOption{
 }
 
 func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
-	ctx := r.Context()
-	data := liveData{Follow: true}
-	status := http.StatusOK
-	f, apiErr := view.ParseLogFilter(r.URL.Query())
-	data.Filter = filterView(r, f)
-
-	streams, err := s.d.Store.Streams(ctx)
+	data, status, err := s.liveData(r.Context(), p, r.URL.Query(), "/live", r.URL.RequestURI(), false)
 	if err != nil {
 		s.Oops(w, r, &p, err)
 		return
 	}
-	acc := s.d.Projects.Access(ctx, p)
-	seen := map[string]bool{}
-	for _, st := range streams {
-		if !store.IsMessageStream(st.ID) && acc.Can(st.ID, auth.ScopeRead) {
-			// A whole project's logs first, then its streams.
-			if pr := store.ProjectOf(st.ID); pr != "" && !seen[pr] && acc.ProjectScopes(pr).Has(auth.ScopeRead) {
-				seen[pr] = true
-				data.Filter.Known = append(data.Filter.Known, "*:"+pr+"/*")
-			}
-			data.Filter.Known = append(data.Filter.Known, st.ID)
-		}
+	s.Render(w, status, "live", s.Shell(r, &p, "Live", "live", adminNav(p)), liveTwins, data)
+}
+
+// adminNav is the navigation item of a global page: Admin for the admin,
+// none for the others, who reach it from a link.
+func adminNav(p auth.Principal) string {
+	if p.Has(auth.ScopeAdmin) {
+		return "admin"
 	}
-	if len(data.Filter.Known) == 0 {
-		data.Commands = view.SourceCommands(s.d.Server.BaseURL())
+	return ""
+}
+
+// liveData is a logs view: the filters of q, the lines they select and
+// the quick drop a range is attached through. The form posts to action;
+// with fixed, q's streams come from the page (a project's sinks) and the
+// form offers no stream or channel of its own.
+func (s *Site) liveData(ctx context.Context, p auth.Principal, q url.Values, action, back string, fixed bool) (liveData, int, error) {
+	data := liveData{Follow: true}
+	status := http.StatusOK
+	f, apiErr := view.ParseLogFilter(q)
+	data.Filter = filterView(q, f, fixed)
+	data.Filter.Action = action
+
+	if !fixed {
+		streams, err := s.d.Store.Streams(ctx)
+		if err != nil {
+			return data, 0, err
+		}
+		acc := s.d.Projects.Access(ctx, p)
+		seen := map[string]bool{}
+		for _, st := range streams {
+			if !store.IsMessageStream(st.ID) && acc.Can(st.ID, auth.ScopeRead) {
+				// A whole project's logs first, then its streams.
+				if pr := store.ProjectOf(st.ID); pr != "" && !seen[pr] && acc.ProjectScopes(pr).Has(auth.ScopeRead) {
+					seen[pr] = true
+					data.Filter.Known = append(data.Filter.Known, "*:"+pr+"/*")
+				}
+				data.Filter.Known = append(data.Filter.Known, st.ID)
+			}
+		}
+		if len(data.Filter.Known) == 0 {
+			data.Commands = view.SourceCommands(s.d.Server.BaseURL())
+		}
 	}
 	if s.chats != nil {
 		chats, err := s.chats.svc.Chats(ctx, p, messaging.ChatsQuery{All: true})
 		if err != nil {
-			s.Oops(w, r, &p, err)
-			return
+			return data, 0, err
 		}
 		groups := map[string]int{}
 		for _, c := range chats {
-			if c.Kind == dto.ChatChannel && !c.Archived {
-				name := strings.TrimPrefix(c.ID, "chan:")
-				i, ok := groups[c.Project]
-				if !ok {
-					label := c.ProjectTitle
-					if label == "" {
-						label = c.Project
-					}
-					i = len(data.Filter.Channels)
-					groups[c.Project] = i
-					data.Filter.Channels = append(data.Filter.Channels, ChatGroup{Label: label})
-				}
-				g := &data.Filter.Channels[i]
-				g.Options = append(g.Options, ChatOption{ID: name, Label: ChatName(c), Selected: name == f.Channel || c.Name == f.Channel})
+			if fixed || c.Kind != dto.ChatChannel || c.Archived {
+				continue
 			}
+			name := strings.TrimPrefix(c.ID, "chan:")
+			i, ok := groups[c.Project]
+			if !ok {
+				label := c.ProjectTitle
+				if label == "" {
+					label = c.Project
+				}
+				i = len(data.Filter.Channels)
+				groups[c.Project] = i
+				data.Filter.Channels = append(data.Filter.Channels, ChatGroup{Label: label})
+			}
+			g := &data.Filter.Channels[i]
+			g.Options = append(g.Options, ChatOption{ID: name, Label: ChatName(c), Selected: name == f.Channel || c.Name == f.Channel})
 		}
 		if p.Has(auth.ScopeMessage) {
-			drop := s.dropView(chats, "", p, r.URL.RequestURI())
+			drop := s.dropView(chats, "", p, back)
 			data.Drop = &drop
 		}
 	}
@@ -127,27 +153,23 @@ func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	if apiErr == nil {
 		var patterns []string
 		if patterns, apiErr = f.Patterns(ctx, s.d, p); apiErr == nil {
-			ids, err := view.StreamIDs(ctx, s.d.Store, acc, patterns)
+			ids, err := view.StreamIDs(ctx, s.d.Store, s.d.Projects.Access(ctx, p), patterns)
 			if err != nil {
-				s.Oops(w, r, &p, err)
-				return
+				return data, 0, err
 			}
 			var pg view.LogPage
 			if len(f.Kinds) > 0 {
 				if pg, err = view.ReadLogs(ctx, s.d.Store, f, ids, LiveLines); err != nil {
-					s.Oops(w, r, &p, err)
-					return
+					return data, 0, err
 				}
 			} else if pg.NextSeq, err = s.followFrom(ctx, f); err != nil {
-				s.Oops(w, r, &p, err)
-				return
+				return data, 0, err
 			}
 			entries := pg.Entries
 			if f.Messages && s.d.Messaging != nil {
 				msgs, err := s.liveMessages(ctx, p, f)
 				if err != nil {
-					s.Oops(w, r, &p, err)
-					return
+					return data, 0, err
 				}
 				entries = mergeBySeq(entries, msgs, LiveLines, f.FromSeq > 0)
 			}
@@ -164,7 +186,7 @@ func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		data.Showing = "nothing"
 	}
 	data.Query = f.URL()
-	s.Render(w, status, "live", s.Shell(r, &p, "Live", "live", "live"), liveTwins, data)
+	return data, status, nil
 }
 
 func showing(f view.LogFilter, n int) string {
@@ -181,9 +203,11 @@ func showing(f view.LogFilter, n int) string {
 
 // filterView reads the raw query back into the form, so a rejected value
 // stays in its field to be fixed.
-func filterView(r *http.Request, f view.LogFilter) liveFilter {
-	q := r.URL.Query()
-	v := liveFilter{Streams: strings.Join(q["streams"], ","), Re: q.Get("re")}
+func filterView(q url.Values, f view.LogFilter, fixed bool) liveFilter {
+	v := liveFilter{Streams: strings.Join(q["streams"], ","), Re: q.Get("re"), Fixed: fixed}
+	if fixed {
+		v.Streams = ""
+	}
 	var sev string
 	v.Severities, sev = sevOptions(q.Get("sev"), f)
 	v.Lines, v.Markers = true, true

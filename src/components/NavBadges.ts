@@ -5,8 +5,10 @@ import type { Counts } from '@/model/types.ts';
 import { Component } from '@/components/Component.ts';
 
 /**
- * Keeps the navigation badges and the document title current from the SSE
- * counts event; the server rendered their first values.
+ * Keeps the navigation badges (questions for you on Projects, unread
+ * direct messages on Direct, a source down on Admin) and the document
+ * title current from the SSE counts event; the server rendered their
+ * first values.
  */
 export class NavBadges extends Component {
   private readonly baseTitle: string;
@@ -26,10 +28,12 @@ export class NavBadges extends Component {
 
   show(c: Counts): void {
     const chats = c.open_questions + c.unread_direct;
-    const badge = Dom.find('[data-badge="chats"]', this.root);
-    if (badge !== null) {
-      badge.hidden = chats === 0;
-      Dom.setText(badge, String(chats));
+    for (const [name, n] of [['questions', c.open_questions], ['direct', c.unread_direct]] as const) {
+      const badge = Dom.find(`[data-badge="${name}"]`, this.root);
+      if (badge !== null) {
+        badge.hidden = n === 0;
+        Dom.setText(badge, String(n));
+      }
     }
     const down = Dom.find('[data-badge="sources-down"]', this.root);
     if (down !== null) down.hidden = c.sources_down === 0;

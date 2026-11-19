@@ -39,8 +39,8 @@ func (s *Site) mountProjects(mux *http.ServeMux) {
 }
 
 type projectRowView struct {
-	Name, Title, Href, Created string
-	Channels, Sinks, Members   int
+	Name, Title, Href, View, Created string
+	Channels, Sinks, Members         int
 }
 
 type projectsData struct {
@@ -77,7 +77,8 @@ func (s *Site) renderProjects(w http.ResponseWriter, r *http.Request, p auth.Pri
 			s.Oops(w, r, &p, err)
 			return
 		}
-		row := projectRowView{Name: pr.Name, Title: pr.Title, Href: view.SettingsHref(pr.Name), Created: Day(pr.CreatedAt), Sinks: len(sinks)}
+		row := projectRowView{Name: pr.Name, Title: pr.Title, Href: view.SettingsHref(pr.Name), View: view.ProjectHref(pr.Name),
+			Created: Day(pr.CreatedAt), Sinks: len(sinks)}
 		for _, c := range chans {
 			if c.Project() == pr.Name {
 				row.Channels++
@@ -92,7 +93,8 @@ func (s *Site) renderProjects(w http.ResponseWriter, r *http.Request, p auth.Pri
 		row.Members = len(members)
 		data.Projects = append(data.Projects, row)
 	}
-	l := s.Shell(r, &p, "Projects", "projects", "projects")
+	l := s.Shell(r, &p, "Projects", "projects", "admin")
+	l.Back = "/admin"
 	l.Error = errText
 	s.Render(w, status, "projects", l, []string{"tpl-toast"}, data)
 }
@@ -146,7 +148,11 @@ type retentionView struct {
 	LinesMaxAge, LinesMaxBytes, MessagesMaxAge, BlobsMaxBytes string
 }
 
+// projectTwins are the side list's rows and the toasts.
+var projectTwins = []string{"tpl-chat-row", "tpl-stream-dot", "tpl-toast"}
+
 type projectData struct {
+	Side SideView
 	// Base is where the forms post (/projects/<name>/...), Settings the
 	// page they come back to.
 	Name, Title, Created, Base, Settings string
@@ -209,10 +215,14 @@ func (s *Site) renderProject(w http.ResponseWriter, r *http.Request, p auth.Prin
 		return
 	}
 	data.Token = pg.created
-	l := s.Shell(r, &p, pr.Label(), "project", "projects")
-	l.Back = "/projects"
+	if data.Side, err = s.projectSide(ctx, p, pr.Name, sideSettings); err != nil {
+		s.Oops(w, r, &p, err)
+		return
+	}
+	l := s.Shell(r, &p, "Settings", "project", "home")
+	l.Side, l.Kicker, l.Back = true, pr.Label(), "/projects"
 	l.Error, l.Notice = pg.errText, pg.notice
-	s.Render(w, pg.status, "project", l, []string{"tpl-toast"}, data)
+	s.Render(w, pg.status, "project", l, projectTwins, data)
 }
 
 func (s *Site) projectData(ctx context.Context, p auth.Principal, pr projects.Project) (projectData, error) {
@@ -314,7 +324,7 @@ func grantsTouch(specs, project string) bool {
 
 func sinkViewOf(k projects.Sink, tokens []auth.TokenRow) sinkView {
 	v := sinkView{Name: k.Name, Title: k.Title, Action: view.ProjectHref(k.Project) + "/sinks/" + url.PathEscape(k.Name),
-		LiveHref: "/live?" + url.Values{"streams": {"*:" + k.Ref()}}.Encode(), SerialKind: "none",
+		LiveHref: view.LogsHref(k.Project, k.Name), SerialKind: "none",
 		DefaultTokenPrincipal: tokenPrincipal(k)}
 	var srcs []string
 	for _, p := range k.Sources {

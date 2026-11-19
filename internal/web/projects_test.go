@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/nebuloss/cafard/internal/auth"
-	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/web/webtest"
 )
 
@@ -112,20 +111,25 @@ func TestTheAdminRunsAProjectFromItsPage(t *testing.T) {
 	}
 }
 
-// Chats, Sources and Live group what they list by project.
+// Home lists the projects, each project's view its own channels and
+// sinks, and Sources and Live group what they list by project.
 func TestListsAreGroupedByProject(t *testing.T) {
 	e := newEnv(t, webtest.Options{})
 	seed(e)
-	if _, err := e.Deps.Projects.SaveSink(context.Background(), projects.Sink{Project: "lab", Name: "bench-pi"}); err != nil {
+	if _, err := e.Stack.Projects.Create(context.Background(), "rack", "Rack 2"); err != nil {
 		t.Fatal(err)
 	}
 	admin := e.Admin()
 	home := e.Do("GET", "/", admin, nil).Body.String()
-	if !regexp.MustCompile(`(?s)<section class="project-chats" data-project="lab".*data-section="channels" data-project="lab".*#?dut1`).MatchString(home) {
-		t.Error("home has no section for lab with its channels")
+	if !regexp.MustCompile(`(?s)data-project="lab">.*Lab.*data-project="rack">.*Rack 2`).MatchString(home) {
+		t.Error("home has no card for each project")
 	}
-	if !strings.Contains(home, `href="/live?streams=%2A%3Alab%2Fbench-pi"`) {
-		t.Error("home lacks the logs of lab's sinks")
+	side := e.Do("GET", "/projects/lab/c/dut1", admin, nil).Body.String()
+	if !regexp.MustCompile(`(?s)data-section="channels" data-project="lab">.*#dut1`).MatchString(side) || strings.Contains(side, "chan:rack/general") {
+		t.Error("the side list of lab does not hold its channels alone")
+	}
+	if !strings.Contains(side, `href="/projects/lab/logs/bench-pi" data-sink="lab/bench-pi"`) || !strings.Contains(side, `data-switch="rack"`) {
+		t.Error("the side list lacks lab's sinks or the switch to rack")
 	}
 	streams := e.Do("GET", "/streams", admin, nil).Body.String()
 	if !regexp.MustCompile(`(?s)<div class="stream-group" role="rowgroup" data-project="lab">.*data-stream="serial:lab/dut1"`).MatchString(streams) {

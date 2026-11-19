@@ -80,19 +80,26 @@ func noBundleChats() map[string][]string {
 	return map[string][]string{
 		"/": {
 			"Needs you", "Power-cycle dut1?", `action="/api/messages"`, `name="choice" value="done"`, `name="reply_to" value="` + q + `"`,
-			`name="next" value="/"`, `href="/projects/lab/c/dut1"`, `href="/dm/codex-build"`, `href="/drop"`, `href="/?all=1"`, `href="/?archived=1"`,
-			"Build 812 is green.",
+			`name="next" value="/"`, `<a class="project-card" href="/projects/lab" data-project="lab">`, "2 chats, 0 galleries, 2 sinks",
+			`<a class="project-card direct-card" href="/dm" data-direct>`, `href="/drop"`, "Build 812 is green.",
+			// The admin makes projects from home.
+			`action="/projects"`, `href="/admin"`,
 		},
+		"/dm": {`href="/dm/codex-build" data-chat="dm:codex-build"`, "Pick a conversation"},
 		"/projects/lab/c/dut1": {
 			"image v42 ready", "<code>dwc3</code>", `<a href="https://git.example.com/k/4a1f" rel="noopener noreferrer" target="_blank">`,
 			`<form class="composer"`, `enctype="multipart/form-data"`, `name="files[]"`, `capture="environment"`, `name="chat" value="chan:lab/dut1"`,
 			`class="event-row"`, "codex-build: flashed linux-6.18-rc3", `href="/projects/lab/c/dut1?view=logs"`, `href="/projects/lab/c/dut1?f=questions"`,
 			`href="/blob/` + seeded.sha + `"`, `href="/live?from_seq=1&amp;streams=serial%3Alab%2Fdut1&amp;to_seq=2"`, "Power-cycle dut1?",
-			`href="/live?streams=serial%3Alab%2Fdut1"`, "1 question waiting for you",
+			`href="/projects/lab/logs/dut1"`, "1 question waiting for you",
+			// The side list: the project's chats, sinks and settings, as links.
+			`<aside class="side" id="side" data-component="SideNav" data-project="lab"`, `href="#side"`,
+			`<a class="chat-row" href="/projects/lab/c/dut1" data-chat="chan:lab/dut1" aria-current="page">`,
+			`href="/projects/lab/c/general"`, `href="/projects/lab/logs"`, `href="/projects/lab/settings"`, `href="#main"`,
 		},
 		"/projects/lab/c/dut1?view=logs": {`data-view="logs"`, "U-Boot 2024.04", `class="marker"`, `action="/projects/lab/c/dut1"`},
-		"/dm/codex-build":       {"Build 812 is green.", `name="chat" value="dm:codex-build"`},
-		"/drop":                 {`<select name="chat"`, `<option value="chan:lab/dut1">#dut1</option>`, `action="/api/messages"`, `name="back" value="/drop"`},
+		"/dm/codex-build":                {"Build 812 is green.", `name="chat" value="dm:codex-build"`, `data-section="direct"`, `aria-current="page"`},
+		"/drop":                          {`<select name="chat"`, `<option value="chan:lab/dut1">#dut1</option>`, `action="/api/messages"`, `name="back" value="/drop"`},
 	}
 }
 

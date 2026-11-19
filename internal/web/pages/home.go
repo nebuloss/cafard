@@ -3,8 +3,10 @@ package pages
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"slices"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
@@ -13,7 +15,7 @@ import (
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// Home: the chat list with "Needs you" on top and, on wide screens, the
+// Home: the projects, with "Needs you" on top and, on wide screens, the
 // overview pane (PLAN 9.6.3).
 
 // chatSite is what the chat pages need beyond the Site.
@@ -50,7 +52,8 @@ var (
 		"tpl-line", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-gallery-ref", "tpl-toast"}
 	chatTwins = []string{"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row",
 		"tpl-line", "tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-gallery-ref", "tpl-toast"}
-	dropTwins = []string{"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"}
+	dropTwins   = []string{"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"}
+	directTwins = []string{"tpl-chat-row", "tpl-stream-dot", "tpl-toast"}
 )
 
 func (s *Site) mountHome(mux *http.ServeMux) {
@@ -72,34 +75,20 @@ type NeedsYouView struct {
 // Any reports whether the section has something to show.
 func (n NeedsYouView) Any() bool { return len(n.Questions) > 0 || len(n.Direct) > 0 }
 
-// ChatListView is partials/chat_list.html: the list on home and in the
-// list pane of a chat, one section per project, Discord-like, then the
-// direct conversations.
-type ChatListView struct {
-	NeedsYou   NeedsYouView
-	Projects   []ProjectChatsView
-	NoProjects string // what to say when there is no project to list
-	Direct     []ChatRowView
-	All        bool // unfollowed channels are listed
-	ShowArch   bool // archived channels are listed
-	AllHref    string
-	ArchHref   string
-	CanCreate  bool
+// ProjectCardView is one project on home: its badges, its latest chat's
+// time and preview, and what it holds.
+type ProjectCardView struct {
+	Name, Label, Initial, Href string
+	Unread, Questions          string // "" when zero
+	Time, ISO, Preview         string
+	Holds                      string // "2 chats, 1 gallery, 2 sinks"
 }
 
-// ProjectChatsView is one project of the chat list: its channels by
-// state, and links to the logs of its sinks.
-type ProjectChatsView struct {
-	Name, Label string
-	Channels    []ChatRowView // followed
-	Unfollowed  []ChatRowView
-	Archived    []ChatRowView
-	Sinks       []SinkLinkView
-	Galleries   string // the project's galleries page, when it has one the viewer reads
+// DirectCardView is the entry of home that leads to the direct
+// conversations.
+type DirectCardView struct {
+	Unread, Time, ISO, Preview, Holds string
 }
-
-// SinkLinkView opens a sink's logs on Live.
-type SinkLinkView struct{ Name, Href string }
 
 // OverviewView is partials/overview.html.
 type OverviewView struct {
@@ -126,40 +115,71 @@ type ChatOption struct {
 }
 
 type homeData struct {
-	List     ChatListView
-	Overview OverviewView
-	Drop     QuickDropView
-	Empty    bool // no message anywhere yet
-	MCP      string
-	Admin    bool
-	CanSend  bool
+	NeedsYou   NeedsYouView
+	Projects   []ProjectCardView
+	NoProjects string
+	Direct     DirectCardView
+	Muted      string // the muted chats, for "Needs you" in the bundle
+	Overview   OverviewView
+	Drop       QuickDropView
+	Empty      bool // no message anywhere yet
+	MCP        string
+	Admin      bool
+	CanSend    bool
 }
 
+// home is the projects (PLAN 9.6.3, DECISIONS "projects first"): a card
+// per project the viewer sees, the direct conversations, "Needs you" on
+// top, and the overview on wide screens.
 func (s *Site) home(w http.ResponseWriter, r *http.Request, p auth.Principal) {
-	data := homeData{MCP: view.MCPCommand(s.d.Server.BaseURL()), Admin: p.Has(auth.ScopeAdmin), CanSend: p.Has(auth.ScopeMessage)}
-	l := s.shellFor(r, p, "Chats", "home")
+	ctx := r.Context()
+	data := homeData{MCP: view.MCPCommand(s.d.Server.BaseURL()), Admin: p.Has(auth.ScopeAdmin), CanSend: p.Has(auth.ScopeMessage),
+		NoProjects: "You have no grant in any project yet; ask the admin for one."}
+	if data.Admin {
+		data.NoProjects = "No project yet: make one below. A project holds chats and log sinks, keeps its own history and decides who sees it."
+	}
+	l := s.shellFor(r, p, "Projects", "home")
+	list, err := s.visibleProjects(ctx, p)
+	if err != nil {
+		s.Oops(w, r, &p, err)
+		return
+	}
+	c := view.Counts(ctx, s.d, p)
+	var chats []dto.Chat
+	if s.chats != nil {
+		if chats, err = s.chats.svc.Chats(ctx, p, messaging.ChatsQuery{All: true}); err != nil {
+			s.Oops(w, r, &p, err)
+			return
+		}
+	}
+	now := s.d.Clock.Now()
+	data.Projects = projectCards(list, chats, c, now)
+	data.Direct = directCard(chats, c.UnreadDirect, now)
 	if s.chats == nil {
 		data.Empty = true
 		s.Render(w, http.StatusOK, "home", l, homeTwins, data)
 		return
 	}
-	q := r.URL.Query()
-	list, chats, err := s.chatList(r.Context(), p, q.Get("all") == "1", q.Get("archived") == "1", "")
+	var muted []string
+	for _, ch := range chats {
+		if ch.Muted {
+			muted = append(muted, ch.ID)
+		}
+	}
+	data.Muted = strings.Join(muted, " ")
+	if data.NeedsYou, err = s.needsYou(ctx, p, chats); err != nil {
+		s.Oops(w, r, &p, err)
+		return
+	}
+	o, err := s.chats.svc.Overview(ctx, p)
 	if err != nil {
 		s.Oops(w, r, &p, err)
 		return
 	}
-	data.List = list
-	o, err := s.chats.svc.Overview(r.Context(), p)
-	if err != nil {
-		s.Oops(w, r, &p, err)
-		return
-	}
-	now := s.d.Clock.Now()
-	data.Overview = OverviewView{NeedsYou: list.NeedsYou, MCP: data.MCP, Admin: data.Admin,
+	data.Overview = OverviewView{NeedsYou: data.NeedsYou, MCP: data.MCP, Admin: data.Admin,
 		Recent: Items(reverse(o.Recent), ItemsOptions{Viewer: p.Name, Now: now, Back: "/", Next: "/", InList: true})}
-	data.Empty = len(o.Recent) == 0 && !list.NeedsYou.Any()
-	data.Drop = s.dropView(chats, q.Get("share"), p, "/")
+	data.Empty = len(o.Recent) == 0 && !data.NeedsYou.Any()
+	data.Drop = s.dropView(chats, r.URL.Query().Get("share"), p, "/")
 	s.Render(w, http.StatusOK, "home", l, homeTwins, data)
 }
 
@@ -169,77 +189,101 @@ func reverse[T any](s []T) []T {
 	return out
 }
 
-// chatList builds the list; active marks the chat a page shows.
-func (s *Site) chatList(ctx context.Context, p auth.Principal, all, archived bool, active string) (ChatListView, []dto.Chat, error) {
-	svc := s.chats.svc
-	chats, err := svc.Chats(ctx, p, messaging.ChatsQuery{All: all, Archived: archived})
-	if err != nil {
-		return ChatListView{}, nil, err
+// plural is "1 chat" or "3 chats".
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
 	}
-	now := s.d.Clock.Now()
-	v := ChatListView{All: all, ShowArch: archived, AllHref: "/?all=1", ArchHref: "/?archived=1", CanCreate: p.Has(auth.ScopeMessage)}
-	if all {
-		v.AllHref = "/"
-	}
-	if archived {
-		v.ArchHref = "/"
-	}
-	projects, err := svc.Projects(ctx, p)
-	if err != nil {
-		return ChatListView{}, nil, err
-	}
-	v.NoProjects = "You have no grant in any project yet; ask the admin for one."
-	if p.Has(auth.ScopeAdmin) {
-		v.NoProjects = "No project yet: make one on the Projects page of the admin interface."
-	}
-	at := map[string]int{}
-	for _, pr := range projects {
-		at[pr.Name] = len(v.Projects)
-		g := ProjectChatsView{Name: pr.Name, Label: pr.Name}
-		if pr.Title != "" {
-			g.Label = pr.Title
-		}
-		for _, k := range pr.Sinks {
-			g.Sinks = append(g.Sinks, SinkLinkView{Name: k, Href: "/live?" + url.Values{"streams": {"*:" + pr.Name + "/" + k}}.Encode()})
-		}
-		if len(pr.Galleries) > 0 {
-			g.Galleries = view.GalleriesHref(pr.Name)
-		}
-		v.Projects = append(v.Projects, g)
-	}
-	for _, c := range chats {
-		row := ChatRow(c, now, active)
-		if c.Kind == dto.ChatDirect {
-			v.Direct = append(v.Direct, row)
-			if c.Unread > 0 {
-				v.NeedsYou.Direct = append(v.NeedsYou.Direct, row)
+	return strconv.Itoa(n) + " " + many
+}
+
+// projectCards are the projects of home, in the order they come.
+func projectCards(list []dto.Project, chats []dto.Chat, c dto.Counts, now time.Time) []ProjectCardView {
+	unread, questions := projectUnread(c)
+	out := make([]ProjectCardView, 0, len(list))
+	for _, pr := range list {
+		label := projectLabel(pr)
+		v := ProjectCardView{Name: pr.Name, Label: label, Initial: initial(label), Href: view.ProjectHref(pr.Name),
+			Unread: count(unread[pr.Name]), Questions: count(questions[pr.Name])}
+		var latest *dto.Chat
+		chatsN := 0
+		for i := range chats {
+			ch := &chats[i]
+			if ch.Kind != dto.ChatChannel || ch.Project != pr.Name || ch.Archived {
+				continue
 			}
+			if ch.ChannelKind != dto.ChannelGallery {
+				chatsN++
+			}
+			if ch.LastActivity != nil && (latest == nil || ch.LastActivity.After(latest.LastActivity.Time)) {
+				latest = ch
+			}
+		}
+		if latest != nil {
+			v.Time, v.ISO = MessageTime(latest.LastActivity.Time, now), iso(latest.LastActivity.Time)
+			if latest.Preview != nil {
+				v.Preview = ProjectPreview(*latest)
+			}
+		}
+		v.Holds = plural(chatsN, "chat", "chats") + ", " + plural(len(pr.Galleries), "gallery", "galleries") + ", " +
+			plural(len(pr.Sinks), "sink", "sinks")
+		out = append(out, v)
+	}
+	return out
+}
+
+// ProjectPreview is a project card's line: the chat, then its preview.
+// src/components/ProjectCards.ts builds the same from a new message.
+func ProjectPreview(c dto.Chat) string {
+	if c.Preview == nil {
+		return ""
+	}
+	return ChatName(c) + " " + PreviewText(*c.Preview)
+}
+
+// directCard is home's entry to the direct conversations.
+func directCard(chats []dto.Chat, unread int, now time.Time) DirectCardView {
+	v := DirectCardView{Unread: count(unread)}
+	var latest *dto.Chat
+	n := 0
+	for i := range chats {
+		ch := &chats[i]
+		if ch.Kind != dto.ChatDirect {
 			continue
 		}
-		i, ok := at[c.Project]
-		if !ok {
-			continue
-		}
-		g := &v.Projects[i]
-		switch {
-		case c.Archived:
-			g.Archived = append(g.Archived, row)
-		case !c.Followed:
-			g.Unfollowed = append(g.Unfollowed, row)
-		default:
-			g.Channels = append(g.Channels, row)
+		n++
+		if ch.LastActivity != nil && (latest == nil || ch.LastActivity.After(latest.LastActivity.Time)) {
+			latest = ch
 		}
 	}
-	qs, err := svc.QuestionsFor(ctx, p)
+	v.Holds = plural(n, "conversation", "conversations")
+	if latest != nil {
+		v.Time, v.ISO = MessageTime(latest.LastActivity.Time, now), iso(latest.LastActivity.Time)
+		v.Preview = ProjectPreview(*latest)
+	}
+	return v
+}
+
+// needsYou is "Needs you": the open questions for p, then the direct
+// conversations with unread messages.
+func (s *Site) needsYou(ctx context.Context, p auth.Principal, chats []dto.Chat) (NeedsYouView, error) {
+	var v NeedsYouView
+	now := s.d.Clock.Now()
+	for _, c := range chats {
+		if c.Kind == dto.ChatDirect && c.Unread > 0 {
+			v.Direct = append(v.Direct, ChatRow(c, now, ""))
+		}
+	}
+	qs, err := s.chats.svc.QuestionsFor(ctx, p)
 	if err != nil {
-		return v, nil, err
+		return v, err
 	}
 	for _, it := range Items(qs, ItemsOptions{Viewer: p.Name, Now: now, Back: "/", Next: "/", InList: true}) {
 		if it.Question != nil {
-			v.NeedsYou.Questions = append(v.NeedsYou.Questions, *it.Question)
+			v.Questions = append(v.Questions, *it.Question)
 		}
 	}
-	return v, chats, nil
+	return v, nil
 }
 
 // errorText is the banner for the ?error= code a no-JS post came back
@@ -271,7 +315,7 @@ func errorText(code string) string {
 // shellFor is the layout of a chat page, with the banner of a failed
 // no-JS post.
 func (s *Site) shellFor(r *http.Request, p auth.Principal, title, page string) assets.Layout {
-	l := s.Shell(r, &p, title, page, "chats")
+	l := s.Shell(r, &p, title, page, "home")
 	l.Error = errorText(r.URL.Query().Get("error"))
 	return l
 }

@@ -92,6 +92,17 @@ export function projectHref(project: string): string {
   return `/projects/${encodeURIComponent(project)}`;
 }
 
+/** A project's live logs, or one sink's, like view.LogsHref. */
+export function logsHref(project: string, sink = ''): string {
+  return `${projectHref(project)}/logs${sink === '' ? '' : `/${encodeURIComponent(sink)}`}`;
+}
+
+/** A badge: "" for none, "99+" beyond 99, like pages.count. */
+export function badgeCount(n: number): string {
+  if (n <= 0) return '';
+  return n > 99 ? '99+' : String(n);
+}
+
 /** The page of a chat id, like view.ChatHref. */
 export function chatHref(id: string): string {
   if (id.startsWith('chan:')) {

@@ -65,6 +65,7 @@ export class App {
     };
     this.pages = new PageRegistry();
     this.pages.register('live', (doc) => new LivePage(doc, this.services));
+    this.pages.register('logs', (doc) => new LivePage(doc, this.services));
     this.pages.register('streams', (doc) => new StreamsPage(doc, this.services));
     this.pages.register('agents', (doc) => new AgentsPage(doc, this.services));
     this.pages.register('pair', (doc) => new PairPage(doc, this.services));
@@ -77,6 +78,8 @@ export class App {
     // Plain pages of links: the shell only.
     this.pages.register('galleries', (doc) => new PairPage(doc, this.services));
     this.pages.register('item', (doc) => new PairPage(doc, this.services));
+    this.pages.register('direct', (doc) => new PairPage(doc, this.services));
+    this.pages.register('admin', (doc) => new PairPage(doc, this.services));
   }
 
   start(): Disposable {

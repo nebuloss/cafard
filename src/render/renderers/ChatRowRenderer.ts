@@ -1,14 +1,9 @@
 import type { Chat } from '@/model/types.ts';
-import { chatPageHref, messageTime, previewText } from '@/render/format.ts';
+import { badgeCount as count, chatPageHref, messageTime, previewText } from '@/render/format.ts';
 import type { SlotTemplate } from '@/render/SlotTemplate.ts';
 
 export const CHAT_ROW_ATTRIBUTES = ['href', 'data-chat', 'data-pinned', 'data-muted', 'data-archived'] as const;
 export const STREAM_DOT_ATTRIBUTES = ['data-status', 'title'] as const;
-
-function count(n: number): string {
-  if (n <= 0) return '';
-  return n > 99 ? '99+' : String(n);
-}
 
 /** A row of the chat list from tpl-chat-row, like pages.ChatRow. */
 export class ChatRowRenderer {

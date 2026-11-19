@@ -59,7 +59,8 @@ func TestPagesAndAPIFollowGrants(t *testing.T) {
 			t.Errorf("%s without a grant = %d %s", path, code, b)
 		}
 	}
-	for _, path := range []string{"/projects/lab/c/dut1", "/projects/lab/c/general", "/blob/" + seeded.sha,
+	for _, path := range []string{"/projects/lab", "/projects/lab/logs", "/projects/lab/logs/dut1", "/projects/lab/g",
+		"/projects/lab/c/dut1", "/projects/lab/c/general", "/blob/" + seeded.sha,
 		fmt.Sprintf("/api/messages/%d", seeded.message), fmt.Sprintf("/api/messages/%d/attachments/1", seeded.message)} {
 		if code, _ := get(nobody, path); code != http.StatusNotFound {
 			t.Errorf("%s without a grant = %d", path, code)
@@ -85,6 +86,18 @@ func TestPagesAndAPIFollowGrants(t *testing.T) {
 	}
 	if _, b := get(narrow, "/streams"); !strings.Contains(string(b), "serial:lab/dut1") || strings.Contains(string(b), "bench-pi") {
 		t.Error("Sources shows other streams than the bound one")
+	}
+	// The project view: its logs pages show the bound stream alone, and the
+	// side list neither the sinks nor the channels no grant covers.
+	for _, path := range []string{"/projects/lab/logs", "/projects/lab/logs/dut1"} {
+		code, b := get(narrow, path)
+		if code != http.StatusOK || !strings.Contains(string(b), "U-Boot") || strings.Contains(string(b), "Started cafard push") {
+			t.Errorf("%s with a channel grant = %d, or shows an unbound stream", path, code)
+		}
+	}
+	if _, b := get(narrow, "/projects/lab/c/dut1"); strings.Contains(string(b), `data-sink=`) || strings.Contains(string(b), "chan:lab/general") ||
+		strings.Contains(string(b), "chan:lab/bench") || strings.Contains(string(b), "/settings") {
+		t.Error("the side list shows what the channel grant does not cover")
 	}
 	if _, b := get(narrow, "/api/entries?streams=syslog:lab/bench-pi"); listLen(t, b, "items") != 0 {
 		t.Errorf("entries of an unbound stream: %s", b)

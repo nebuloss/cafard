@@ -1,3 +1,5 @@
+{{/* The admin's list of projects: each one's settings, and the form that
+     makes one. */}}
 <section class="page-wide projects">
   <h2>Projects</h2>
   {{if .Data.Projects}}
@@ -8,6 +10,7 @@
         <span class="title"><span class="mono">{{.Name}}</span>{{if .Title}} {{.Title}}{{end}}</span>
         <span class="subtitle">{{.Channels}} channels, {{.Sinks}} sinks, {{.Members}} members; since {{.Created}}</span>
       </a>
+      <a class="btn text" href="{{.View}}">Open</a>
     </li>
     {{end}}
   </ul>
@@ -16,16 +19,5 @@
   {{end}}
 
   <h2 id="new-project">New project</h2>
-  <form class="card outlined narrow stack" method="post" action="/projects">
-    <label class="ofield">
-      <span>Name</span>
-      <input name="name" required placeholder="lab" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9._\-]{0,39}">
-    </label>
-    <label class="ofield">
-      <span>Title</span>
-      <input name="title" placeholder="Lab bench" maxlength="200">
-    </label>
-    <p class="help">The name is in every stream id of the project (chan:lab/general, serial:lab/dut1), so it cannot change. The project starts with #general and the configured retention.</p>
-    <button class="btn filled" type="submit">Make project</button>
-  </form>
+  {{template "partials/project_form.html"}}
 </section>

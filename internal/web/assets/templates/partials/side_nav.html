@@ -1,0 +1,73 @@
+{{/* The side list of the project view (SideNav; its rows are a ChatList):
+     the project switcher, then Chats, Galleries, Logs and, for the admin,
+     Settings; or the direct conversations. Plain links and <details>, so it
+     works without the bundle. From 840 px it is a sidebar; below, a drawer
+     the top bar opens with a link to #side (CSS :target), which the bundle
+     turns into a toggle. Data: SideView. */}}
+<aside class="side" id="side" data-component="SideNav"{{if .Project}} data-project="{{.Project}}"{{end}} aria-label="{{.Label}}">
+  <div class="side-head">
+    <details class="switcher">
+      <summary class="switcher-btn" aria-label="Switch project"><span class="switcher-label">{{.Label}}</span><svg aria-hidden="true"><use href="/static/icons.svg#expand_more"></use></svg></summary>
+      <div class="menu switcher-menu" role="menu">
+        <a class="menu-item" role="menuitem" href="/"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg><span class="grow">All projects</span></a>
+        {{range .Switch}}<a class="menu-item" role="menuitem" href="{{.Href}}" data-switch="{{.Name}}"{{if .Current}} aria-current="page"{{end}}><span class="switch-avatar" aria-hidden="true">{{.Initial}}</span><span class="grow">{{.Label}}</span><span class="chat-unread" data-slot="unread">{{.Unread}}</span></a>{{end}}
+        <a class="menu-item" role="menuitem" href="/dm"{{if not .Project}} aria-current="page"{{end}}><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="grow">Direct messages</span><span class="chat-unread" data-slot="direct">{{.DirectUnread}}</span></a>
+      </div>
+    </details>
+    <a class="icon-btn side-close" href="#main" data-action="close-side" aria-label="Close the list"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></a>
+  </div>
+  <nav class="side-list" data-component="ChatList" aria-label="{{if .Project}}Channels of {{.Label}}{{else}}Direct messages{{end}}">
+  {{if .Project}}
+    <section class="side-section" aria-labelledby="side-chats">
+      <h2 class="side-heading"><span id="side-chats">Chats</span>{{if .CanCreate}}<button class="icon-btn small only-scripted" type="button" data-action="new-channel" aria-label="New channel" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></button>{{end}}</h2>
+      <div class="chat-rows" data-section="channels" data-project="{{.Project}}">{{range .Chats}}{{template "partials/chat_row.html" .}}{{end}}</div>
+      {{if .Unfollowed}}<details class="side-more"><summary>Not followed ({{len .Unfollowed}})</summary>
+        <div class="chat-rows" data-section="unfollowed" data-project="{{.Project}}">{{range .Unfollowed}}{{template "partials/chat_row.html" .}}{{end}}</div>
+      </details>{{end}}
+      {{if .Archived}}<details class="side-more"><summary>Archived ({{len .Archived}})</summary>
+        <div class="chat-rows" data-section="archived" data-project="{{.Project}}">{{range .Archived}}{{template "partials/chat_row.html" .}}{{end}}</div>
+      </details>{{end}}
+    </section>
+    {{if .Galleries}}
+    <section class="side-section" aria-labelledby="side-galleries">
+      <h2 class="side-heading"><a id="side-galleries" href="{{.GalleriesHref}}"{{if .GalleriesOn}} aria-current="page"{{end}}>Galleries</a></h2>
+      <div class="chat-rows" data-section="galleries" data-project="{{.Project}}">{{range .Galleries}}{{template "partials/chat_row.html" .}}{{end}}</div>
+    </section>
+    {{end}}
+    {{if .Logs}}
+    <section class="side-section" aria-labelledby="side-logs">
+      <h2 class="side-heading"><span id="side-logs">Logs</span></h2>
+      <div class="side-rows" data-section="sinks">
+        <a class="side-item" href="{{.Logs}}"{{if .LogsOn}} aria-current="page"{{end}}><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg><span class="side-name">All logs</span></a>
+        {{range .Sinks}}<a class="side-item sink-row" href="{{.Href}}" data-sink="{{.Ref}}" data-status="{{.Status}}"{{if .Active}} aria-current="page"{{end}}><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="side-name">{{.Name}}{{if .Title}} <span class="muted">{{.Title}}</span>{{end}}</span><span class="sink-dots">{{range .Dots}}{{template "partials/stream_dot.html" .}}{{end}}</span><time class="side-time" data-slot="time" datetime="{{.ISO}}">{{if .Time}}{{.Time}}{{else}}no line yet{{end}}</time></a>{{end}}
+      </div>
+    </section>
+    {{end}}
+    {{if .Settings}}
+    <section class="side-section">
+      <a class="side-item" href="{{.Settings}}"{{if .SettingsOn}} aria-current="page"{{end}}><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#settings"></use></svg><span class="side-name">Settings</span></a>
+    </section>
+    {{end}}
+  {{else}}
+    <section class="side-section" aria-labelledby="side-direct">
+      <h2 class="side-heading"><span id="side-direct">Direct messages</span></h2>
+      <div class="chat-rows" data-section="direct">{{range .Direct}}{{template "partials/chat_row.html" .}}{{end}}</div>
+      {{if not .Direct}}<p class="muted body-small list-empty">No direct conversation yet. Agents start them with send(to=you).</p>{{end}}
+    </section>
+  {{end}}
+  </nav>
+  {{if .CanCreate}}
+  <dialog class="modal new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
+    <form class="panel stack" method="dialog">
+      <h2 id="new-channel-title">New channel in {{.Label}}</h2>
+      <div class="banner error" data-slot="error" role="alert" hidden></div>
+      <input type="hidden" name="project" value="{{.Project}}">
+      <label class="ofield"><span>Name</span><input name="name" required pattern="[a-z0-9\-]{1,40}" placeholder="dut1" autocomplete="off" spellcheck="false"></label>
+      <label class="ofield"><span>Title</span><input name="title" maxlength="200" placeholder="DUT 1 (x86 board)"></label>
+      <label class="ofield"><span>Bound streams (comma separated, globs allowed)</span><input name="patterns" placeholder="serial:{{.Project}}/dut1, syslog:{{.Project}}/dut1" autocomplete="off" spellcheck="false"></label>
+      <div class="dialog-actions"><button class="btn text" type="button" data-action="close">Cancel</button><button class="btn filled" type="button" data-action="create">Create</button></div>
+    </form>
+  </dialog>
+  {{end}}
+</aside>
+<a class="side-scrim" href="#main" data-action="close-side" tabindex="-1" aria-hidden="true"></a>

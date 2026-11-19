@@ -75,7 +75,8 @@ func (s *Site) renderPair(w http.ResponseWriter, r *http.Request, p auth.Princip
 		data.Sessions = append(data.Sessions, sessionView{ID: se.ID, Label: label, Principal: se.Principal,
 			Created: Day(se.CreatedAt), Expires: Day(se.ExpiresAt), Current: se.ID == p.SessionID})
 	}
-	l := s.Shell(r, &p, "Pair a phone", "pair", "pair")
+	l := s.Shell(r, &p, "Pair a phone", "pair", "admin")
+	l.Back = "/admin"
 	l.Error = errText
 	s.Render(w, status, "pair", l, []string{"tpl-toast"}, data)
 }

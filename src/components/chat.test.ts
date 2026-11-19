@@ -113,13 +113,19 @@ describe('HomePage', () => {
     expect(needs?.querySelector('[data-slot="questions"] .question')?.getAttribute('data-seq')).toBe('777');
     feed?.emit('counts', { open_questions: 3, unread_direct: 1, sources_down: 0, chats: [{ id: 'chan:lab/dut1', unread: 5, open_questions: 2 }] });
     expect(document.title.startsWith('(4) ')).toBe(true);
-    const row = document.querySelector('.chat-rows a.chat-row[data-chat="chan:lab/dut1"]');
-    expect(row?.querySelector('[data-slot="unread"]')?.textContent).toBe('5');
-    expect(row?.querySelector('[data-slot="questions"]')?.textContent).toBe('2');
+    expect(document.querySelector('[data-badge="questions"]')?.textContent).toBe('3');
+    expect(document.querySelector('[data-badge="direct"]')?.textContent).toBe('1');
+    // The project's card sums its chats; the direct card has the rest.
+    const card = document.querySelector('a.project-card[data-project="lab"]');
+    expect(card?.querySelector('[data-slot="unread"]')?.textContent).toBe('5');
+    expect(card?.querySelector('[data-slot="questions"]')?.textContent).toBe('2');
+    expect(document.querySelector('a.direct-card [data-slot="unread"]')?.textContent).toBe('1');
     feed?.emit('answered', { seq: 777, answer: { by: 'admin', seq: 778 } });
     expect(needs?.querySelector('[data-seq="777"]')).toBeNull();
-    feed?.emit('chat', { ...(fixture('chat_channel') as Chat), id: 'chan:lab/dut1', name: 'dut1', muted: true });
-    expect(row?.hasAttribute('data-muted')).toBe(true);
+    // A direct conversation's row in Needs you follows its chat.
+    const dm = needs?.querySelector('a.chat-row[data-chat="dm:codex-build"]');
+    feed?.emit('chat', { ...(fixture('chat_direct') as Chat), id: 'dm:codex-build', muted: true });
+    expect(dm?.hasAttribute('data-muted')).toBe(true);
   });
 });
 

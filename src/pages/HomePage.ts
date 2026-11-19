@@ -1,12 +1,12 @@
 import { DisposableBag, type Disposable } from '@/core/Disposable.ts';
 import { Dom } from '@/core/Dom.ts';
-import { ApiError } from '@/net/ApiError.ts';
-import { chatHref, chatLabel } from '@/render/format.ts';
+import { chatLabel } from '@/render/format.ts';
 import type { SlotTemplate } from '@/render/SlotTemplate.ts';
 import { ChatList } from '@/components/ChatList.ts';
-import { closeDialog, ImageViewer, openDialog } from '@/components/ImageViewer.ts';
+import { ImageViewer } from '@/components/ImageViewer.ts';
 import { NeedsYou } from '@/components/NeedsYou.ts';
 import { Overview } from '@/components/Overview.ts';
+import { ProjectCards } from '@/components/ProjectCards.ts';
 import { QuestionCard } from '@/components/QuestionCard.ts';
 import { QuickDropSheet } from '@/components/QuickDropSheet.ts';
 import type { Services } from '@/App.ts';
@@ -15,9 +15,9 @@ import { mountShell, type Shell } from '@/pages/Shell.ts';
 import { chatRenderers, mountDropForm, viewerOf } from '@/pages/chatParts.ts';
 
 /**
- * Home (PLAN 9.6.3): the chat list with "Needs you" on top, the overview
- * on wide screens, the quick drop sheet behind the FAB (and opened by the
- * share target's /?share=), and a new channel dialog.
+ * Home (PLAN 9.6.3, DECISIONS "projects first"): the project cards with
+ * "Needs you" on top, the overview on wide screens, and the quick drop
+ * sheet behind the FAB (opened by the share target's /?share= too).
  */
 export class HomePage implements Page {
   constructor(
@@ -36,18 +36,20 @@ export class HomePage implements Page {
     const toast = shell.notify;
     const queue = services.uploads;
 
-    const list = Dom.find('[data-component="ChatList"]', doc);
-    if (list !== null) {
-      bag.add(new ChatList(list, r.rows, shell.feed.events, services.api, services.clock, (t) => toast(t, 'error'), Dom.find<HTMLInputElement>('[data-slot="search"]', doc)).mount());
-    }
-    const muted = (chat: string): boolean => Dom.find(`a.chat-row[data-chat="${chat}"]`, doc)?.hasAttribute('data-muted') === true;
+    const cards = Dom.find('[data-component="ProjectCards"]', doc);
+    if (cards !== null) bag.add(new ProjectCards(cards, shell.feed.events, services.clock).mount());
+    const mutedChats = new Set((layout?.dataset['muted'] ?? '').split(' ').filter((c) => c !== ''));
     const needs = Dom.find('[data-component="NeedsYou"]', doc);
-    if (needs !== null) bag.add(new NeedsYou(needs, shell.feed.events, r.needsYou, viewer.name, viewer.human, muted).mount());
+    if (needs !== null) {
+      bag.add(new NeedsYou(needs, shell.feed.events, r.needsYou, viewer.name, viewer.human, (chat) => mutedChats.has(chat)).mount());
+      // Its direct conversations' rows keep their badges and previews.
+      bag.add(new ChatList(needs, r.rows, shell.feed.events, services.api, services.clock, (t) => toast(t, 'error'), null).mount());
+    }
     const main = Dom.find('main', doc);
     if (main !== null) {
-      const cards = new QuestionCard(main, queue, services.clock);
-      bag.add(cards.mount());
-      bag.add(shell.feed.events.on('answered', (a) => cards.answered(a)));
+      const questions = new QuestionCard(main, queue, services.clock);
+      bag.add(questions.mount());
+      bag.add(shell.feed.events.on('answered', (a) => questions.answered(a)));
     }
     const overview = Dom.find('[data-component="Overview"]', doc);
     if (overview !== null) bag.add(new Overview(overview, shell.feed.events, r.timeline).mount());
@@ -65,7 +67,6 @@ export class HomePage implements Page {
     }
 
     this.quickDrop(bag, r.chip, r.upload, toast);
-    this.newChannel(bag);
     void queue.restore();
     if (win !== null) bag.listen(win, 'online', () => queue.kick());
     bag.add(shell.feed.start());
@@ -89,30 +90,5 @@ export class HomePage implements Page {
       });
     }
     if (new URLSearchParams(doc.defaultView?.location.search ?? '').has('share')) sheet.open();
-  }
-
-  private newChannel(bag: DisposableBag): void {
-    const { doc, services } = this;
-    const dialog = Dom.find<HTMLDialogElement>('[data-component="NewChannel"]', doc);
-    const button = Dom.find('[data-action="new-channel"]', doc);
-    if (dialog === null || button === null) return;
-    bag.listen(button, 'click', () => openDialog(dialog));
-    bag.listen(dialog, 'click', (event) => {
-      const action = (event.target as Element | null)?.closest<HTMLElement>('[data-action]')?.dataset['action'];
-      if (action === 'close') closeDialog(dialog);
-      if (action !== 'create') return;
-      const value = (n: string): string => Dom.find<HTMLInputElement>(`input[name="${n}"]`, dialog)?.value.trim() ?? '';
-      const patterns = value('patterns').split(',').map((p) => p.trim()).filter((p) => p !== '');
-      const error = Dom.find('[data-slot="error"]', dialog);
-      services.api
-        .createChannel({ name: value('name'), ...(value('title') === '' ? {} : { title: value('title') }), ...(patterns.length === 0 ? {} : { patterns }) })
-        .then((chat) => doc.defaultView?.location.assign(chatHref(chat.id)))
-        .catch((e: unknown) => {
-          if (error !== null) {
-            error.hidden = false;
-            error.textContent = e instanceof ApiError ? e.message : 'The channel was not created.';
-          }
-        });
-    });
   }
 }

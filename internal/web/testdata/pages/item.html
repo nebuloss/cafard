@@ -22,9 +22,11 @@
 <header class="topbar">
   <div class="bar">
     
-    <a class="icon-btn" href="/projects/lab/g/shots?section=login&#43;flow" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
+    <a class="icon-btn side-open" href="#side" data-action="open-side" aria-controls="side" aria-label="Channels"><svg aria-hidden="true"><use href="/static/icons.svg#menu"></use></svg></a>
     
-    <h1>login page</h1>
+    <a class="icon-btn side-back" href="/projects/lab/g/shots?section=login&#43;flow" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
+    
+    <div class="title-block"><span class="kicker">Lab</span><h1>login page</h1></div>
     <span class="spacer"></span>
     
     <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
@@ -36,29 +38,17 @@
 
 <nav class="nav" aria-label="Main">
   <a class="nav-item" href="/" aria-current="page">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats">2</span></span>
-    <span class="nav-label">Chats</span>
-  </a>
-  <a class="nav-item" href="/live">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
-    <span class="nav-label">Live</span>
-  </a>
-  <a class="nav-item" href="/streams">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
-    <span class="nav-label">Sources</span>
-  </a>
-  
-  <a class="nav-item rail-only" href="/projects">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></span>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg><span class="badge" data-badge="questions" title="Questions for you">1</span></span>
     <span class="nav-label">Projects</span>
   </a>
-  <a class="nav-item rail-only" href="/agents">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
-    <span class="nav-label">Agents</span>
+  <a class="nav-item" href="/dm">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="direct" title="Unread direct messages">1</span></span>
+    <span class="nav-label">Direct</span>
   </a>
-  <a class="nav-item rail-only" href="/pair">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
-    <span class="nav-label">Pair</span>
+  
+  <a class="nav-item" href="/admin">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#key"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Admin</span>
   </a>
   
   <details class="nav-more">
@@ -67,11 +57,6 @@
       <span class="nav-label">More</span>
     </summary>
     <div class="menu" role="menu">
-      
-      <a class="menu-item bar-only" role="menuitem" href="/projects"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg>Projects</a>
-      <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
-      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
-      
       <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
         <input type="hidden" name="next" value="/projects/lab/g/shots/10">
         <span class="menu-caption">Theme</span>
@@ -92,6 +77,76 @@
 <main id="main">
 
 
+<div class="project-view">
+  
+<aside class="side" id="side" data-component="SideNav" data-project="lab" aria-label="Lab">
+  <div class="side-head">
+    <details class="switcher">
+      <summary class="switcher-btn" aria-label="Switch project"><span class="switcher-label">Lab</span><svg aria-hidden="true"><use href="/static/icons.svg#expand_more"></use></svg></summary>
+      <div class="menu switcher-menu" role="menu">
+        <a class="menu-item" role="menuitem" href="/"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg><span class="grow">All projects</span></a>
+        <a class="menu-item" role="menuitem" href="/projects/lab" data-switch="lab" aria-current="page"><span class="switch-avatar" aria-hidden="true">L</span><span class="grow">Lab</span><span class="chat-unread" data-slot="unread">6</span></a>
+        <a class="menu-item" role="menuitem" href="/dm"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="grow">Direct messages</span><span class="chat-unread" data-slot="direct">1</span></a>
+      </div>
+    </details>
+    <a class="icon-btn side-close" href="#main" data-action="close-side" aria-label="Close the list"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></a>
+  </div>
+  <nav class="side-list" data-component="ChatList" aria-label="Channels of Lab">
+  
+    <section class="side-section" aria-labelledby="side-chats">
+      <h2 class="side-heading"><span id="side-chats">Chats</span><button class="icon-btn small only-scripted" type="button" data-action="new-channel" aria-label="New channel" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></button></h2>
+      <div class="chat-rows" data-section="channels" data-project="lab"><a class="chat-row" href="/projects/lab/c/dut1" data-chat="chan:lab/dut1"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#dut1</span><span class="chat-dots" data-slot="dots">
+<span class="stream-dot" data-status="connected" title="serial:lab/dut1: connected"></span>
+</span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: before and after the fix:</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">3</span></span></span></a>
+<a class="chat-row" href="/projects/lab/c/general" data-chat="chan:lab/general"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#general</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+</div>
+      
+      
+    </section>
+    
+    <section class="side-section" aria-labelledby="side-galleries">
+      <h2 class="side-heading"><a id="side-galleries" href="/projects/lab/g">Galleries</a></h2>
+      <div class="chat-rows" data-section="galleries" data-project="lab"><a class="chat-row" href="/projects/lab/g/shots" data-chat="chan:lab/shots" aria-current="page"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#shots</span><span class="chat-dots" data-slot="dots"></span><span class="chat-items">3 images</span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: after submit ...</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">3</span></span></span></a>
+</div>
+    </section>
+    
+    
+    <section class="side-section" aria-labelledby="side-logs">
+      <h2 class="side-heading"><span id="side-logs">Logs</span></h2>
+      <div class="side-rows" data-section="sinks">
+        <a class="side-item" href="/projects/lab/logs"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg><span class="side-name">All logs</span></a>
+        <a class="side-item sink-row" href="/projects/lab/logs/bench-pi" data-sink="lab/bench-pi" data-status="connected"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="side-name">bench-pi</span><span class="sink-dots">
+<span class="stream-dot" data-status="connected" title="syslog:lab/bench-pi: connected"></span>
+</span><time class="side-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></a><a class="side-item sink-row" href="/projects/lab/logs/dut1" data-sink="lab/dut1" data-status="connected"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="side-name">dut1 <span class="muted">DUT 1</span></span><span class="sink-dots">
+<span class="stream-dot" data-status="connected" title="serial:lab/dut1: connected"></span>
+</span><time class="side-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></a>
+      </div>
+    </section>
+    
+    
+    <section class="side-section">
+      <a class="side-item" href="/projects/lab/settings"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#settings"></use></svg><span class="side-name">Settings</span></a>
+    </section>
+    
+  
+  </nav>
+  
+  <dialog class="modal new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
+    <form class="panel stack" method="dialog">
+      <h2 id="new-channel-title">New channel in Lab</h2>
+      <div class="banner error" data-slot="error" role="alert" hidden></div>
+      <input type="hidden" name="project" value="lab">
+      <label class="ofield"><span>Name</span><input name="name" required pattern="[a-z0-9\-]{1,40}" placeholder="dut1" autocomplete="off" spellcheck="false"></label>
+      <label class="ofield"><span>Title</span><input name="title" maxlength="200" placeholder="DUT 1 (x86 board)"></label>
+      <label class="ofield"><span>Bound streams (comma separated, globs allowed)</span><input name="patterns" placeholder="serial:lab/dut1, syslog:lab/dut1" autocomplete="off" spellcheck="false"></label>
+      <div class="dialog-actions"><button class="btn text" type="button" data-action="close">Cancel</button><button class="btn filled" type="button" data-action="create">Create</button></div>
+    </form>
+  </dialog>
+  
+</aside>
+<a class="side-scrim" href="#main" data-action="close-side" tabindex="-1" aria-hidden="true"></a>
+
+  <div class="project-main">
 <section class="page-wide gallery-item-page">
   <p class="body-small"><a href="/projects/lab/g/shots">#lab/shots</a> / <a href="/projects/lab/g/shots?section=login&#43;flow">login flow</a></p>
   <figure class="gallery-figure">
@@ -105,12 +160,19 @@
   </nav>
   <p class="muted body-small">To show it in a chat of this project, write <code class="mono">[[lab/shots#10]]</code> in a message.</p>
 </section>
+  </div>
+</div>
 
 </main>
 <div class="toast-region" data-component="Toast" aria-live="polite">
 
 </div>
 <div class="dialog-root" data-dialog-root></div>
+<template id="tpl-chat-row"><a class="chat-row" href="" data-chat=""><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name"></span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime=""></time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+</template>
+<template id="tpl-stream-dot">
+<span class="stream-dot" data-status="" title=""></span>
+</template>
 <template id="tpl-toast">
 <div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
 </template>

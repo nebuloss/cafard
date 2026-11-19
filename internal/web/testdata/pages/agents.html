@@ -22,9 +22,11 @@
 <header class="topbar">
   <div class="bar">
     
-    <svg class="mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
     
-    <h1>Agents</h1>
+    
+    <a class="icon-btn" href="/admin" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
+    
+    <div class="title-block"><h1>Agents</h1></div>
     <span class="spacer"></span>
     
     <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
@@ -36,29 +38,17 @@
 
 <nav class="nav" aria-label="Main">
   <a class="nav-item" href="/">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats">2</span></span>
-    <span class="nav-label">Chats</span>
-  </a>
-  <a class="nav-item" href="/live">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
-    <span class="nav-label">Live</span>
-  </a>
-  <a class="nav-item" href="/streams">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
-    <span class="nav-label">Sources</span>
-  </a>
-  
-  <a class="nav-item rail-only" href="/projects">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></span>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg><span class="badge" data-badge="questions" title="Questions for you">1</span></span>
     <span class="nav-label">Projects</span>
   </a>
-  <a class="nav-item rail-only" href="/agents" aria-current="page">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
-    <span class="nav-label">Agents</span>
+  <a class="nav-item" href="/dm">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="direct" title="Unread direct messages">1</span></span>
+    <span class="nav-label">Direct</span>
   </a>
-  <a class="nav-item rail-only" href="/pair">
-    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
-    <span class="nav-label">Pair</span>
+  
+  <a class="nav-item" href="/admin" aria-current="page">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#key"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Admin</span>
   </a>
   
   <details class="nav-more">
@@ -67,11 +57,6 @@
       <span class="nav-label">More</span>
     </summary>
     <div class="menu" role="menu">
-      
-      <a class="menu-item bar-only" role="menuitem" href="/projects"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg>Projects</a>
-      <a class="menu-item bar-only" role="menuitem" href="/agents" aria-current="page"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
-      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
-      
       <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
         <input type="hidden" name="next" value="/agents">
         <span class="menu-caption">Theme</span>

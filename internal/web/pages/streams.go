@@ -46,7 +46,7 @@ func (s *Site) streams(w http.ResponseWriter, r *http.Request, p auth.Principal)
 	if p.Has(auth.ScopeAdmin) {
 		data.Unrouted = unroutedText(s.d.Status.UnroutedCounts())
 	}
-	s.Render(w, http.StatusOK, "streams", s.Shell(r, &p, "Sources", "streams", "streams"),
+	s.Render(w, http.StatusOK, "streams", s.Shell(r, &p, "Sources", "streams", adminNav(p)),
 		[]string{"tpl-stream-dot", "tpl-stream-card", "tpl-toast"}, data)
 }
 

@@ -40,9 +40,15 @@ type Layout struct {
 	Scripted bool   // emit the bundle's script tag
 
 	Theme  string // "system" | "light" | "dark", from the theme cookie
-	Nav    string // the active navigation item: chats, live, streams, agents, pair
+	Nav    string // the active navigation item: home, direct, admin
 	User   *User  // nil when signed out
 	Badges Badges
+	// Side is set on pages with a side list (a project's channels, or the
+	// direct conversations): on narrow screens the top bar opens it as a
+	// drawer.
+	Side bool
+	// Kicker is the small line above the title: the project of the page.
+	Kicker string
 	// Twins is the rendered <template id="tpl-..."> elements the page lists
 	// (CONTRACTS.md 6.2), placed at the end of <body>.
 	Twins template.HTML
@@ -73,8 +79,9 @@ type User struct {
 
 // Badges are the counts on the navigation items.
 type Badges struct {
-	Chats       int  // open questions for you + unread direct messages
-	SourcesDown bool // error dot on Sources
+	Questions   int  // open questions for you, on Projects
+	Direct      int  // unread direct messages, on Direct
+	SourcesDown bool // error dot on Admin
 }
 
 // NewLayout fills in what does not depend on the page.

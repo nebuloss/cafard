@@ -11,15 +11,25 @@ import { ChatRowRenderer } from '@/render/renderers/ChatRowRenderer.ts';
 import { Component } from '@/components/Component.ts';
 import { popupMenu, type MenuItem } from '@/components/PopupMenu.ts';
 
-/** The sections of the list a chat goes in. */
-function sectionOf(chat: Chat): string {
+/** The section of a side list a chat goes in. */
+export function sectionOf(chat: Chat): string {
   if (chat.kind === 'direct') return 'direct';
   if (chat.archived) return 'archived';
+  if (chat.channel_kind === 'gallery') return 'galleries';
   return chat.followed ? 'channels' : 'unfollowed';
 }
 
+/** A new message as a row's preview, like pages.PreviewText of the chat's. */
+export function entryPreview(e: Entry): string {
+  const first = e.text.trim().split('\n')[0] ?? '';
+  const images = imagesLabel(e.attachments?.filter((a) => a.type === 'image').length ?? 0);
+  const text = first !== '' ? first : images !== '' ? images : galleryImagesLabel(e.gallery_refs?.length ?? 0);
+  return previewText({ ...(e.sender === undefined ? {} : { sender: e.sender.name }), text });
+}
+
 /**
- * The chat list (PLAN 9.6.3), on home and in a chat's list pane: badges
+ * The rows of a side list (a project's chats and galleries, or the direct
+ * conversations) and of "Needs you" (PLAN 9.6.3): badges
  * from counts, rows from chat events, previews from new messages, status
  * dots from stream_status, a filter field, and a menu on long press or
  * right click (pin, mute, follow, mark read, settings).
@@ -91,11 +101,9 @@ export class ChatList extends Component {
   /** A new message: its row's preview and time, and the row moves up. */
   entry(e: Entry): void {
     if (e.kind !== 'message' || e.chat === undefined) return;
-    const first = e.text.trim().split('\n')[0] ?? '';
-    const images = imagesLabel(e.attachments?.filter((a) => a.type === 'image').length ?? 0);
-    const text = first !== '' ? first : images !== '' ? images : galleryImagesLabel(e.gallery_refs?.length ?? 0);
+    const preview = entryPreview(e);
     for (const row of Dom.findAll<HTMLElement>('a.chat-row', this.root).filter((r) => r.dataset['chat'] === e.chat)) {
-      Dom.setText(Dom.find('[data-slot="preview"]', row), previewText({ ...(e.sender === undefined ? {} : { sender: e.sender.name }), text }));
+      Dom.setText(Dom.find('[data-slot="preview"]', row), preview);
       Dom.setText(Dom.find('[data-slot="time"]', row), messageTime(e.ts, this.clock.now()));
       const section = row.parentElement;
       if (section === null || row.hasAttribute('data-pinned') || section.dataset['section'] === undefined) continue;

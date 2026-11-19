@@ -95,7 +95,7 @@ func (s *Site) Shell(r *http.Request, p *auth.Principal, title, page, nav string
 	if p != nil {
 		l.User = &assets.User{Name: p.Name, Kind: p.Kind, Admin: p.Has(auth.ScopeAdmin), Initial: initial(p.Name)}
 		c := view.Counts(r.Context(), s.d, *p)
-		l.Badges = assets.Badges{Chats: c.OpenQuestions + c.UnreadDirect, SourcesDown: c.SourcesDown > 0}
+		l.Badges = assets.Badges{Questions: c.OpenQuestions, Direct: c.UnreadDirect, SourcesDown: c.SourcesDown > 0}
 	}
 	return l
 }
@@ -226,6 +226,7 @@ func SafeNext(next string) string {
 func (s *Site) Mount(public, admin *http.ServeMux) {
 	s.mountAccount(public, admin)
 	s.mountStreams(public)
+	s.mountAdmin(admin)
 	s.mountAgents(admin)
 	s.mountPair(admin)
 	s.mountProjects(admin)

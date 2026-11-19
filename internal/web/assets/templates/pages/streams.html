@@ -5,18 +5,7 @@
   {{if .Data.Unrouted}}<p class="banner warn" data-slot="unrouted">Dropped because no sink takes them, since the server started: {{.Data.Unrouted}}. Add the senders' addresses to a sink, or give the tokens a sink or a grant, on the project pages.</p>{{end}}
   {{if .Data.Groups}}
   <div class="stream-table dense" role="table" aria-label="Sources" data-component="StreamList">
-    <div class="stream-head" role="row">
-      <span role="columnheader">Source</span>
-      <span role="columnheader">Status</span>
-      <span role="columnheader">Kind / transport</span>
-      <span role="columnheader">Lines/min</span>
-      <span role="columnheader">Last activity</span>
-      <span role="columnheader">Last line</span>
-      <span role="columnheader">Dropped</span>
-      <span role="columnheader">Claim</span>
-      <span role="columnheader">Lines</span>
-      <span role="columnheader"><span class="visually-hidden">Open</span></span>
-    </div>
+    {{template "partials/stream_head.html"}}
     <div class="stream-rows" data-slot="rows">
     {{range .Data.Groups}}
     <div class="stream-group" role="rowgroup" data-project="{{.Project}}">

@@ -1,15 +1,18 @@
 {{/* The logs filters (server-only, FilterBar attaches to it). A GET form,
      so filters live in the URL and work without the bundle. On compact
      screens it folds into a sheet behind one button. The channel picker
-     and the Messages kind need messaging. Data: liveFilter. */}}
+     and the Messages kind need messaging; a project's logs pick the
+     streams themselves (Fixed). Data: liveFilter. */}}
 <details class="filter-sheet" data-component="FilterBar"{{if .Open}} open{{end}}>
   <summary class="btn tonal filter-toggle"><svg aria-hidden="true"><use href="/static/icons.svg#filter_list"></use></svg>Filters{{if .Active}} ({{.Active}}){{end}}</summary>
-  <form class="filter-bar" method="get" action="/live" role="search">
+  <form class="filter-bar" method="get" action="{{.Action}}" role="search">
+    {{if not .Fixed}}
     <label class="ofield">
       <span>Streams</span>
       <input name="streams" value="{{.Streams}}" placeholder="serial:lab/dut1, *:lab/*" list="known-streams" autocomplete="off" spellcheck="false">
     </label>
     <datalist id="known-streams">{{range .Known}}<option value="{{.}}"></option>{{end}}</datalist>
+    {{end}}
     {{if .Channels}}<label class="ofield">
       <span>Channel</span>
       <select name="channel">
@@ -36,6 +39,6 @@
     {{if .FromSeq}}<input type="hidden" name="from_seq" value="{{.FromSeq}}">{{end}}
     {{if .ToSeq}}<input type="hidden" name="to_seq" value="{{.ToSeq}}">{{end}}
     <button class="btn filled" type="submit">Apply</button>
-    <a class="btn text" href="/live">Reset</a>
+    <a class="btn text" href="{{.Action}}">Reset</a>
   </form>
 </details>

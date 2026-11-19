@@ -86,7 +86,8 @@ func (s *Site) renderAgents(w http.ResponseWriter, r *http.Request, p auth.Princ
 		return
 	}
 	data.Created = created
-	l := s.Shell(r, &p, "Agents", "agents", "agents")
+	l := s.Shell(r, &p, "Agents", "agents", "admin")
+	l.Back = "/admin"
 	l.Error = errText
 	if r.URL.Query().Get("revoked") == "1" {
 		l.Notice = "Token revoked."

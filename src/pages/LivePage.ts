@@ -18,12 +18,13 @@ import type { Services } from '@/App.ts';
 import type { Page } from '@/pages/Page.ts';
 import { mountShell, type Shell } from '@/pages/Shell.ts';
 import { copier, mountDropForm } from '@/pages/chatParts.ts';
+import { STREAM_CARD_ATTRIBUTES, StreamCards } from '@/pages/StreamsPage.ts';
 
 /** What a reload after a reset shows, like the server-rendered page. */
 const RELOAD_LINES = 500;
 
 /**
- * /live (PLAN 9.6.4): the filters in the URL (a sheet on compact
+ * /live (PLAN 9.6.4), and a project's logs with their sources: the filters in the URL (a sheet on compact
  * screens), the lines following live at the pace of animation frames,
  * markers as dividers, messages with kinds=message, and the line actions
  * and range selection of the logs pane. Attaching opens the quick drop
@@ -84,6 +85,7 @@ export class LivePage implements Page {
     bag.add(pane.mount());
 
     bag.add(shell.feed.events.on('entry', (entry) => pane.enqueue([entry])));
+    this.sources(bag, shell);
     bag.add(
       shell.feed.events.on('reset', () => {
         void this.reload(query, pane)
@@ -94,6 +96,27 @@ export class LivePage implements Page {
     const next = Dom.number(mount, 'data-next-seq') ?? 0;
     bag.add(shell.feed.start(follow ? next : 0));
     return bag;
+  }
+
+  /**
+   * A project's logs list its sources above the lines: their cards follow
+   * stream_status, for the streams of the page's project (and sink) only.
+   */
+  private sources(bag: DisposableBag, shell: Shell): void {
+    const table = Dom.find('[data-component="StreamList"]', this.doc);
+    const rows = table === null ? null : Dom.find('[data-slot="rows"]', table);
+    const template = SlotTemplate.find(this.doc, 'tpl-stream-card', STREAM_CARD_ATTRIBUTES);
+    if (table === null || rows === null || template === null) return;
+    const project = table.dataset['project'] ?? '';
+    const sink = table.dataset['sink'];
+    const cards = new StreamCards(rows, template, () => this.services.clock.now());
+    bag.add(
+      shell.feed.events.on('stream_status', (s) => {
+        if (s.project !== project || (sink !== undefined && s.sink !== sink)) return;
+        cards.update(s);
+        table.hidden = false;
+      }),
+    );
   }
 
   /** The quick drop sheet a range is attached through, when the page has it. */

@@ -7,7 +7,6 @@ import { linesText } from '@/render/format.ts';
 import { AttachmentTray, logLabel, type PendingLog } from '@/components/AttachmentTray.ts';
 import { ChannelDialog } from '@/components/ChannelDialog.ts';
 import { ChannelHeader } from '@/components/ChannelHeader.ts';
-import { ChatList } from '@/components/ChatList.ts';
 import { Composer } from '@/components/Composer.ts';
 import { ConversationView } from '@/components/ConversationView.ts';
 import { ElementScroller } from '@/components/ElementScroller.ts';
@@ -75,9 +74,6 @@ export class ChatPage implements Page {
     const r = chatRenderers(doc, viewer, services.clock);
     const queue = services.uploads;
     const go = (path: string): void => win?.location.assign(path);
-
-    const list = Dom.find('[data-component="ChatList"]', doc);
-    if (list !== null) bag.add(new ChatList(list, r.rows, shell.feed.events, services.api, services.clock, (t) => toast(t, 'error'), null).mount());
 
     // Logs pane.
     const paneEl = Dom.find('[data-component="LogsPane"]', doc);

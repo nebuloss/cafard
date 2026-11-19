@@ -19,6 +19,7 @@ import (
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/mcpserver"
 	"github.com/nebuloss/cafard/internal/messaging"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/status"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/web"
@@ -51,10 +52,15 @@ func newEnv(t *testing.T, o webtest.Options) *env {
 	return e
 }
 
-// seed gives the pages something to show: two sources, lines, a marker,
-// and the chats of seedChats.
+// seed gives the pages something to show: the sinks lab/dut1 and
+// lab/bench-pi with lines and a marker, and the chats of seedChats.
 func seed(e *env) {
 	e.Status.Declare(status.Source{Stream: "serial:lab/dut1", Transport: "rfc2217"})
+	for _, k := range []projects.Sink{{Project: "lab", Name: "dut1", Title: "DUT 1"}, {Project: "lab", Name: "bench-pi"}} {
+		if _, err := e.Deps.Projects.SaveSink(context.Background(), k); err != nil {
+			e.T.Fatal(err)
+		}
+	}
 	e.Commit(
 		webtest.Line("serial:lab/dut1", "U-Boot 2024.04 (Nov 16 2026)"),
 		store.Entry{Stream: "serial:lab/dut1", Kind: store.KindLine, Severity: 3, Text: "\x1b[31mdwc3 fe800000.usb: failed to initialize core: -110\x1b[0m"},
@@ -92,21 +98,25 @@ var pageTwins = map[string][]string{
 	"agents":   {"tpl-toast"},
 	"pair":     {"tpl-toast"},
 	"projects": {"tpl-toast"},
-	"project":  {"tpl-toast"},
+	"project":  {"tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
+	"admin":    {"tpl-toast"},
+	"direct":   {"tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
 	"live":     {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
+	"logs": {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-stream-card", "tpl-stream-dot",
+		"tpl-chat-row", "tpl-toast"},
 	"home": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
 		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-gallery-ref", "tpl-toast"},
 	"chat": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
 		"tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-gallery-ref", "tpl-toast"},
 	"drop":      {"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
-	"gallery":   {"tpl-gallery-item", "tpl-toast"},
-	"item":      {"tpl-toast"},
-	"galleries": {"tpl-toast"},
+	"gallery":   {"tpl-gallery-item", "tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
+	"item":      {"tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
+	"galleries": {"tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
 }
 
 var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
-	"projects": "/projects", "project": "/projects/lab/settings",
+	"projects": "/projects", "project": "/projects/lab/settings", "admin": "/admin", "direct": "/dm", "logs": "/projects/lab/logs/dut1",
 	"home": "/", "chat": "/projects/lab/c/dut1", "drop": "/drop",
 	"gallery": "/projects/lab/g/shots", "galleries": "/projects/lab/g", "item": "", // the item's seq is known once seeded
 }
@@ -192,6 +202,7 @@ func TestEveryPageCarriesItsTwins(t *testing.T) {
 // the page to work with no script at all; noBundleChats in chat_test.go
 // adds the chat pages.
 var noBundle = map[string][]string{
+	"/admin": {`href="/projects"`, `href="/agents"`, `href="/pair"`, `href="/streams"`, `href="/live"`, "Unrouted drops"},
 	"/streams": {
 		`data-stream="serial:lab/dut1"`, "rfc2217", "flashed linux-6.18-rc3", `href="/live?streams=serial%3Alab%2Fdut1"`,
 		`data-stream="syslog:lab/bench-pi"`, "systemd[1]: Started cafard push.",
@@ -199,6 +210,15 @@ var noBundle = map[string][]string{
 	"/live": {
 		"U-Boot 2024.04", `class="marker"`, "flashed linux-6.18-rc3", `<form class="filter-bar" method="get" action="/live"`,
 		"Live updates need JavaScript",
+	},
+	// A project's logs replace Live and Sources inside the project.
+	"/projects/lab/logs": {
+		"U-Boot 2024.04", "systemd[1]: Started cafard push.", `class="marker"`, `data-stream="serial:lab/dut1"`, "rfc2217",
+		`<form class="filter-bar" method="get" action="/projects/lab/logs"`, `href="/projects/lab/logs/dut1"`, "Live updates need JavaScript",
+	},
+	"/projects/lab/logs/dut1": {
+		"U-Boot 2024.04", `data-stream="serial:lab/dut1"`, `<form class="filter-bar" method="get" action="/projects/lab/logs/dut1"`,
+		`href="/live?streams=%2A%3Alab%2Fdut1"`, `aria-current="page"><svg class="side-icon"`,
 	},
 }
 
@@ -217,7 +237,7 @@ func TestThePageWorksWithoutTheBundle(t *testing.T) {
 			}
 		}
 		// Navigation, theme and sign out are links and plain forms.
-		for _, want := range []string{`href="/live"`, `href="/streams"`, `href="/agents"`, `href="/pair"`,
+		for _, want := range []string{`href="/"`, `href="/dm"`, `href="/admin"`,
 			`action="/theme"`, `action="/signout"`, `aria-current="page"`} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s: shell lost %q", path, want)
@@ -557,7 +577,7 @@ func TestIconsAndRootFilesAreServed(t *testing.T) {
 	}
 	cookie := e.Admin()
 	used := map[string]bool{}
-	for _, path := range []string{"/streams", "/live", "/agents", "/pair", "/"} {
+	for _, path := range []string{"/streams", "/live", "/agents", "/pair", "/", "/dm", "/admin", "/projects/lab/logs"} {
 		for _, m := range regexp.MustCompile(`icons\.svg#([a-z_]+)`).FindAllStringSubmatch(e.Do("GET", path, cookie, nil).Body.String(), -1) {
 			used[m[1]] = true
 		}

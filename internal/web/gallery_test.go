@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -121,9 +122,11 @@ func TestGalleryPageGroupsItemsBySectionWithoutTheBundle(t *testing.T) {
 		t.Errorf("/projects/lab/g/dut1: status %d", rec.Code)
 	}
 
-	// The chat list leads to the grid, the conversation header back to it.
-	if body := e.Do("GET", "/", cookie, nil).Body.String(); !strings.Contains(body, `href="/projects/lab/g/shots" data-chat="chan:lab/shots"`) {
-		t.Error("the chat list row of a gallery does not lead to its grid")
+	// The side list leads to the grid, with its count, and the
+	// conversation header back to it.
+	side := e.Do("GET", "/projects/lab/c/dut1", cookie, nil).Body.String()
+	if !regexp.MustCompile(`(?s)data-section="galleries" data-project="lab"><a class="chat-row" href="/projects/lab/g/shots" data-chat="chan:lab/shots">.*3 images`).MatchString(side) {
+		t.Error("the side list's row of a gallery does not lead to its grid")
 	}
 	if body := e.Do("GET", "/projects/lab/c/shots", cookie, nil).Body.String(); !strings.Contains(body, `href="/projects/lab/g/shots"`) {
 		t.Error("the conversation of a gallery does not link to its grid")
@@ -232,8 +235,8 @@ func TestChatsShowGalleryRefsAsCards(t *testing.T) {
 		"2 images in #lab/shots", `data-full="/blob/`,
 		// The composer offers the project's gallery.
 		`data-action="gallery-picker"`, `data-component="GalleryPicker"`, `data-gallery="lab/shots"`,
-		// The chat list's entry for the project's galleries.
-		`<a class="chip small" href="/projects/lab/g">`,
+		// The side list's heading of the project's galleries.
+		`<a id="side-galleries" href="/projects/lab/g">Galleries</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("chat page lacks %q", want)

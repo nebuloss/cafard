@@ -1,9 +1,12 @@
-{{/* A conversation: /c/{name} and /dm/{peer} (PLAN 9.6.3). The latest 50
-     messages and event rows, filter chips, an "Older" link, the composer,
-     and the logs of a bound channel; ?view=logs shows the logs instead of
-     the conversation. The panes are laid out by CSS only. */}}
+{{/* A conversation: /projects/{project}/c/{name} and /dm/{peer} (PLAN
+     9.6.3), beside the side list of its project or of the direct
+     conversations. The latest 50 messages and event rows, filter chips, an
+     "Older" link, the composer, and the logs of a bound channel; ?view=logs
+     shows the logs instead of the conversation. The panes are laid out by
+     CSS only. */}}
+<div class="project-view">
+{{template "partials/side_nav.html" .Data.Side}}
 <div class="chat-layout" data-view="{{.Data.View}}"{{if .Data.Logs}} data-bound{{end}} data-chat="{{.Data.Chat}}" data-surface="{{.Data.Surface}}" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}">
-  <div class="pane-list">{{template "partials/chat_list.html" .Data.List}}</div>
   <div class="pane-head">
     {{template "partials/channel_header.html" .Data.Header}}
     {{with .Data.Banner}}<a class="banner warn q-banner" href="{{.Href}}" data-slot="banner">{{.Text}}</a>{{end}}
@@ -21,6 +24,7 @@
   </div>
   {{with .Data.Logs}}{{template "partials/logs_pane.html" .}}{{end}}
   <div class="pane-composer">{{template "partials/composer.html" .Data.Composer}}</div>
+</div>
 </div>
 {{with .Data.Dialog}}{{template "partials/channel_dialog.html" .}}{{end}}
 {{template "partials/image_viewer.html"}}

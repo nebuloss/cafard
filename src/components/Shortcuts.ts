@@ -3,12 +3,13 @@ import { Component } from '@/components/Component.ts';
 import { isTyping } from '@/components/FilterBar.ts';
 import { closeDialog, openDialog } from '@/components/ImageViewer.ts';
 
-/** Where each "g" chord goes (PLAN 9.6.9). */
-const GO: Readonly<Record<string, string>> = { c: '/', l: '/live', s: '/streams' };
+/** Where each "g" chord goes (PLAN 9.6.9): projects, direct messages, Live, Sources. */
+const GO: Readonly<Record<string, string>> = { p: '/', d: '/dm', l: '/live', s: '/streams' };
 
 /**
  * The desktop keys (PLAN 9.6.9): "/" focuses the filter or the composer,
- * "g c", "g l", "g s" go to Chats, Live and Sources, "?" lists the keys,
+ * "g p", "g d", "g l", "g s" go to the projects, the direct
+ * messages, Live and Sources, "?" lists the keys,
  * Esc closes what is open (dialogs close on Esc by themselves). They wait
  * while a field has focus, except Esc and Ctrl+Enter, which their fields
  * handle.

@@ -1,0 +1,8 @@
+{{/* The direct conversations (/dm): the side list is the page on a
+     phone, and stands beside an empty pane on wide screens. */}}
+<div class="project-view side-page" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}">
+  {{template "partials/side_nav.html" .Data.Side}}
+  <div class="project-main side-placeholder">
+    <p class="muted">Pick a conversation. Agents start one when they send(to={{.User.Name}}).</p>
+  </div>
+</div>

@@ -33,6 +33,7 @@ const (
 
 func (s *Site) mountChats(mux *http.ServeMux) {
 	mux.HandleFunc("GET /projects/{project}/c/{name}", s.Auth(auth.ScopeRead, s.channelPage))
+	mux.HandleFunc("GET /dm", s.Auth(auth.ScopeRead, s.directList))
 	mux.HandleFunc("GET /dm/{peer}", s.Auth(auth.ScopeRead, s.directPage))
 	mux.HandleFunc("GET /drop", s.Auth(auth.ScopeMessage, s.drop))
 	mux.Handle("POST /share", s.Write(auth.ScopeMessage, s.share))
@@ -109,7 +110,7 @@ type BannerView struct {
 
 type chatData struct {
 	Header    HeaderView
-	List      ChatListView
+	Side      SideView
 	Items     []TimelineItem
 	Older     string
 	Newer     string // back to the latest page from an older one
@@ -176,6 +177,23 @@ func (s *Site) directPage(w http.ResponseWriter, r *http.Request, p auth.Princip
 		return
 	}
 	s.chatPage(w, r, p, messaging.DMStream(p.Name, peer), chat, nil)
+}
+
+type directData struct {
+	Side SideView
+}
+
+// directList is the direct conversations: the side list, as the page
+// itself on a phone and beside an empty pane on wide screens.
+func (s *Site) directList(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	side, err := s.directSide(r.Context(), p, "")
+	if err != nil {
+		s.Oops(w, r, &p, err)
+		return
+	}
+	l := s.shellFor(r, p, "Direct messages", "direct")
+	l.Nav = "direct"
+	s.Render(w, http.StatusOK, "direct", l, directTwins, directData{Side: side})
 }
 
 func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal, stream string, chat dto.Chat, ch *messaging.Channel) {
@@ -250,11 +268,21 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 		s.Oops(w, r, &p, err)
 		return
 	}
-	if data.List, _, err = s.chatList(ctx, p, false, false, chat.ID); err != nil {
+	if ch != nil {
+		data.Side, err = s.projectSide(ctx, p, ch.Project(), chat.ID)
+	} else {
+		data.Side, err = s.directSide(ctx, p, chat.ID)
+	}
+	if err != nil {
 		s.Oops(w, r, &p, err)
 		return
 	}
-	data.Banner = banner(data.List.NeedsYou.Questions, chat.ID, data.Items, base)
+	needs, err := s.needsYou(ctx, p, nil)
+	if err != nil {
+		s.Oops(w, r, &p, err)
+		return
+	}
+	data.Banner = banner(needs.Questions, chat.ID, data.Items, base)
 	if bound {
 		data.Logs = s.logsPane(ctx, r, p, ch, base, data.View == "logs")
 	}
@@ -263,9 +291,11 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	}
 	s.ackShown(ctx, p, &data, entries.Items)
 
-	title := ChatName(chat)
-	l := s.shellFor(r, p, title, "chat")
-	l.Back = "/"
+	l := s.shellFor(r, p, ChatName(chat), "chat")
+	l.Side, l.Kicker, l.Back = true, data.Side.Label, "/"
+	if ch == nil {
+		l.Nav, l.Back = "direct", "/dm"
+	}
 	s.Render(w, http.StatusOK, "chat", l, chatTwins, data)
 }
 
@@ -298,7 +328,7 @@ func (s *Site) chatHeader(ctx context.Context, data *chatData, p auth.Principal,
 			return err
 		}
 		for _, st := range chat.Streams {
-			h.Streams = append(h.Streams, StreamChip{ID: st.ID, Status: string(st.Status), Href: "/live?" + url.Values{"streams": {st.ID}}.Encode()})
+			h.Streams = append(h.Streams, StreamChip{ID: st.ID, Status: string(st.Status), Href: streamLogsHref(st.ID)})
 			if c, ok := claims[st.ID]; ok {
 				h.Claims = append(h.Claims, c.Principal+" holds "+st.ID+" until "+c.ExpiresAt.UTC().Format("15:04")+" UTC")
 			}
@@ -439,8 +469,6 @@ func (s *Site) seen(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	_, _ = w.Write(pixel)
 }
 
-// chatOptions are the chat picker's choices: every chat the viewer can
-// post to, the selected one first.
 // chatGroups is the chat picker: the channels of each project, then the
 // direct conversations.
 func chatGroups(chats []dto.Chat, selected string) []ChatGroup {

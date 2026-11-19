@@ -28,12 +28,15 @@
 {{if .User}}
 <header class="topbar">
   <div class="bar">
+    {{/* With a side list, narrow screens open it as a drawer: a plain
+         link to #side (CSS :target), which the bundle turns into a toggle. */}}
+    {{if .Side}}<a class="icon-btn side-open" href="#side" data-action="open-side" aria-controls="side" aria-label="Channels"><svg aria-hidden="true"><use href="/static/icons.svg#menu"></use></svg></a>{{end}}
     {{if .Back}}
-    <a class="icon-btn" href="{{.Back}}" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
-    {{else}}
+    <a class="icon-btn{{if .Side}} side-back{{end}}" href="{{.Back}}" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
+    {{else if not .Side}}
     <svg class="mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
     {{end}}
-    <h1>{{.Title}}</h1>
+    <div class="title-block">{{if .Kicker}}<span class="kicker">{{.Kicker}}</span>{{end}}<h1>{{.Title}}</h1></div>
     <span class="spacer"></span>
     {{/* Driven by LiveFeed; hidden without the bundle, which has no live feed. */}}
     <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
