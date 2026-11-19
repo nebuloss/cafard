@@ -1,16 +1,24 @@
 {{/* The chat list (ChatList): the same on the phone's home and in the
-     list pane of a chat. Data: ChatListView. */}}
+     list pane of a chat. One section per project with its channels and the
+     logs of its sinks, then the direct conversations. Data: ChatListView. */}}
 <nav class="chat-list" data-component="ChatList" aria-label="Chats">
   {{template "partials/needs_you.html" .NeedsYou}}
-  <h2 class="list-heading">Channels</h2>
-  <div class="chat-rows" data-section="channels">{{range .Channels}}{{template "partials/chat_row.html" .}}{{end}}</div>
-  {{if .Unfollowed}}
-  <h2 class="list-heading">Not followed</h2>
-  <div class="chat-rows" data-section="unfollowed">{{range .Unfollowed}}{{template "partials/chat_row.html" .}}{{end}}</div>
-  {{end}}
-  {{if .Archived}}
-  <h2 class="list-heading">Archived</h2>
-  <div class="chat-rows" data-section="archived">{{range .Archived}}{{template "partials/chat_row.html" .}}{{end}}</div>
+  {{range .Projects}}
+  <section class="project-chats" data-project="{{.Name}}" aria-label="{{.Label}}">
+    <h2 class="list-heading">{{.Label}}</h2>
+    <div class="chat-rows" data-section="channels" data-project="{{.Name}}">{{range .Channels}}{{template "partials/chat_row.html" .}}{{end}}</div>
+    {{if .Unfollowed}}
+    <h3 class="list-subheading">Not followed</h3>
+    <div class="chat-rows" data-section="unfollowed" data-project="{{.Name}}">{{range .Unfollowed}}{{template "partials/chat_row.html" .}}{{end}}</div>
+    {{end}}
+    {{if .Archived}}
+    <h3 class="list-subheading">Archived</h3>
+    <div class="chat-rows" data-section="archived" data-project="{{.Name}}">{{range .Archived}}{{template "partials/chat_row.html" .}}{{end}}</div>
+    {{end}}
+    {{if .Sinks}}<p class="project-sinks body-small"><span class="muted">Logs</span>{{range .Sinks}} <a class="chip small" href="{{.Href}}">{{.Name}}</a>{{end}}</p>{{end}}
+  </section>
+  {{else}}
+  <p class="muted body-small list-empty">{{.NoProjects}}</p>
   {{end}}
   <h2 class="list-heading">Direct</h2>
   <div class="chat-rows" data-section="direct">{{range .Direct}}{{template "partials/chat_row.html" .}}{{end}}</div>

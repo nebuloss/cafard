@@ -67,6 +67,8 @@ export class App {
     this.pages.register('streams', (doc) => new StreamsPage(doc, this.services));
     this.pages.register('agents', (doc) => new AgentsPage(doc, this.services));
     this.pages.register('pair', (doc) => new PairPage(doc, this.services));
+    this.pages.register('project', (doc) => new PairPage(doc, this.services));
+    this.pages.register('projects', (doc) => new PairPage(doc, this.services));
     this.pages.register('home', (doc) => new HomePage(doc, this.services));
     this.pages.register('chat', (doc) => new ChatPage(doc, this.services));
     this.pages.register('drop', (doc) => new DropPage(doc, this.services));

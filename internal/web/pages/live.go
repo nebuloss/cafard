@@ -34,10 +34,16 @@ type liveFilter struct {
 	Streams, Re              string
 	Known                    []string
 	Channel                  string
-	Channels                 []ChatOption // by name; empty without messaging
+	Channels                 []ChatGroup // by project; empty without messaging
 	Severities               []sevOption
 	Lines, Markers, Messages bool
 	FromSeq, ToSeq           string
+}
+
+// ChatGroup is the channels of one project, an <optgroup> of a picker.
+type ChatGroup struct {
+	Label   string
+	Options []ChatOption
 }
 
 type liveData struct {
@@ -74,8 +80,14 @@ func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 		return
 	}
 	acc := s.d.Projects.Access(ctx, p)
+	seen := map[string]bool{}
 	for _, st := range streams {
 		if !store.IsMessageStream(st.ID) && acc.Can(st.ID, auth.ScopeRead) {
+			// A whole project's logs first, then its streams.
+			if pr := store.ProjectOf(st.ID); pr != "" && !seen[pr] && acc.ProjectScopes(pr).Has(auth.ScopeRead) {
+				seen[pr] = true
+				data.Filter.Known = append(data.Filter.Known, "*:"+pr+"/*")
+			}
 			data.Filter.Known = append(data.Filter.Known, st.ID)
 		}
 	}
@@ -88,10 +100,22 @@ func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 			s.Oops(w, r, &p, err)
 			return
 		}
+		groups := map[string]int{}
 		for _, c := range chats {
 			if c.Kind == dto.ChatChannel && !c.Archived {
 				name := strings.TrimPrefix(c.ID, "chan:")
-				data.Filter.Channels = append(data.Filter.Channels, ChatOption{ID: name, Label: ChatName(c), Selected: name == f.Channel || c.Name == f.Channel})
+				i, ok := groups[c.Project]
+				if !ok {
+					label := c.ProjectTitle
+					if label == "" {
+						label = c.Project
+					}
+					i = len(data.Filter.Channels)
+					groups[c.Project] = i
+					data.Filter.Channels = append(data.Filter.Channels, ChatGroup{Label: label})
+				}
+				g := &data.Filter.Channels[i]
+				g.Options = append(g.Options, ChatOption{ID: name, Label: ChatName(c), Selected: name == f.Channel || c.Name == f.Channel})
 			}
 		}
 		if p.Has(auth.ScopeMessage) {

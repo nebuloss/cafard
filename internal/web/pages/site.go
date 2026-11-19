@@ -228,6 +228,7 @@ func (s *Site) Mount(public, admin *http.ServeMux) {
 	s.mountStreams(public)
 	s.mountAgents(admin)
 	s.mountPair(admin)
+	s.mountProjects(admin)
 	s.mountLive(public)
 	s.mountHome(public)
 }

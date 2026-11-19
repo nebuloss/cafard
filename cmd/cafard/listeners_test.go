@@ -23,6 +23,10 @@ var adminRoutes = []struct{ method, path string }{
 	{"GET", "/agents"}, {"POST", "/tokens"}, {"POST", "/tokens/1/revoke"},
 	{"GET", "/pair"}, {"POST", "/pair"}, {"GET", "/pair/1/qr.svg"},
 	{"GET", "/api/tokens"}, {"POST", "/api/tokens"}, {"DELETE", "/api/tokens/1"}, {"POST", "/api/pairings"},
+	{"GET", "/projects"}, {"POST", "/projects"}, {"GET", "/projects/lab"}, {"POST", "/projects/lab/retention"},
+	{"POST", "/projects/lab/channels"}, {"POST", "/projects/lab/sinks"}, {"POST", "/projects/lab/sinks/dut1"},
+	{"POST", "/projects/lab/sinks/dut1/delete"}, {"POST", "/projects/lab/sinks/dut1/tokens"},
+	{"POST", "/projects/lab/grants"}, {"POST", "/projects/lab/grants/1/delete"}, {"POST", "/projects/lab/pairings"},
 }
 
 // What a phone, an agent or a device uses must answer on both.

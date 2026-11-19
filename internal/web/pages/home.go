@@ -3,6 +3,7 @@ package pages
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"slices"
 
 	"github.com/nebuloss/cafard/internal/auth"
@@ -69,12 +70,12 @@ type NeedsYouView struct {
 func (n NeedsYouView) Any() bool { return len(n.Questions) > 0 || len(n.Direct) > 0 }
 
 // ChatListView is partials/chat_list.html: the list on home and in the
-// list pane of a chat.
+// list pane of a chat, one section per project, Discord-like, then the
+// direct conversations.
 type ChatListView struct {
 	NeedsYou   NeedsYouView
-	Channels   []ChatRowView
-	Unfollowed []ChatRowView
-	Archived   []ChatRowView
+	Projects   []ProjectChatsView
+	NoProjects string // what to say when there is no project to list
 	Direct     []ChatRowView
 	All        bool // unfollowed channels are listed
 	ShowArch   bool // archived channels are listed
@@ -82,6 +83,19 @@ type ChatListView struct {
 	ArchHref   string
 	CanCreate  bool
 }
+
+// ProjectChatsView is one project of the chat list: its channels by
+// state, and links to the logs of its sinks.
+type ProjectChatsView struct {
+	Name, Label string
+	Channels    []ChatRowView // followed
+	Unfollowed  []ChatRowView
+	Archived    []ChatRowView
+	Sinks       []SinkLinkView
+}
+
+// SinkLinkView opens a sink's logs on Live.
+type SinkLinkView struct{ Name, Href string }
 
 // OverviewView is partials/overview.html.
 type OverviewView struct {
@@ -93,7 +107,7 @@ type OverviewView struct {
 
 // QuickDropView is partials/quick_drop_sheet.html and the /drop form.
 type QuickDropView struct {
-	Chats    []ChatOption
+	Chats    []ChatGroup
 	ShareID  string
 	Images   []ImageView
 	Text     string
@@ -166,20 +180,47 @@ func (s *Site) chatList(ctx context.Context, p auth.Principal, all, archived boo
 	if archived {
 		v.ArchHref = "/"
 	}
+	projects, err := svc.Projects(ctx, p)
+	if err != nil {
+		return ChatListView{}, nil, err
+	}
+	v.NoProjects = "You have no grant in any project yet; ask the admin for one."
+	if p.Has(auth.ScopeAdmin) {
+		v.NoProjects = "No project yet: make one on the Projects page of the admin interface."
+	}
+	at := map[string]int{}
+	for _, pr := range projects {
+		at[pr.Name] = len(v.Projects)
+		g := ProjectChatsView{Name: pr.Name, Label: pr.Name}
+		if pr.Title != "" {
+			g.Label = pr.Title
+		}
+		for _, k := range pr.Sinks {
+			g.Sinks = append(g.Sinks, SinkLinkView{Name: k, Href: "/live?" + url.Values{"streams": {"*:" + pr.Name + "/" + k}}.Encode()})
+		}
+		v.Projects = append(v.Projects, g)
+	}
 	for _, c := range chats {
 		row := ChatRow(c, now, active)
-		switch {
-		case c.Kind == dto.ChatDirect:
+		if c.Kind == dto.ChatDirect {
 			v.Direct = append(v.Direct, row)
 			if c.Unread > 0 {
 				v.NeedsYou.Direct = append(v.NeedsYou.Direct, row)
 			}
+			continue
+		}
+		i, ok := at[c.Project]
+		if !ok {
+			continue
+		}
+		g := &v.Projects[i]
+		switch {
 		case c.Archived:
-			v.Archived = append(v.Archived, row)
+			g.Archived = append(g.Archived, row)
 		case !c.Followed:
-			v.Unfollowed = append(v.Unfollowed, row)
+			g.Unfollowed = append(g.Unfollowed, row)
 		default:
-			v.Channels = append(v.Channels, row)
+			g.Channels = append(g.Channels, row)
 		}
 	}
 	qs, err := svc.QuestionsFor(ctx, p)

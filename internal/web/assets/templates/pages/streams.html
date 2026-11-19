@@ -1,7 +1,9 @@
-{{/* Sources. Fully server-rendered; StreamsPage keeps the rows current from
-     the SSE stream_status events, using tpl-stream-card for new sources. */}}
+{{/* Sources, grouped by project. Fully server-rendered; StreamsPage keeps
+     the rows current from the SSE stream_status events, using
+     tpl-stream-card for new sources in their project's group. */}}
 <section class="page-wide">
-  {{if .Data.Streams}}
+  {{if .Data.Unrouted}}<p class="banner warn" data-slot="unrouted">Dropped because no sink takes them, since the server started: {{.Data.Unrouted}}. Add the senders' addresses to a sink, or give the tokens a sink or a grant, on the project pages.</p>{{end}}
+  {{if .Data.Groups}}
   <div class="stream-table dense" role="table" aria-label="Sources" data-component="StreamList">
     <div class="stream-head" role="row">
       <span role="columnheader">Source</span>
@@ -15,14 +17,19 @@
       <span role="columnheader">Lines</span>
       <span role="columnheader"><span class="visually-hidden">Open</span></span>
     </div>
-    <div class="stream-rows" role="rowgroup" data-slot="rows">
-    {{range .Data.Streams}}{{template "partials/stream_card.html" .}}{{end}}
+    <div class="stream-rows" data-slot="rows">
+    {{range .Data.Groups}}
+    <div class="stream-group" role="rowgroup" data-project="{{.Project}}">
+      <div class="stream-group-head" role="row"><span class="list-heading" role="rowheader">{{.Label}}</span></div>
+      {{range .Streams}}{{template "partials/stream_card.html" .}}{{end}}
+    </div>
+    {{end}}
     </div>
   </div>
   <p class="muted body-small">Times are UTC. Rates are lines per minute over the last 5 minutes.</p>
   {{else}}
   <div class="stream-table dense" role="table" aria-label="Sources" data-component="StreamList" hidden>
-    <div class="stream-rows" role="rowgroup" data-slot="rows"></div>
+    <div class="stream-rows" data-slot="rows"></div>
   </div>
   {{template "partials/empty_sources.html" .Data.Commands}}
   {{end}}

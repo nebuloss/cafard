@@ -29,6 +29,11 @@ describe('StreamsPage', () => {
     expect(fresh.querySelector('[data-slot="open"]')?.getAttribute('href')).toBe('/live?streams=serial%3Adut0');
     expect(fresh.querySelector('[data-slot="preview"]')?.textContent).toBe('<b>hi</b>');
     expect(fresh.querySelector('[data-slot="rate"]')?.textContent).toBe('42.6');
+    const other = cards.update({ ...base, id: 'syslog:zz/box', project: 'zz' });
+    const group = other.closest<HTMLElement>('.stream-group');
+    expect(group?.dataset['project']).toBe('zz');
+    expect(group?.querySelector('[role="rowheader"]')?.textContent).toBe('zz');
+    expect(fresh.closest<HTMLElement>('.stream-group')?.dataset['project']).toBe('lab');
   });
 });
 

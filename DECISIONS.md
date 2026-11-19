@@ -133,6 +133,12 @@ among the options the brief left open, with their reasons:
 - **The admin UI** is two pages on the admin interface, `/projects` and
   `/projects/{name}`, with plain form posts (no JSON API for admin
   writes), as `/agents` and `/pair` are. Projects cannot be deleted yet.
+  A sink token belongs to a device principal named `<project>-<sink>`
+  unless the admin types another. The pages have no script of their own:
+  they reuse `PairPage` for the shell and the countdown of sign-in codes.
+  The chat list has one section per project (its sinks link to their
+  logs on Live), Sources one group per project, and the channel pickers
+  of Live and the quick drop one `<optgroup>` per project.
 - **CLI:** `cafard token create --sink project/sink` and `--grant
   project[:channel]=scopes` (repeatable); `cafard pair --grant` the same.
   No `cafard project` command: projects are made on the admin interface.

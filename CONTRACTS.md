@@ -760,8 +760,8 @@ Every connection also receives `counts` and `stream_status`.
 | `live` | `pages/live.html` | `LivePage` | C (LogView in M3), page in M5 |
 | `streams` | `pages/streams.html` | `StreamsPage` | C |
 | `agents` | `pages/agents.html` | `AgentsPage` | C |
-| `projects` | `pages/projects.html` | none | projects |
-| `project` | `pages/project.html` | `ProjectPage` | projects |
+| `projects` | `pages/projects.html` | `PairPage` (the shell only) | projects |
+| `project` | `pages/project.html` | `PairPage` (the shell, and the countdown of its sign-in codes) | projects |
 | `pair` | `pages/pair.html` | `PairPage` | C |
 | `signin` | `pages/signin.html` | none | C |
 
@@ -779,11 +779,6 @@ Each partial below is rendered twice:
 | Template id | Partial | `data-slot` names | Attributes the client may set | Pages |
 |---|---|---|---|---|
 | `tpl-chat-row` | `partials/chat_row.html` | `name`, `preview`, `time`, `unread`, `questions`, `dots` | `href`, `data-chat`, `data-pinned`, `data-muted`, `data-archived` | home, chat |
-
-The chat list groups its rows in one `<section data-project="<name>">` per
-project and a `data-project=""` section for direct chats; the bundle puts a
-row in the section of its `Chat.project`. Sources group stream cards the
-same way, by `Stream.project` (`""` for streams outside projects).
 | `tpl-stream-dot` | `partials/stream_dot.html` | none | `data-status`, `title` | home, chat, streams |
 | `tpl-message` | `partials/message.html` | `sender`, `sender-kind`, `time`, `body`, `reply-quote`, `attachments`, `seen-by`, `menu` | `data-seq`, `data-mine`, `data-sender-kind`, `id` (`m<seq>`) | chat, home (overview) |
 | `tpl-question` | `partials/question.html` | `sender`, `time`, `body`, `choices`, `reply-form`, `answer` | `data-seq`, `data-open`, `id` (`m<seq>`); the hidden inputs (`data-field`) get their `value` | chat, home |
@@ -799,6 +794,16 @@ same way, by `Stream.project` (`""` for streams outside projects).
 | `tpl-stream-card` | `partials/stream_card.html` | `name`, `status`, `transport`, `rate`, `last`, `preview`, `dropped`, `claim`, `line-state`, `open` | `data-stream`, `data-status`, `href` on `open` | streams |
 | `tpl-needs-you-question` | `partials/needs_you.html` (`partials/needs_you_question`) | as `tpl-question`, plus `chat` (link to the question in its chat) | as `tpl-question`, plus `href` on `chat` (same-origin) | home |
 
+The chat list groups its channel rows in one `<section class="project-chats"
+data-project="<name>">` per project, each with its `data-section="channels"`
+(and, when listed, `unfollowed` and `archived`) rows carrying the same
+`data-project`; direct chats are in the one `data-section="direct"`. The
+bundle puts a new row in the section of its state and `Chat.project`, and
+leaves it to the next load when the page has no such section. Sources group
+stream cards in `.stream-group[data-project]`, by `Stream.project` (`""`
+for streams outside projects, listed last); the bundle makes a group for a
+project the page did not have.
+
 ### 6.3 Server-only partials (no twin)
 
 These are on the page from the start, and the bundle only attaches
@@ -807,6 +812,7 @@ behaviour to them:
 - `nav`, `channel_header`, `channel_dialog`, `composer`, `quick_drop_sheet`
 - `image_viewer`, `range_bar`, `filter_bar`, `logs_pane`, `line_menu`, `overview`
 - `token_dialog`, `pair_panel`, `shortcuts_dialog`, `empty_*`
+- `sink_form`, `grant_fields` (the project page)
 
 Their mount points are `data-component="<ComponentName>"`.
 

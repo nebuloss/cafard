@@ -861,7 +861,8 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 
 /* Cards on compact screens. */
 .stream-head { display: none; }
-.stream-rows { display: flex; flex-direction: column; gap: 8px; }
+.stream-rows, .stream-group { display: flex; flex-direction: column; gap: 8px; }
+.stream-group-head .list-heading { display: block; margin: 8px 0 0; }
 .stream-card {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -884,7 +885,8 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 /* A table from medium up. */
 @media (min-width: 600px) {
   .stream-table { display: grid; grid-template-columns: minmax(140px, 1.2fr) auto auto auto auto minmax(120px, 2fr) auto auto auto auto; column-gap: 16px; }
-  .stream-head, .stream-rows, .stream-card { display: contents; }
+  .stream-head, .stream-rows, .stream-group, .stream-card { display: contents; }
+  .stream-group-head { grid-column: 1 / -1; }
   .stream-head > span { padding: 8px 0; border-bottom: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-weight: 500; white-space: nowrap; }
   .stream-card > * { padding: 6px 0; border-bottom: 1px solid var(--outline-variant); align-self: stretch; display: flex; align-items: center; }
   .sc-preview { grid-column: auto; display: block; padding-top: 7px; }
@@ -1089,6 +1091,8 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
   text-transform: uppercase;
 }
 .chat-rows { display: flex; flex-direction: column; }
+.list-subheading { margin: 8px 0 2px; padding: 0 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--on-surface-variant); }
+.project-sinks { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0 0; padding: 0 4px; }
 .chat-row {
   display: flex;
   align-items: center;

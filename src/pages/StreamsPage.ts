@@ -59,8 +59,9 @@ export class StreamCards {
       filled.text('name', s.id).text('preview', s.last_line ?? '');
       filled.slotAttr('open', { href: `/live?${new URLSearchParams({ streams: s.id }).toString()}` });
       card = filled.root;
-      const after = Dom.findAll('[data-stream]', this.rows).find((el) => (el.dataset['stream'] ?? '') > s.id);
-      this.rows.insertBefore(card, after ?? null);
+      const group = this.group(s.project ?? '');
+      const after = Dom.findAll('[data-stream]', group).find((el) => (el.dataset['stream'] ?? '') > s.id);
+      group.insertBefore(card, after ?? null);
     }
     card.dataset['status'] = s.status;
     const set = (slot: string, text: string): void => Dom.setText(Dom.find(`[data-slot="${slot}"]`, card), text);
@@ -81,5 +82,17 @@ export class StreamCards {
       set('line-state', parts.join(', '));
     }
     return card;
+  }
+
+  /** The rows of a project, made (titled with its name) when it has none yet. */
+  private group(project: string): HTMLElement {
+    const groups = Dom.findAll('.stream-group', this.rows);
+    const found = groups.find((el) => (el.dataset['project'] ?? '') === project);
+    if (found !== undefined) return found;
+    const group = h('div', { class: 'stream-group', role: 'rowgroup', 'data-project': project },
+      h('div', { class: 'stream-group-head', role: 'row' }, h('span', { class: 'list-heading', role: 'rowheader' }, project === '' ? 'Outside projects' : project)));
+    const after = groups.find((el) => project !== '' && ((el.dataset['project'] ?? '') === '' || (el.dataset['project'] ?? '') > project));
+    this.rows.insertBefore(group, after ?? null);
+    return group;
   }
 }

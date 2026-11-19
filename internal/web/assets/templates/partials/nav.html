@@ -16,6 +16,10 @@
     <span class="nav-label">Sources</span>
   </a>
   {{if .User.Admin}}
+  <a class="nav-item rail-only" href="/projects"{{if eq .Nav "projects"}} aria-current="page"{{end}}>
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></span>
+    <span class="nav-label">Projects</span>
+  </a>
   <a class="nav-item rail-only" href="/agents"{{if eq .Nav "agents"}} aria-current="page"{{end}}>
     <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
     <span class="nav-label">Agents</span>
@@ -32,6 +36,7 @@
     </summary>
     <div class="menu" role="menu">
       {{if .User.Admin}}
+      <a class="menu-item bar-only" role="menuitem" href="/projects"{{if eq .Nav "projects"}} aria-current="page"{{end}}><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg>Projects</a>
       <a class="menu-item bar-only" role="menuitem" href="/agents"{{if eq .Nav "agents"}} aria-current="page"{{end}}><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
       <a class="menu-item bar-only" role="menuitem" href="/pair"{{if eq .Nav "pair"}} aria-current="page"{{end}}><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
       {{end}}

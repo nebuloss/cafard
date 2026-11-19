@@ -417,19 +417,35 @@ func (s *Site) seen(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 
 // chatOptions are the chat picker's choices: every chat the viewer can
 // post to, the selected one first.
-func chatOptions(chats []dto.Chat, selected string) []ChatOption {
-	out := make([]ChatOption, 0, len(chats))
+// chatGroups is the chat picker: the channels of each project, then the
+// direct conversations.
+func chatGroups(chats []dto.Chat, selected string) []ChatGroup {
+	var out []ChatGroup
+	at := map[string]int{}
 	for _, c := range chats {
 		if c.Archived {
 			continue
 		}
-		out = append(out, ChatOption{ID: c.ID, Label: ChatName(c), Selected: c.ID == selected})
+		key, label := "", "Direct"
+		if c.Kind == dto.ChatChannel {
+			key, label = "p:"+c.Project, c.ProjectTitle
+			if label == "" {
+				label = c.Project
+			}
+		}
+		i, ok := at[key]
+		if !ok {
+			i = len(out)
+			at[key] = i
+			out = append(out, ChatGroup{Label: label})
+		}
+		out[i].Options = append(out[i].Options, ChatOption{ID: c.ID, Label: ChatName(c), Selected: c.ID == selected})
 	}
 	return out
 }
 
 func (s *Site) dropView(chats []dto.Chat, shareID string, p auth.Principal, back string) QuickDropView {
-	v := QuickDropView{Chats: chatOptions(chats, ""), Back: back, MaxFiles: s.chats.svc.Blobs().Config().MaxFiles}
+	v := QuickDropView{Chats: chatGroups(chats, ""), Back: back, MaxFiles: s.chats.svc.Blobs().Config().MaxFiles}
 	if sh, ok := s.chats.shares.Get(p.Name, shareID); ok {
 		v.ShareID, v.Text = sh.ID, sh.Text
 		for _, f := range sh.DTO().Files {

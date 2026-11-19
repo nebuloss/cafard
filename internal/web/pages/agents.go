@@ -43,6 +43,7 @@ type createdView struct {
 	Principal string
 	Secret    string
 	Snippets  []dto.Snippet
+	Done      string // the page the dialog's Done link goes back to
 }
 
 func (s *Site) agentsData(r *http.Request) (agentsData, error) {
@@ -114,7 +115,7 @@ func (s *Site) createToken(w http.ResponseWriter, r *http.Request, p auth.Princi
 		s.renderAgents(w, r, p, dto.HTTPStatus(apiErr.Code), nil, apiErr.Message)
 		return
 	}
-	s.renderAgents(w, r, p, http.StatusCreated, &createdView{Principal: created.Principal, Secret: created.Secret, Snippets: created.Snippets}, "")
+	s.renderAgents(w, r, p, http.StatusCreated, &createdView{Principal: created.Principal, Secret: created.Secret, Snippets: created.Snippets, Done: "/agents"}, "")
 }
 
 func (s *Site) revokeToken(w http.ResponseWriter, r *http.Request, p auth.Principal) {
@@ -130,5 +131,9 @@ func (s *Site) revokeToken(w http.ResponseWriter, r *http.Request, p auth.Princi
 		s.Oops(w, r, &p, err)
 		return
 	}
-	http.Redirect(w, r, "/agents?revoked=1", http.StatusSeeOther)
+	next := SafeNext(r.PostFormValue("next"))
+	if next == "" {
+		next = "/agents?revoked=1"
+	}
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }

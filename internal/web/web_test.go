@@ -84,11 +84,13 @@ var twinSlots = map[string][]string{
 }
 
 var pageTwins = map[string][]string{
-	"signin":  {"tpl-toast"},
-	"streams": {"tpl-stream-dot", "tpl-stream-card", "tpl-toast"},
-	"agents":  {"tpl-toast"},
-	"pair":    {"tpl-toast"},
-	"live":    {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
+	"signin":   {"tpl-toast"},
+	"streams":  {"tpl-stream-dot", "tpl-stream-card", "tpl-toast"},
+	"agents":   {"tpl-toast"},
+	"pair":     {"tpl-toast"},
+	"projects": {"tpl-toast"},
+	"project":  {"tpl-toast"},
+	"live":     {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
 	"home": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
 		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-toast"},
 	"chat": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
@@ -98,6 +100,7 @@ var pageTwins = map[string][]string{
 
 var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
+	"projects": "/projects", "project": "/projects/lab",
 	"home": "/", "chat": "/c/lab/dut1", "drop": "/drop",
 }
 

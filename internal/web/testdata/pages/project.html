@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>Lab - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="project" class="shell">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="bar">
+    
+    <a class="icon-btn" href="/projects" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
+    
+    <h1>Lab</h1>
+    <span class="spacer"></span>
+    
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    <span class="avatar" title="admin (human)">A</span>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Main">
+  <a class="nav-item" href="/">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats">2</span></span>
+    <span class="nav-label">Chats</span>
+  </a>
+  <a class="nav-item" href="/live">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
+    <span class="nav-label">Live</span>
+  </a>
+  <a class="nav-item" href="/streams">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Sources</span>
+  </a>
+  
+  <a class="nav-item rail-only" href="/projects" aria-current="page">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></span>
+    <span class="nav-label">Projects</span>
+  </a>
+  <a class="nav-item rail-only" href="/agents">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
+    <span class="nav-label">Agents</span>
+  </a>
+  <a class="nav-item rail-only" href="/pair">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
+    <span class="nav-label">Pair</span>
+  </a>
+  
+  <details class="nav-more">
+    <summary class="nav-item">
+      <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></span>
+      <span class="nav-label">More</span>
+    </summary>
+    <div class="menu" role="menu">
+      
+      <a class="menu-item bar-only" role="menuitem" href="/projects" aria-current="page"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg>Projects</a>
+      <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
+      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
+      
+      <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+        <input type="hidden" name="next" value="/projects/lab">
+        <span class="menu-caption">Theme</span>
+        <span class="segmented">
+          <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
+          <button type="submit" name="theme" value="light" aria-pressed="false">Light</button>
+          <button type="submit" name="theme" value="dark" aria-pressed="false">Dark</button>
+        </span>
+      </form>
+      <form method="post" action="/signout">
+        <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out admin</button>
+      </form>
+    </div>
+  </details>
+</nav>
+
+
+<main id="main">
+
+<section class="page-wide project" data-project="lab">
+  <h2><span class="mono">lab</span> Lab</h2>
+  <p class="muted body-small">Since 2026-11-16 09:40. Its chats are chan:lab/..., its logs *:lab/...</p>
+  
+<section class="card token-created" data-component="TokenDialog" aria-labelledby="token-created-title" tabindex="-1" hidden>
+  <h2 id="token-created-title">New token for <span data-slot="principal"></span></h2>
+  <p class="banner warn">This is the only time the token is shown. Only its hash is stored, so copy it now.</p>
+  <div class="secret-row">
+    <code class="mono secret" data-slot="token"></code>
+    <button class="btn tonal only-scripted" type="button" data-copy="token"><svg aria-hidden="true"><use href="/static/icons.svg#content_copy"></use></svg>Copy</button>
+  </div>
+  <div data-slot="snippets">
+  
+  </div>
+  <p><a class="btn text" href="/agents">Done</a></p>
+</section>
+
+  
+
+  
+  <h2 id="channels">Channels</h2>
+  <ul class="list project-channels">
+    
+    <li data-channel="dut1">
+      <a class="grow" href="/c/lab/dut1">
+        <span class="title">#dut1 DUT 1 (x86 board)</span>
+        <span class="subtitle">bound to <span class="mono">serial:lab/dut1</span></span>
+      </a>
+    </li>
+    
+    <li data-channel="general">
+      <a class="grow" href="/c/lab/general">
+        <span class="title">#general</span>
+        <span class="subtitle">no bound logs</span>
+      </a>
+    </li>
+    
+  </ul>
+  <details class="card outlined narrow">
+    <summary class="btn text">New channel</summary>
+    <form class="stack" method="post" action="/projects/lab/channels">
+      <label class="ofield"><span>Name</span><input name="name" required placeholder="dut1" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9\-]{0,39}"></label>
+      <label class="ofield"><span>Title</span><input name="title" maxlength="200"></label>
+      <label class="ofield"><span>Topic</span><input name="topic" maxlength="500"></label>
+      <label class="ofield"><span>Bound logs</span><textarea name="patterns" rows="2" placeholder="serial:lab/dut1" autocomplete="off" spellcheck="false"></textarea></label>
+      <p class="help">One stream id or glob per line, inside this project (serial:lab/dut1, *:lab/dut1).</p>
+      <button class="btn filled" type="submit">Make channel</button>
+    </form>
+  </details>
+  
+
+  <h2 id="sinks">Log sinks</h2>
+  
+  <p class="muted">No sink yet. Logs that reach no sink are dropped.</p>
+  
+  <details class="card outlined narrow">
+    <summary class="btn text">New sink</summary>
+    
+<form class="stack sink-form" method="post" action="/projects/lab/sinks">
+  <label class="ofield"><span>Name</span><input name="name" required placeholder="dut1" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9._\-]{0,39}"></label>
+  <label class="ofield"><span>Title</span><input name="title" value="" maxlength="200"></label>
+  <label class="ofield"><span>Syslog and netconsole senders</span><textarea name="sources" rows="2" placeholder="10.0.50.42&#10;10.0.51.0/24" autocomplete="off" spellcheck="false"></textarea></label>
+  <p class="help">One IP or CIDR per line. The most specific prefix wins, then the oldest sink.</p>
+  <fieldset class="stack">
+    <legend class="label">Serial port</legend>
+    <label class="ofield"><span>Kind</span><select name="serial_kind">
+      <option value="none" selected>none</option>
+      <option value="device">local device</option>
+      <option value="rfc2217">RFC 2217 (host:port)</option>
+      <option value="tcp">raw TCP (host:port)</option>
+    </select></label>
+    <label class="ofield"><span>Device or address</span><input name="serial_address" value="" placeholder="/dev/serial/by-id/usb-FTDI_FT232R_A1B2C3-if00-port0" autocomplete="off" spellcheck="false"></label>
+    <label class="ofield"><span>Baud</span><input name="baud" value="" inputmode="numeric" placeholder="115200"></label>
+    <label class="ofield"><span>Data bits</span><input name="data_bits" value="" inputmode="numeric" placeholder="8"></label>
+    <label class="ofield"><span>Parity</span><select name="parity">
+      <option value="" selected>(default none)</option>
+      <option value="none">none</option>
+      <option value="even">even</option>
+      <option value="odd">odd</option>
+      <option value="mark">mark</option>
+      <option value="space">space</option>
+    </select></label>
+    <label class="ofield"><span>Stop bits</span><input name="stop_bits" value="" placeholder="1"></label>
+    <label class="chip filter"><input type="checkbox" name="writable" value="1">agents may drive it</label>
+    <p class="help">Line settings apply to local and RFC 2217 ports; a raw TCP port takes them from the far end. Saving opens, reopens or closes the port at once.</p>
+  </fieldset>
+  <button class="btn filled" type="submit">Save sink</button>
+</form>
+
+  </details>
+
+  <h2 id="members">Members</h2>
+  
+  <table class="grants dense">
+    <caption class="visually-hidden">Grants of lab</caption>
+    <thead><tr><th scope="col">Principal</th><th scope="col">On</th><th scope="col">Scopes</th><th scope="col"><span class="visually-hidden">Remove</span></th></tr></thead>
+    <tbody>
+    
+    <tr data-grant="3">
+      <td><span class="mono">admin</span> <span class="chip small">human</span></td>
+      <td>the whole project</td>
+      <td>ingest, read, message</td>
+      <td><form method="post" action="/projects/lab/grants/3/delete" data-confirm="Remove this grant?"><button class="btn text danger-text" type="submit">Remove</button></form></td>
+    </tr>
+    
+    <tr data-grant="2">
+      <td><span class="mono">claude-laptop</span> <span class="chip small">agent</span></td>
+      <td>the whole project</td>
+      <td>read, message</td>
+      <td><form method="post" action="/projects/lab/grants/2/delete" data-confirm="Remove this grant?"><button class="btn text danger-text" type="submit">Remove</button></form></td>
+    </tr>
+    
+    <tr data-grant="1">
+      <td><span class="mono">codex-build</span> <span class="chip small">agent</span></td>
+      <td>the whole project</td>
+      <td>read, message</td>
+      <td><form method="post" action="/projects/lab/grants/1/delete" data-confirm="Remove this grant?"><button class="btn text danger-text" type="submit">Remove</button></form></td>
+    </tr>
+    
+    </tbody>
+  </table>
+  
+  <form class="card outlined narrow stack" method="post" action="/projects/lab/grants">
+    <h3>Give access</h3>
+    <label class="ofield"><span>Principal</span><input name="principal" required list="project-principals" placeholder="claude-laptop" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9._\-]{0,39}"></label>
+    <datalist id="project-principals"><option value="claude-laptop"></option><option value="codex-build"></option></datalist>
+    <label class="ofield"><span>Kind (for a new principal)</span><select name="kind"><option value="agent">agent</option><option value="human">human</option><option value="device">device</option></select></label>
+    
+<label class="ofield"><span>On</span><select name="channel">
+  <option value="">the whole project</option>
+  <option value="dut1">#dut1 and its bound logs</option><option value="general">#general and its bound logs</option>
+</select></label>
+<fieldset class="chips">
+  <legend class="label">Scopes</legend>
+  <label class="chip filter"><input type="checkbox" name="scopes" value="ingest">ingest</label><label class="chip filter"><input type="checkbox" name="scopes" value="read" checked>read</label><label class="chip filter"><input type="checkbox" name="scopes" value="message" checked>message</label><label class="chip filter"><input type="checkbox" name="scopes" value="serial_write">serial_write</label>
+</fieldset>
+
+    <p class="help">This replaces what the principal had on the same target. Its tokens and sessions still need the scopes themselves; a token from the Agents page carries them.</p>
+    <button class="btn filled" type="submit">Save grant</button>
+  </form>
+
+  <form class="card outlined narrow stack" method="post" action="/projects/lab/pairings">
+    <h3>Sign a person in</h3>
+    
+    <label class="ofield"><span>Or a new person's name</span><input name="new_name" placeholder="alice-phone" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[a-z0-9][a-z0-9._\-]{0,39}"></label>
+    
+<label class="ofield"><span>On</span><select name="channel">
+  <option value="">the whole project</option>
+  <option value="dut1">#dut1 and its bound logs</option><option value="general">#general and its bound logs</option>
+</select></label>
+<fieldset class="chips">
+  <legend class="label">Scopes</legend>
+  <label class="chip filter"><input type="checkbox" name="scopes" value="ingest">ingest</label><label class="chip filter"><input type="checkbox" name="scopes" value="read" checked>read</label><label class="chip filter"><input type="checkbox" name="scopes" value="message" checked>message</label><label class="chip filter"><input type="checkbox" name="scopes" value="serial_write">serial_write</label>
+</fieldset>
+
+    <p class="help">Shows a one-time QR code; opening it signs the phone in and gives the person this grant.</p>
+    <button class="btn filled" type="submit"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Show a code</button>
+  </form>
+
+  <h2 id="retention">Retention</h2>
+  <form class="card outlined narrow stack" method="post" action="/projects/lab/retention">
+    <label class="ofield"><span>Log lines, age</span><input name="lines_max_age" value="0" required></label>
+    <label class="ofield"><span>Log lines, total size</span><input name="lines_max_bytes" value="0" required></label>
+    <label class="ofield"><span>Messages, age</span><input name="messages_max_age" value="0" required></label>
+    <label class="ofield"><span>Images and log snapshots, total size</span><input name="blobs_max_bytes" value="0" required></label>
+    <p class="help">Ages such as 336h or 90m, sizes such as 2GB or 512MiB; 0 keeps everything. retention.streams in the config still wins for the age of the streams it names.</p>
+    <button class="btn filled" type="submit">Save retention</button>
+  </form>
+</section>
+
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+
+</body>
+</html>

@@ -82,8 +82,10 @@ export class ChatList extends Component {
       for (const row of rows) this.rows?.fill(row, chat);
       return;
     }
-    const section = Dom.find(`[data-section="${sectionOf(chat)}"]`, this.root);
-    if (section !== null && this.rows !== null) section.prepend(this.rows.render(chat));
+    const name = sectionOf(chat);
+    const section = Dom.findAll<HTMLElement>(`[data-section="${name}"]`, this.root)
+      .find((el) => name === 'direct' || el.dataset['project'] === chat.project);
+    if (section !== undefined && this.rows !== null) section.prepend(this.rows.render(chat));
   }
 
   /** A new message: its row's preview and time, and the row moves up. */

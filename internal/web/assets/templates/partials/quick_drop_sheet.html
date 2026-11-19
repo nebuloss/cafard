@@ -6,7 +6,7 @@
 <form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="{{.MaxFiles}}">
   <input type="hidden" name="back" value="{{.Back}}">
   {{if .ShareID}}<input type="hidden" name="staged" value="{{.ShareID}}" data-field="staged">{{end}}
-  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required>{{range .Chats}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required>{{range .Chats}}<optgroup label="{{.Label}}">{{range .Options}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</optgroup>{{end}}</select></label>
   {{if .Images}}<div class="images staged" data-count="{{len .Images}}">{{range .Images}}{{template "partials/image.html" .}}{{end}}</div>{{end}}
   <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
   <div class="upload-list" data-slot="uploads" aria-live="polite"></div>

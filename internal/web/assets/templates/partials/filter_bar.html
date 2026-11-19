@@ -7,14 +7,14 @@
   <form class="filter-bar" method="get" action="/live" role="search">
     <label class="ofield">
       <span>Streams</span>
-      <input name="streams" value="{{.Streams}}" placeholder="serial:dut1, syslog:*" list="known-streams" autocomplete="off" spellcheck="false">
+      <input name="streams" value="{{.Streams}}" placeholder="serial:lab/dut1, *:lab/*" list="known-streams" autocomplete="off" spellcheck="false">
     </label>
     <datalist id="known-streams">{{range .Known}}<option value="{{.}}"></option>{{end}}</datalist>
     {{if .Channels}}<label class="ofield">
       <span>Channel</span>
       <select name="channel">
         <option value=""{{if not .Channel}} selected{{end}}>None</option>
-        {{range .Channels}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+        {{range .Channels}}<optgroup label="{{.Label}}">{{range .Options}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</optgroup>{{end}}
       </select>
     </label>{{end}}
     <label class="ofield">

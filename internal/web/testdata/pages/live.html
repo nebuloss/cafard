@@ -48,6 +48,10 @@
     <span class="nav-label">Sources</span>
   </a>
   
+  <a class="nav-item rail-only" href="/projects">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></span>
+    <span class="nav-label">Projects</span>
+  </a>
   <a class="nav-item rail-only" href="/agents">
     <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
     <span class="nav-label">Agents</span>
@@ -64,6 +68,7 @@
     </summary>
     <div class="menu" role="menu">
       
+      <a class="menu-item bar-only" role="menuitem" href="/projects"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg>Projects</a>
       <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
       <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
       
@@ -94,14 +99,14 @@
   <form class="filter-bar" method="get" action="/live" role="search">
     <label class="ofield">
       <span>Streams</span>
-      <input name="streams" value="" placeholder="serial:dut1, syslog:*" list="known-streams" autocomplete="off" spellcheck="false">
+      <input name="streams" value="" placeholder="serial:lab/dut1, *:lab/*" list="known-streams" autocomplete="off" spellcheck="false">
     </label>
-    <datalist id="known-streams"><option value="serial:lab/dut1"></option><option value="syslog:lab/bench-pi"></option></datalist>
+    <datalist id="known-streams"><option value="*:lab/*"></option><option value="serial:lab/dut1"></option><option value="syslog:lab/bench-pi"></option></datalist>
     <label class="ofield">
       <span>Channel</span>
       <select name="channel">
         <option value="" selected>None</option>
-        <option value="lab/dut1">#dut1</option><option value="lab/general">#general</option>
+        <optgroup label="Lab"><option value="lab/dut1">#dut1</option><option value="lab/general">#general</option></optgroup>
       </select>
     </label>
     <label class="ofield">
@@ -174,7 +179,7 @@
 <form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="10">
   <input type="hidden" name="back" value="/live">
   
-  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><option value="chan:lab/dut1">#dut1</option><option value="chan:lab/general">#general</option><option value="dm:codex-build">@codex-build</option></select></label>
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><optgroup label="Lab"><option value="chan:lab/dut1">#dut1</option><option value="chan:lab/general">#general</option></optgroup><optgroup label="Direct"><option value="dm:codex-build">@codex-build</option></optgroup></select></label>
   
   <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
   <div class="upload-list" data-slot="uploads" aria-live="polite"></div>

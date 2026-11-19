@@ -1,0 +1,9 @@
+{{/* The target and scopes of a grant (server-only). Data: projectData. */}}
+<label class="ofield"><span>On</span><select name="channel">
+  <option value="">the whole project</option>
+  {{range .ChannelNames}}<option value="{{.}}">#{{.}} and its bound logs</option>{{end}}
+</select></label>
+<fieldset class="chips">
+  <legend class="label">Scopes</legend>
+  {{range .Scopes}}<label class="chip filter"><input type="checkbox" name="scopes" value="{{.Name}}"{{if .Checked}} checked{{end}}>{{.Name}}</label>{{end}}
+</fieldset>

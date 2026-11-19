@@ -48,6 +48,10 @@
     <span class="nav-label">Sources</span>
   </a>
   
+  <a class="nav-item rail-only" href="/projects">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></span>
+    <span class="nav-label">Projects</span>
+  </a>
   <a class="nav-item rail-only" href="/agents">
     <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
     <span class="nav-label">Agents</span>
@@ -64,6 +68,7 @@
     </summary>
     <div class="menu" role="menu">
       
+      <a class="menu-item bar-only" role="menuitem" href="/projects"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg>Projects</a>
       <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
       <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
       
@@ -111,13 +116,18 @@
 </div>
 </section>
 
-  <h2 class="list-heading">Channels</h2>
-  <div class="chat-rows" data-section="channels"><a class="chat-row" href="/c/lab/dut1" data-chat="chan:lab/dut1"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#dut1</span><span class="chat-dots" data-slot="dots">
+  
+  <section class="project-chats" data-project="lab" aria-label="Lab">
+    <h2 class="list-heading">Lab</h2>
+    <div class="chat-rows" data-section="channels" data-project="lab"><a class="chat-row" href="/c/lab/dut1" data-chat="chan:lab/dut1"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#dut1</span><span class="chat-dots" data-slot="dots">
 <span class="stream-dot" data-status="connected" title="serial:lab/dut1: connected"></span>
 </span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: Power-cycle dut1?</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">2</span></span></span></a>
 <a class="chat-row" href="/c/lab/general" data-chat="chan:lab/general"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">#general</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
 </div>
-  
+    
+    
+    
+  </section>
   
   <h2 class="list-heading">Direct</h2>
   <div class="chat-rows" data-section="direct"><a class="chat-row" href="/dm/codex-build" data-chat="dm:codex-build"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">@codex-build</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">codex-build: Build 812 is green.</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">1</span></span></span></a>
@@ -206,7 +216,7 @@
 <form class="drop-form stack" method="post" action="/api/messages" enctype="multipart/form-data" data-component="DropForm" data-max-files="10">
   <input type="hidden" name="back" value="/">
   
-  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><option value="chan:lab/dut1">#dut1</option><option value="chan:lab/general">#general</option><option value="dm:codex-build">@codex-build</option></select></label>
+  <label class="ofield"><span>Send to</span><select name="chat" data-field="chat" required><optgroup label="Lab"><option value="chan:lab/dut1">#dut1</option><option value="chan:lab/general">#general</option></optgroup><optgroup label="Direct"><option value="dm:codex-build">@codex-build</option></optgroup></select></label>
   
   <div class="attachment-tray" data-slot="tray" aria-live="polite"></div>
   <div class="upload-list" data-slot="uploads" aria-live="polite"></div>

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -185,5 +187,31 @@ func TestTwoAgentsContendForASerialPort(t *testing.T) {
 	text = callFails(t, a, "serial_write", map[string]any{"stream": "serial:imported/nope", "data": "x"}, "not_found")
 	if !strings.Contains(text, "serial:imported/dut1") {
 		t.Errorf("unknown stream sentence = %q", text)
+	}
+}
+
+// A port set on the project page opens at once, and closes, with a
+// marker, when its sink is deleted: no restart.
+func TestAPortSetOnTheProjectPageOpensAndCloses(t *testing.T) {
+	far := &rfc2217test.Peer{Raw: true}
+	addr := far.Listen(t)
+	s := startServer(t)
+	cookie := s.session()
+	form := url.Values{"name": {"bench2"}, "serial_kind": {"tcp"}, "serial_address": {addr}}
+	resp, b := s.browserAt(s.adminBase, cookie, "POST", "/projects/lab/sinks", "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("save sink: %d %s", resp.StatusCode, b)
+	}
+	got := s.waitEntries("serial:lab/bench2", 1)
+	if !strings.Contains(got[0].Text, "serial: connected") {
+		t.Errorf("first entry = %q", got[0].Text)
+	}
+	resp, b = s.browserAt(s.adminBase, cookie, "POST", "/projects/lab/sinks/bench2/delete", "application/x-www-form-urlencoded", strings.NewReader(""))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("delete sink: %d %s", resp.StatusCode, b)
+	}
+	got = s.waitEntries("serial:lab/bench2", 2)
+	if !strings.Contains(got[len(got)-1].Text, "serial: port removed") {
+		t.Errorf("last entry = %q", got[len(got)-1].Text)
 	}
 }
