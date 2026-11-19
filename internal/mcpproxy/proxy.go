@@ -274,13 +274,14 @@ func (p *Proxy) reconnect(ctx context.Context, old *mcp.ClientSession) (*mcp.Cli
 		return nil, err
 	}
 	p.mu.Lock()
-	if p.closed || p.remote != old {
+	if closed := p.closed; closed || p.remote != old {
+		current := p.remote
 		p.mu.Unlock()
 		fresh.Close()
-		if p.closed {
+		if closed {
 			return nil, mcp.ErrConnectionClosed
 		}
-		return p.current(), nil
+		return current, nil
 	}
 	old.Close()
 	p.remote = fresh
@@ -296,12 +297,6 @@ func (p *Proxy) reconnect(ctx context.Context, old *mcp.ClientSession) (*mcp.Cli
 		}
 	}
 	return fresh, nil
-}
-
-func (p *Proxy) current() *mcp.ClientSession {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.remote
 }
 
 func (p *Proxy) callTool(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
