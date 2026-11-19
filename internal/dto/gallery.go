@@ -18,6 +18,7 @@ type GalleryItem struct {
 	Section string          `json:"section,omitempty"`
 	Image   ImageAttachment `json:"image"`
 	Href    string          `json:"href"` // /g/<project>/<gallery>/<seq>
+	Ref     string          `json:"ref"`  // [[<project>/<gallery>#<seq>]]
 }
 
 // GalleryPage answers GET /api/galleries/{chat}: items newest first, and
@@ -38,4 +39,25 @@ func (g GalleryPage) MarshalJSON() ([]byte, error) {
 	p.Items = nonNil(p.Items)
 	p.Sections = nonNil(p.Sections)
 	return json.Marshal(p)
+}
+
+// Gallery ref states, from the reader's side.
+const (
+	RefOK          = "ok"
+	RefUnavailable = "unavailable" // the reader may not see it: nothing else is said
+	RefGone        = "gone"        // retention or a deletion removed it
+)
+
+// GalleryRef is a message's pointer at a gallery item (Seq) or at a
+// section (Section), resolved for the reader. Unavailable carries only
+// its state, so a ref leaks nothing of a gallery the reader cannot see.
+type GalleryRef struct {
+	State   string        `json:"state"`
+	Gallery string        `json:"gallery,omitempty"` // <project>/<gallery>
+	Seq     int64         `json:"seq,omitempty"`
+	Section string        `json:"section,omitempty"`
+	Href    string        `json:"href,omitempty"`
+	Item    *GalleryItem  `json:"item,omitempty"`  // an item ref
+	Items   []GalleryItem `json:"items,omitempty"` // a section ref: its newest few
+	Count   int           `json:"count,omitempty"` // a section ref: how many it has
 }

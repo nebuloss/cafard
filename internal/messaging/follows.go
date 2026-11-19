@@ -3,11 +3,13 @@ package messaging
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/store"
 )
 
 // FollowState is a principal's relation to a chat.
@@ -206,20 +208,26 @@ func (s *Service) preview(ctx context.Context, stream string) (*dto.ChatPreview,
 		seq          int64
 		sender, text sql.NullString
 		images       int
+		meta         string
 	)
 	err := s.db.QueryRowContext(ctx, `SELECT seq, sender, text,
-		(SELECT count(*) FROM json_each(coalesce(attachments, '[]')) WHERE json_extract(value, '$.type') = 'image')
+		(SELECT count(*) FROM json_each(coalesce(attachments, '[]')) WHERE json_extract(value, '$.type') = 'image'),
+		coalesce(meta, '')
 		FROM entries WHERE stream = ? AND kind = 'message' ORDER BY seq DESC LIMIT 1`, stream).
-		Scan(&seq, &sender, &text, &images)
+		Scan(&seq, &sender, &text, &images, &meta)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	t := previewText(text.String, 140)
+	refs := readMeta(store.Entry{Meta: json.RawMessage(meta)}).Refs
+	t := previewText(stripRefs(text.String, refs), 140)
 	if t == "" {
 		t = ImagesLabel(images)
+	}
+	if t == "" && len(refs) > 0 {
+		t = GalleryImagesLabel(len(refs))
 	}
 	return &dto.ChatPreview{Seq: seq, Sender: sender.String, Text: t}, nil
 }

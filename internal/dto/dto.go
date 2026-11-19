@@ -94,6 +94,9 @@ type Entry struct {
 	Question    *Question    `json:"question,omitempty"`
 	// Section is the section of a gallery item.
 	Section string `json:"section,omitempty"`
+	// GalleryRefs are the gallery items and sections the message points
+	// at, as the viewer may see them.
+	GalleryRefs []GalleryRef `json:"gallery_refs,omitempty"`
 
 	// Event marks a line or marker of a bound stream shown as a timeline row.
 	Event bool `json:"event,omitempty"`

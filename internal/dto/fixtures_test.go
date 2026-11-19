@@ -240,6 +240,34 @@ func screenshot() ImageAttachment {
 	}
 }
 
+func galleryItem() GalleryItem {
+	return GalleryItem{Seq: 48433, Chat: "chan:lab/screens", Title: "login page after the fix", Section: "login flow v2", Image: screenshot(),
+		Href: "/g/lab/screens/48433", Ref: "[[lab/screens#48433]]"}
+}
+
+// refsEntry is a chat message pointing at an item, a section, an item
+// the reader may not see, and one retention removed.
+func refsEntry() Entry {
+	it := galleryItem()
+	return Entry{
+		Seq:      48440,
+		TS:       ts("2026-11-16T09:47:00.120000000Z"),
+		Stream:   "chan:lab/dut1",
+		Kind:     EntryMessage,
+		Severity: 6,
+		Text:     "The login page before and after the fix:",
+		Chat:     "chan:lab/dut1",
+		Sender:   &Sender{Name: "claude-laptop", Kind: KindAgent},
+		Segments: []Segment{{T: SegText, V: "The login page before and after the fix:"}},
+		GalleryRefs: []GalleryRef{
+			{State: RefOK, Gallery: "lab/screens", Seq: 48433, Section: "login flow v2", Href: "/g/lab/screens/48433", Item: &it},
+			{State: RefOK, Gallery: "lab/screens", Section: "login flow v2", Href: "/g/lab/screens?section=login+flow+v2", Items: []GalleryItem{it}, Count: 2},
+			{State: RefUnavailable},
+			{State: RefGone, Gallery: "lab/screens", Seq: 48001},
+		},
+	}
+}
+
 func directChat() Chat {
 	return Chat{
 		ID:           "dm:codex-build",
@@ -295,18 +323,20 @@ func fixtures() []fixture {
 		{"chat_direct", directChat()},
 		{"chat_gallery", galleryChat()},
 		{"entry_gallery_item", galleryEntry()},
+		{"entry_gallery_refs", refsEntry()},
 		{"gallery_page", GalleryPage{
 			Chat:    "chan:lab/screens",
 			Section: ptr("login flow v2"),
 			Items: []GalleryItem{
-				{Seq: 48433, Chat: "chan:lab/screens", Title: "login page after the fix", Section: "login flow v2", Image: screenshot(), Href: "/g/lab/screens/48433"},
-				{Seq: 48431, Chat: "chan:lab/screens", Title: "", Section: "login flow v2", Image: imageAttachment(), Href: "/g/lab/screens/48431"},
+				galleryItem(),
+				{Seq: 48431, Chat: "chan:lab/screens", Title: "", Section: "login flow v2", Image: imageAttachment(), Href: "/g/lab/screens/48431", Ref: "[[lab/screens#48431]]"},
 			},
 			Sections:      galleryChat().Sections,
 			HasMore:       true,
 			NextBeforeSeq: 48431,
 		}},
 		{"channel_create_gallery", ChannelCreate{Name: "screens", Project: "lab", Title: "Screenshots of the web UI", Kind: ChannelGallery}},
+		{"send_request_refs", SendRequest{Text: "The login page before and after the fix:", Channel: "lab/dut1", GalleryRefs: []int64{48431, 48433}}},
 		{"send_request_gallery", SendRequest{
 			Text:    "login page after the fix",
 			Channel: "lab/screens",

@@ -17,6 +17,7 @@ type meta struct {
 	Choices *[]string `json:"choices,omitempty"`
 	Choice  string    `json:"choice,omitempty"`
 	Section string    `json:"section,omitempty"` // a gallery item's
+	Refs    []refMeta `json:"refs,omitempty"`    // gallery items and sections pointed at
 }
 
 func readMeta(e store.Entry) meta {
@@ -76,7 +77,7 @@ func (s *Service) EntryDTO(ctx context.Context, viewer auth.Principal, e store.E
 	out.Sender = &dto.Sender{Name: e.Sender, Kind: dto.PrincipalKind(s.kindOf(ctx, e.Sender))}
 	out.Recipient = e.Recipient
 	out.ReplyTo = e.ReplyTo
-	out.Segments = Segments(e.Text)
+	out.Segments = Segments(out.Text)
 	for _, a := range e.Attachments {
 		switch a.Type {
 		case dto.AttachmentImage:
@@ -96,6 +97,9 @@ func (s *Service) EntryDTO(ctx context.Context, viewer auth.Principal, e store.E
 	out.SeenBy = seen
 	m := readMeta(e)
 	out.Section = m.Section
+	if out.GalleryRefs, err = s.refDTOs(ctx, viewer, m.Refs); err != nil {
+		return dto.Entry{}, err
+	}
 	if m.Choices != nil {
 		q := &dto.Question{Choices: *m.Choices, Open: true}
 		if q.Answer, err = s.answer(ctx, e.Seq); err != nil {
@@ -112,6 +116,11 @@ func BaseDTO(e store.Entry) dto.Entry {
 	out := dto.Entry{
 		Seq: e.Seq, TS: dto.TimeOf(e.TS), Stream: e.Stream, Kind: dto.EntryKind(e.Kind),
 		Severity: e.Severity, Host: e.Host, App: e.App, Text: e.Text, Meta: e.Meta,
+	}
+	if e.Kind == store.KindMessage {
+		if refs := readMeta(e).Refs; len(refs) > 0 {
+			out.Text, out.Meta = stripRefs(e.Text, refs), withoutRefs(e.Meta)
+		}
 	}
 	if e.SrcTS != nil {
 		out.SrcTS = dto.TimePtr(*e.SrcTS)

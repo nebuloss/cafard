@@ -1,0 +1,12 @@
+{{/* "Attach from gallery" (GalleryPicker): the project's galleries, then
+     the chosen one's sections and images. Picking writes a ref in the
+     message ([[project/gallery#seq]], or [[project/gallery|section]] for
+     a whole section); nothing is copied. Bundle only: without it, a ref
+     is typed by hand. Data: []GalleryOption. */}}
+<dialog class="modal gallery-picker" data-component="GalleryPicker" aria-label="Attach from gallery">
+  <header class="picker-head"><h2>Attach from gallery</h2><button class="icon-btn" type="button" data-action="close" aria-label="Close"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></button></header>
+  <div class="chips" data-slot="galleries">{{range .}}<button class="chip filter" type="button" data-gallery="{{.Name}}">{{.Label}}</button>{{end}}</div>
+  <div class="chips" data-slot="sections"></div>
+  <div class="gallery-grid" data-slot="items"></div>
+  <p class="muted body-small" data-slot="status">Choose a gallery.</p>
+</dialog>

@@ -13,6 +13,7 @@ import { EVENT_ROW_ATTRIBUTES, EventRowRenderer } from '@/render/renderers/Event
 import { IMAGE_ATTRIBUTES, ImageRenderer } from '@/render/renderers/ImageRenderer.ts';
 import { LOG_ATTACHMENT_ATTRIBUTES, LogAttachmentRenderer } from '@/render/renderers/LogAttachmentRenderer.ts';
 import { MESSAGE_ATTRIBUTES, MessageRenderer } from '@/render/renderers/MessageRenderer.ts';
+import { GALLERY_REF_ATTRIBUTES, GalleryRefRenderer } from '@/render/renderers/GalleryRefRenderer.ts';
 import { CHOICE_ATTRIBUTES, QUESTION_ATTRIBUTES, QuestionRenderer } from '@/render/renderers/QuestionRenderer.ts';
 import { AttachmentTray } from '@/components/AttachmentTray.ts';
 import { DropForm } from '@/components/QuickDropSheet.ts';
@@ -63,6 +64,7 @@ export function chatRenderers(doc: Document, viewer: Viewer, clock: Clock, form:
   const question = find('tpl-question', QUESTION_ATTRIBUTES);
   if (question !== null && choice !== null) timeline.when((e) => e.kind === 'message' && e.question !== undefined, new QuestionRenderer(question, choice, { now, ...form }));
   const message = find('tpl-message', MESSAGE_ATTRIBUTES);
+  const ref = find('tpl-gallery-ref', GALLERY_REF_ATTRIBUTES);
   if (message !== null) {
     timeline.when(
       (e) => e.kind === 'message',
@@ -75,7 +77,7 @@ export function chatRenderers(doc: Document, viewer: Viewer, clock: Clock, form:
           const body = parent === null ? '' : (Dom.find('[data-slot="body"]', parent)?.textContent ?? '');
           return sender === '' ? `reply to message ${seq}` : `reply to ${sender}: ${(body.split('\n')[0] ?? '').slice(0, 80)}`;
         },
-      }),
+      }, ref === null ? null : new GalleryRefRenderer(ref)),
     );
   }
   const ny = find('tpl-needs-you-question', QUESTION_ATTRIBUTES);

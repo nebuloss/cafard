@@ -20,12 +20,14 @@
         {{end}}
       </div>
     </details>
+    {{if .Galleries}}<button class="icon-btn only-scripted" type="button" data-action="gallery-picker" aria-label="Attach from gallery" aria-haspopup="dialog" title="Attach from gallery"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></button>{{end}}
     <label class="icon-btn file-btn" title="Add photos"><input type="file" name="files[]" accept="image/*" multiple data-field="photos"><svg aria-hidden="true"><use href="/static/icons.svg#image"></use></svg><span class="visually-hidden">Add photos</span></label>
     <label class="icon-btn file-btn" title="Camera"><input type="file" name="files[]" accept="image/*" capture="environment" data-field="camera"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg><span class="visually-hidden">Take a photo</span></label>
     <label class="composer-text"><span class="visually-hidden">Message</span><textarea name="text" rows="1" maxlength="32768" placeholder="{{.Placeholder}}" enterkeyhint="send"></textarea></label>
     <button class="icon-btn filled send" type="submit" aria-label="Send" title="Send (Ctrl+Enter)"><svg aria-hidden="true"><use href="/static/icons.svg#send"></use></svg></button>
   </div>
   <label class="keep-original only-scripted"><input type="checkbox" data-field="keep-original"> Keep original photos</label>
+  {{if .Galleries}}{{template "partials/gallery_picker.html" .Galleries}}{{end}}
 </form>
 {{else}}
 <p class="composer composer-readonly muted">This session can read but not send messages.</p>

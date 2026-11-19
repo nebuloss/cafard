@@ -41,6 +41,8 @@ type sendIn struct {
 	Images  []dto.ImageUpload `json:"images,omitempty" jsonschema:"at most 6 images: base64 data and mime"`
 	Logs    []dto.LogRequest  `json:"logs,omitempty" jsonschema:"at most 5 log slices: {stream or channel, from_seq, to_seq (omit for open-ended), grep, min_severity, title}"`
 	Section string            `json:"section,omitempty" jsonschema:"gallery channels only: the batch this screenshot belongs to, e.g. login flow v2 (at most 80 characters)"`
+	// GalleryRefs point at gallery images without copying them.
+	GalleryRefs []int64 `json:"gallery_refs,omitempty" jsonschema:"chat channels only: seqs of gallery images of the same project to show in the message"`
 }
 
 type sendLog struct {
@@ -243,7 +245,7 @@ func (s *Service) RegisterTools(m *mcpserver.Server) {
 	r, w := auth.ScopeRead, auth.ScopeMessage
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_projects", Description: "The projects you have a grant in: your scopes there, their channels, their galleries (where screenshots go) with their sections, and their sinks. Name a channel project/name when several have it."}, s.toolListProjects)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_principals", Description: "Who can be messaged (those you share a project with): name, kind (agent, human, device), last seen."}, s.toolListPrincipals)
-	mcpserver.AddTool(m, w, mcp.Tool{Name: "send", Description: "Send a message: to a principal (direct), to @humans in a channel, or to a whole channel (default general). Attach images and log slices. In a gallery channel a message is a screenshot: an image, a short title as text, and a section for a batch. Do not send acknowledgements or thanks."}, s.toolSend)
+	mcpserver.AddTool(m, w, mcp.Tool{Name: "send", Description: "Send a message: to a principal (direct), to @humans in a channel, or to a whole channel (default general). Attach images and log slices. In a gallery channel a message is a screenshot: an image, a short title as text, and a section for a batch. In a chat channel, gallery_refs (or [[project/gallery#seq]] in the text) show gallery images without copying them. Do not send acknowledgements or thanks."}, s.toolSend)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "inbox", Description: "Your unread messages: direct ones, those to @humans if you are human, and broadcasts in channels you follow. Check it at the start of a task and whenever you wait."}, s.toolInbox)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "get_message", Description: "One message in full: text, its images, and the first lines of its log attachments. Marks it read unless ack=false."}, s.toolGetMessage)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "get_log_attachment", Description: "The lines of a message's log attachment, page by page; an open-ended one keeps delivering new lines."}, s.toolGetLog)
@@ -292,7 +294,7 @@ func (s *Service) toolListPrincipals(ctx context.Context, c *mcpserver.Call, in 
 func (s *Service) toolSend(ctx context.Context, c *mcpserver.Call, in sendIn) (string, sendOut, error) {
 	e, err := s.SendMessage(ctx, c.Principal, SendInput{SendRequest: dto.SendRequest{
 		Text: in.Text, To: in.To, Channel: in.Channel, ReplyTo: in.ReplyTo, Images: in.Images, Logs: in.Logs,
-		Section: in.Section}})
+		Section: in.Section, GalleryRefs: in.GalleryRefs}})
 	if err != nil {
 		return "", sendOut{}, err
 	}
@@ -338,6 +340,9 @@ func (s *Service) summary(ctx context.Context, viewer auth.Principal, e store.En
 		fmt.Fprintf(&b, " [%d log attachment(s)]", logs)
 	}
 	m := readMeta(e)
+	if len(m.Refs) > 0 {
+		b.WriteString(" " + GalleryImagesLabel(len(m.Refs)))
+	}
 	if m.Section != "" {
 		fmt.Fprintf(&b, " [section %q]", m.Section)
 	}
@@ -443,6 +448,8 @@ func (s *Service) toolGetMessage(ctx context.Context, c *mcpserver.Call, in getM
 			fmt.Fprintf(&b, "More images: call get_message(seq=%d, images_offset=%d).\n", e.Seq, i+1)
 		}
 	}
+
+	s.describeRefs(ctx, &b, &out, d.GalleryRefs)
 
 	li := -1
 	for idx, a := range e.Attachments {
@@ -867,4 +874,42 @@ func (s *Service) toolListClaims(ctx context.Context, c *mcpserver.Call, in list
 		return "No stream is claimed.", out, nil
 	}
 	return b.String(), out, nil
+}
+
+// describeRefs adds a message's gallery refs to get_message: each item
+// with its image while the call has room, each section with its newest
+// items. What the caller may not see is only said to be unavailable.
+func (s *Service) describeRefs(ctx context.Context, b *strings.Builder, out *getMessageOut, refs []dto.GalleryRef) {
+	show := func(it dto.GalleryItem) string {
+		if out.ImagesShown >= maxImagesPerCall || !it.Image.Preview {
+			return "not attached"
+		}
+		data, row, err := s.blobs.ReadAll(ctx, it.Image.SHA256, blob.VariantAgent)
+		if err != nil {
+			return "no longer available"
+		}
+		out.images = append(out.images, &mcp.ImageContent{Data: data, MIMEType: row.Mime})
+		out.ImagesShown++
+		return fmt.Sprintf("attached below at %dx%d", row.Width, row.Height)
+	}
+	for i, r := range refs {
+		fmt.Fprintf(b, "Gallery ref %d (a reference, not a copy): ", i+1)
+		switch {
+		case r.State == dto.RefUnavailable:
+			b.WriteString("unavailable to you.\n")
+		case r.State == dto.RefGone:
+			b.WriteString("no longer available.\n")
+		case r.Item != nil:
+			fmt.Fprintf(b, "%s %q", r.Item.Ref, r.Item.Title)
+			if r.Section != "" {
+				fmt.Fprintf(b, " in section %q", r.Section)
+			}
+			fmt.Fprintf(b, ", %s.\n", show(*r.Item))
+		default:
+			fmt.Fprintf(b, "section %q of #%s, %d images; the newest:\n", r.Section, r.Gallery, r.Count)
+			for _, it := range r.Items {
+				fmt.Fprintf(b, "  %s %q, %s.\n", it.Ref, it.Title, show(it))
+			}
+		}
+	}
 }

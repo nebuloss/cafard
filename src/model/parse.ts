@@ -13,6 +13,7 @@ import type {
   Entry,
   GalleryItem,
   GalleryPage,
+  GalleryRef,
   GallerySection,
   EntryKind,
   ImageAttachment,
@@ -244,6 +245,7 @@ export function parseEntry(raw: unknown, path = 'entry'): Entry {
     seen_by: optArr(o, 'seen_by', path, asString),
     question: o['question'] === undefined ? undefined : parseQuestion(o['question'], `${path}.question`),
     section: optStr(o, 'section', path),
+    gallery_refs: optArr(o, 'gallery_refs', path, parseGalleryRef),
     event: optBool(o, 'event', path),
   });
 }
@@ -437,6 +439,21 @@ export function parseGalleryItem(raw: unknown, path = 'item'): GalleryItem {
     section: optStr(o, 'section', path),
     image: parseImage(o['image'], `${path}.image`),
     href: str(o, 'href', path),
+    ref: str(o, 'ref', path),
+  });
+}
+
+export function parseGalleryRef(raw: unknown, path = 'ref'): GalleryRef {
+  const o = obj(raw, path);
+  return compact({
+    state: oneOf(o, 'state', path, ['ok', 'unavailable', 'gone'] as const),
+    gallery: optStr(o, 'gallery', path),
+    seq: optNum(o, 'seq', path),
+    section: optStr(o, 'section', path),
+    href: optStr(o, 'href', path),
+    item: o['item'] === undefined ? undefined : parseGalleryItem(o['item'], `${path}.item`),
+    items: optArr(o, 'items', path, parseGalleryItem),
+    count: optNum(o, 'count', path),
   });
 }
 

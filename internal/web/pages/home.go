@@ -41,14 +41,15 @@ func (s *Site) addChatTwins() {
 	s.AddTwin("tpl-upload-status", "partials/upload_status.html", UploadStatusView{})
 	s.AddTwin("tpl-needs-you-question", "partials/question.html", QuestionView{InList: true})
 	s.AddTwin("tpl-gallery-item", "partials/gallery_item.html", GalleryItemView{})
+	s.AddTwin("tpl-gallery-ref", "partials/gallery_ref.html", GalleryRefView{})
 }
 
 // Twins of each chat page.
 var (
 	homeTwins = []string{"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row",
-		"tpl-line", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-toast"}
+		"tpl-line", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-gallery-ref", "tpl-toast"}
 	chatTwins = []string{"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row",
-		"tpl-line", "tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"}
+		"tpl-line", "tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-gallery-ref", "tpl-toast"}
 	dropTwins = []string{"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"}
 )
 
@@ -94,6 +95,7 @@ type ProjectChatsView struct {
 	Unfollowed  []ChatRowView
 	Archived    []ChatRowView
 	Sinks       []SinkLinkView
+	Galleries   string // the project's galleries page, when it has one the viewer reads
 }
 
 // SinkLinkView opens a sink's logs on Live.
@@ -199,6 +201,9 @@ func (s *Site) chatList(ctx context.Context, p auth.Principal, all, archived boo
 		}
 		for _, k := range pr.Sinks {
 			g.Sinks = append(g.Sinks, SinkLinkView{Name: k, Href: "/live?" + url.Values{"streams": {"*:" + pr.Name + "/" + k}}.Encode()})
+		}
+		if len(pr.Galleries) > 0 {
+			g.Galleries = "/g/" + url.PathEscape(pr.Name)
 		}
 		v.Projects = append(v.Projects, g)
 	}

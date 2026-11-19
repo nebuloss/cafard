@@ -11,4 +11,5 @@
     <a class="btn text" href="{{.Data.Item.Full}}"><svg aria-hidden="true"><use href="/static/icons.svg#open_in_new"></use></svg>Original</a>
     {{if .Data.Older}}<a class="btn text" href="{{.Data.Older}}" rel="next">Older<svg aria-hidden="true"><use href="/static/icons.svg#chevron_right"></use></svg></a>{{end}}
   </nav>
+  <p class="muted body-small">To show it in a chat of this project, write <code class="mono">{{.Data.Ref}}</code> in a message.</p>
 </section>

@@ -118,6 +118,15 @@ func (f *form) set(name, value string) error {
 		f.in.Staged = value
 	case "section":
 		f.in.Section = value
+	case "gallery_refs":
+		// Seqs separated by commas or spaces; the field may also repeat.
+		for _, v := range strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ' ' }) {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || n < 1 {
+				return dto.Errorf(dto.CodeBadRequest, "gallery_refs are message seqs.")
+			}
+			f.in.GalleryRefs = append(f.in.GalleryRefs, n)
+		}
 	case "reply_to":
 		if value == "" {
 			return nil
@@ -202,6 +211,9 @@ func (h *messagesAPI) readForm(r *http.Request, f *form) error {
 			return dto.Errorf(dto.CodeBadRequest, "The form could not be read.")
 		}
 		for name, vs := range r.PostForm {
+			if name == "gallery_refs" {
+				vs = []string{strings.Join(vs, ",")}
+			}
 			if len(vs) > 0 {
 				if err := f.set(name, vs[0]); err != nil {
 					return err

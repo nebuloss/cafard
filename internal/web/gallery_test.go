@@ -19,6 +19,7 @@ import (
 // first.
 var galleryShots struct {
 	items []int64
+	ref   int64 // a message of #lab/dut1 pointing at the gallery
 }
 
 // seedGallery makes the gallery #lab/shots: a boot splash without a
@@ -44,6 +45,12 @@ func seedGallery(e *env) {
 		}
 		galleryShots.items = append(galleryShots.items, m.Seq)
 	}
+	m, err := e.svc.SendMessage(ctx, agentClaude, messaging.SendInput{SendRequest: dto.SendRequest{
+		Text: "before and after the fix: [[lab/shots|login flow]]", Channel: "dut1", GalleryRefs: galleryShots.items[:1]}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	galleryShots.ref = m.Seq
 }
 
 func TestGalleryPageGroupsItemsBySectionWithoutTheBundle(t *testing.T) {
@@ -209,5 +216,64 @@ func TestProjectPageMakesAndTurnsGalleries(t *testing.T) {
 	}
 	if rec := e.Do("POST", "/projects/lab/channels/general/kind", cookie, url.Values{"kind": {"gallery"}}); rec.Code == http.StatusSeeOther {
 		t.Error("#general became a gallery")
+	}
+}
+
+func TestChatsShowGalleryRefsAsCards(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	seed(e)
+	seedGallery(e)
+	cookie := e.Admin()
+	items := galleryShots.items
+	body := e.Do("GET", "/c/lab/dut1", cookie, nil).Body.String()
+	for _, want := range []string{
+		"before and after the fix:", fmt.Sprintf(`<a class="gallery-ref" href="/g/lab/shots/%d" data-state="ok">`, items[0]), `alt="boot splash"`,
+		"#lab/shots / Unsorted", `<a class="gallery-ref" href="/g/lab/shots?section=login&#43;flow" data-state="ok" data-kind="section">`,
+		"2 images in #lab/shots", `data-full="/blob/`,
+		// The composer offers the project's gallery.
+		`data-action="gallery-picker"`, `data-component="GalleryPicker"`, `data-gallery="lab/shots"`,
+		// The chat list's entry for the project's galleries.
+		`<a class="chip small" href="/g/lab">`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("chat page lacks %q", want)
+		}
+	}
+	if strings.Contains(body, "[[lab/shots|login flow]]") {
+		t.Error("the ref text shows next to its card")
+	}
+	// A gallery's own composer and a direct chat's have no picker.
+	for _, path := range []string{"/c/lab/shots", "/dm/codex-build"} {
+		if strings.Contains(e.Do("GET", path, cookie, nil).Body.String(), `data-component="GalleryPicker"`) {
+			t.Errorf("%s offers the gallery picker", path)
+		}
+	}
+
+	// The project's galleries page.
+	body = e.Do("GET", "/g/lab", cookie, nil).Body.String()
+	if !strings.Contains(body, `href="/g/lab/shots"`) || !strings.Contains(body, "3 images in 2 sections") {
+		t.Errorf("galleries page:\n%s", body)
+	}
+	// The item page tells how to point at it.
+	if body = e.Do("GET", fmt.Sprintf("/g/lab/shots/%d", items[0]), cookie, nil).Body.String(); !strings.Contains(body, fmt.Sprintf("[[lab/shots#%d]]", items[0])) {
+		t.Error("the item page does not give its ref")
+	}
+
+	// The form takes gallery_refs, repeated or comma separated.
+	sess := cookie
+	form := url.Values{"chat": {"chan:lab/dut1"}, "gallery_refs": {fmt.Sprint(items[1]), fmt.Sprintf("%d,%d", items[2], items[0])}}
+	rec := e.Do("POST", "/api/messages", sess, form, "X-Cafard", "1")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("post: %d %s", rec.Code, rec.Body)
+	}
+	var got dto.Entry
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.GalleryRefs) != 3 || got.GalleryRefs[0].Seq != items[1] {
+		t.Errorf("refs = %+v", got.GalleryRefs)
+	}
+	if rec := e.Do("POST", "/api/messages", sess, url.Values{"chat": {"chan:lab/dut1"}, "gallery_refs": {"x"}}, "X-Cafard", "1"); rec.Code != http.StatusBadRequest {
+		t.Errorf("gallery_refs=x: %d", rec.Code)
 	}
 }

@@ -205,6 +205,17 @@ export class ConversationView extends Component {
       this.hooks.viewImages(images, Math.max(0, tiles.indexOf(image)));
       return;
     }
+    const card = target?.closest<HTMLAnchorElement>('a.gallery-ref[data-state="ok"]');
+    if (card !== null && card !== undefined) {
+      const thumbs = Dom.findAll<HTMLImageElement>('img[data-full]', card);
+      const images = thumbs.map((img) => ({ src: img.dataset['full'] ?? '', alt: img.alt, caption: img.alt })).filter((i) => i.src.startsWith('/blob/'));
+      if (images.length > 0) {
+        event.preventDefault();
+        const clicked = target?.closest('img');
+        this.hooks.viewImages(images, Math.max(0, thumbs.findIndex((img) => img === clicked)));
+        return;
+      }
+    }
     const log = target?.closest<HTMLAnchorElement>('a.log-open');
     if (log !== null && log !== undefined && this.hooks.openLog(log.getAttribute('href') ?? '')) {
       event.preventDefault();

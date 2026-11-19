@@ -548,6 +548,7 @@ type Entry = {
   seen_by?: string[];
   question?: { choices: string[]; open: boolean; answer?: { by: string; choice?: string; seq: number } };
   section?: string;                  // a gallery item's section (meta.section), PLAN 6.3
+  gallery_refs?: GalleryRef[];       // gallery items and sections the message points at, for this reader (PLAN 6.4)
   // event rows in a timeline:
   event?: boolean;                   // a line or marker from a bound stream, shown as an event row
 };
@@ -610,6 +611,13 @@ type GalleryItem = {
   title: string;                       // first line of the text, at most 140 characters
   section?: string; image: ImageAttachment;
   href: string;                        // "/g/lab/screens/48433"
+  ref: string;                         // "[[lab/screens#48433]]", what a message writes to show it
+};
+type GalleryRef = {                    // "unavailable": the reader may not see it, and nothing else is set
+  state: "ok" | "unavailable" | "gone";
+  gallery?: string; seq?: number; section?: string; href?: string;
+  item?: GalleryItem;                  // an item ref
+  items?: GalleryItem[]; count?: number;  // a section ref: its newest four, and how many it has
 };
 type GalleryPage = {                   // GET /api/galleries/{project/name}?section=&before_seq=&limit= (60 at most)
   chat: string; section?: string;      // the filter, when applied
@@ -674,6 +682,7 @@ Multipart form fields:
 | `files[]` | images, 10 files of 20 MiB at most |
 | `staged` | a share id from `/share`; its files are attached |
 | `section` | a gallery item's section (PLAN 6.3); refused unless the chat is a gallery. A message to a gallery needs an image |
+| `gallery_refs` | item seqs to show (PLAN 6.4), repeated or comma separated; chat channels only |
 | `back` | a same-origin path to return to with `?error=` (only its `share` parameter is kept), for forms not on the chat page (`/drop`, home) |
 | `next` | a same-origin path to go to once sent, instead of the chat (home's question cards) |
 
@@ -755,7 +764,10 @@ Every connection also receives `counts` and `stream_status`.
   only) and refuses a message to a gallery without an image
   (`bad_request`). `create_channel` and `update_channel` take `kind`
   (`chat` or `gallery`). `list_channels` gives `channel_kind` and, for a
-  gallery, `sections`; `list_projects` gives `galleries`.
+  gallery, `sections`; `list_projects` gives `galleries`. `send` takes
+  `gallery_refs` (item seqs, chat channels only, PLAN 6.4): one
+  `bad_request` sentence for every ref it refuses. `get_message` lists
+  each ref "(a reference, not a copy)" with its image within the call's 6.
 - **`cafard mcp` adds `image_paths` to `send`** (a list of local file
   paths, in its `tools/list` and its calls only). It reads each file,
   sniffs a png, jpeg, webp or gif, and forwards `images: [{data, mime}]`
@@ -781,7 +793,8 @@ Every connection also receives `counts` and `stream_status`.
 | `chat` | `pages/chat.html` (channel and direct) | `ChatPage` | D |
 | `drop` | `pages/drop.html` | `DropPage` | D |
 | `gallery` | `pages/gallery.html` (`/g/{project}/{gallery}`) | `GalleryPage` | galleries |
-| `item` | `pages/item.html` (`/g/{project}/{gallery}/{seq}`) | none: plain links | galleries |
+| `item` | `pages/item.html` (`/g/{project}/{gallery}/{seq}`) | `PairPage` (the shell only) | galleries |
+| `galleries` | `pages/galleries.html` (`/g/{project}`) | `PairPage` (the shell only) | galleries |
 | `live` | `pages/live.html` | `LivePage` | C (LogView in M3), page in M5 |
 | `streams` | `pages/streams.html` | `StreamsPage` | C |
 | `agents` | `pages/agents.html` | `AgentsPage` | C |
@@ -818,6 +831,7 @@ Each partial below is rendered twice:
 | `tpl-toast` | `partials/toast.html` | `text`, `action` | `data-tone` | all |
 | `tpl-stream-card` | `partials/stream_card.html` | `name`, `status`, `transport`, `rate`, `last`, `preview`, `dropped`, `claim`, `line-state`, `open` | `data-stream`, `data-status`, `href` on `open` | streams |
 | `tpl-gallery-item` | `partials/gallery_item.html` | `img`, `title` | `href` (`/g/...`), `data-seq`, `data-full` (only `/blob/...`); `src` (only `/blob/...`), `alt`, `width`, `height` on `img` | gallery |
+| `tpl-gallery-ref` | `partials/gallery_ref.html` | `thumbs`, `title`, `meta` | `href` (`/g/...`), `data-state` (`ok`, `unavailable`, `gone`), `data-kind` (`section`) | chat, home |
 | `tpl-needs-you-question` | `partials/needs_you.html` (`partials/needs_you_question`) | as `tpl-question`, plus `chat` (link to the question in its chat) | as `tpl-question`, plus `href` on `chat` (same-origin) | home |
 
 The chat list groups its channel rows in one `<section class="project-chats"
@@ -839,6 +853,7 @@ behaviour to them:
 - `image_viewer`, `range_bar`, `filter_bar`, `logs_pane`, `line_menu`, `overview`
 - `token_dialog`, `pair_panel`, `shortcuts_dialog`, `empty_*`
 - `sink_form`, `grant_fields` (the project page)
+- `gallery_picker` (inside a chat channel's composer)
 
 Their mount points are `data-component="<ComponentName>"`.
 

@@ -40,6 +40,7 @@ type MessageView struct {
 	Images              []ImageView
 	ImageCount          int
 	Logs                []LogAttachmentView
+	Refs                []GalleryRefView
 	ReplyQuote          string
 	SeenBy              string
 	ChatHref, ChatLabel string // set in lists across chats (the overview)
@@ -361,10 +362,68 @@ func Message(e dto.Entry, o ItemsOptions, byseq map[int64]dto.Entry) MessageView
 			v.Logs = append(v.Logs, LogAttachment(*a.Log))
 		}
 	}
+	for _, r := range e.GalleryRefs {
+		v.Refs = append(v.Refs, GalleryRef(r))
+	}
 	if o.InList && e.Chat != "" {
 		v.ChatHref, v.ChatLabel = view.ChatHref(e.Chat)+"#"+v.ID, view.ChatLabel(e.Chat)
 	}
 	return v
+}
+
+// GalleryRefView is partials/gallery_ref.html (tpl-gallery-ref).
+type GalleryRefView struct {
+	State, Href, Title, Meta string
+	Section                  bool // a section's strip, not one item
+	Thumbs                   []RefThumbView
+}
+
+// RefThumbView is one thumbnail of a gallery ref.
+type RefThumbView struct {
+	Src, Alt, Full string
+}
+
+// GalleryRef is the card of a message's gallery ref. What the reader may
+// not see says so and nothing else. render/renderers/GalleryRefRenderer.ts
+// matches it.
+func GalleryRef(r dto.GalleryRef) GalleryRefView {
+	switch {
+	case r.State == dto.RefUnavailable:
+		return GalleryRefView{State: r.State, Title: "gallery item unavailable"}
+	case r.State != dto.RefOK:
+		return GalleryRefView{State: dto.RefGone, Title: "no longer available"}
+	case r.Item != nil:
+		return GalleryRefView{State: r.State, Href: r.Href, Title: ItemTitle(*r.Item),
+			Meta: "#" + r.Gallery + " / " + SectionLabel(r.Item.Section), Thumbs: refThumbs([]dto.GalleryItem{*r.Item})}
+	}
+	return GalleryRefView{State: r.State, Href: r.Href, Section: true, Title: SectionLabel(r.Section),
+		Meta: ImageCount(r.Count) + " in #" + r.Gallery, Thumbs: refThumbs(r.Items)}
+}
+
+func refThumbs(items []dto.GalleryItem) []RefThumbView {
+	var out []RefThumbView
+	for _, it := range items {
+		if it.Image.Preview && it.Image.ThumbURL != "" {
+			out = append(out, RefThumbView{Src: it.Image.ThumbURL, Alt: ItemTitle(it), Full: it.Image.URL})
+		}
+	}
+	return out
+}
+
+// ItemTitle is an item's title, or "Screenshot <seq>" when it has none.
+func ItemTitle(it dto.GalleryItem) string {
+	if it.Title != "" {
+		return it.Title
+	}
+	return "Screenshot " + strconv.FormatInt(it.Seq, 10)
+}
+
+// ImageCount is "1 image" or "N images".
+func ImageCount(n int) string {
+	if n == 1 {
+		return "1 image"
+	}
+	return strconv.Itoa(n) + " images"
 }
 
 // Question is the view of a question card.

@@ -98,6 +98,8 @@ export interface Entry {
   readonly question?: Question;
   /** A gallery item's section. */
   readonly section?: string;
+  /** The gallery items and sections the message points at, as the viewer may see them. */
+  readonly gallery_refs?: readonly GalleryRef[];
   readonly event?: boolean;
 }
 
@@ -286,6 +288,23 @@ export interface GalleryItem {
   readonly section?: string;
   readonly image: ImageAttachment;
   readonly href: string;
+  /** "[[lab/shots#42]]", what a message writes to show it. */
+  readonly ref: string;
+}
+
+/**
+ * A message's pointer at a gallery item (seq) or section, resolved for the
+ * reader. "unavailable" carries nothing else; "gone" was removed.
+ */
+export interface GalleryRef {
+  readonly state: 'ok' | 'unavailable' | 'gone';
+  readonly gallery?: string;
+  readonly seq?: number;
+  readonly section?: string;
+  readonly href?: string;
+  readonly item?: GalleryItem;
+  readonly items?: readonly GalleryItem[];
+  readonly count?: number;
 }
 
 export interface GalleryPage {

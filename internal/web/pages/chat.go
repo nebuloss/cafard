@@ -71,7 +71,13 @@ type ComposerView struct {
 	MaxFiles          int
 	Bound             bool // offers "Attach logs"
 	Streams           []string
+	// The galleries of the chat's project the viewer reads, for "attach
+	// from gallery" (a chat channel's composer only).
+	Galleries []GalleryOption
 }
+
+// GalleryOption is a gallery the composer's picker offers.
+type GalleryOption struct{ Name, Label string }
 
 // LogsPaneView is partials/logs_pane.html.
 type LogsPaneView struct {
@@ -184,6 +190,20 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	data := chatData{Chat: chat.ID, Surface: string(chat.Surface), View: "chat", Filter: f, Shortcuts: true,
 		Composer: ComposerView{Chat: chat.ID, Placeholder: "Message " + ChatName(chat), CanSend: p.Has(auth.ScopeMessage),
 			MaxFiles: svc.Blobs().Config().MaxFiles}}
+	if ch != nil && !ch.Gallery() {
+		gs, err := svc.GalleriesOf(ctx, p, ch.Project())
+		if err != nil {
+			s.Oops(w, r, &p, err)
+			return
+		}
+		for _, g := range gs {
+			o := GalleryOption{Name: g.Name, Label: "#" + g.Name}
+			if g.Title != "" {
+				o.Label += " " + g.Title
+			}
+			data.Composer.Galleries = append(data.Composer.Galleries, o)
+		}
+	}
 	bound := ch != nil && len(ch.Patterns) > 0
 	if bound && q.Get("view") == "logs" {
 		data.View = "logs"

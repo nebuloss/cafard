@@ -1,6 +1,6 @@
 import type { HttpClient } from '@/net/HttpClient.ts';
-import { parseAcked, parseChat, parseEntryPage, parseList, parseMarkCreated, parseStream, parseTokenCreated } from '@/model/parse.ts';
-import type { Acked, ChannelCreate, ChannelUpdate, Chat, ChatPrefs, Entry, MarkCreated, Page, Stream, TokenCreate, TokenCreated } from '@/model/types.ts';
+import { parseAcked, parseChat, parseEntryPage, parseGalleryPage, parseList, parseMarkCreated, parseStream, parseTokenCreated } from '@/model/parse.ts';
+import type { Acked, ChannelCreate, ChannelUpdate, Chat, ChatPrefs, Entry, GalleryPage, MarkCreated, Page, Stream, TokenCreate, TokenCreated } from '@/model/types.ts';
 
 /** The logs query of /live and /api/entries (PLAN 9.6.4). */
 export interface EntriesQuery {
@@ -75,6 +75,11 @@ export class CafardApi {
   chats(options: { all?: boolean; archived?: boolean } = {}): Promise<Chat[]> {
     const query = { all: options.all === true ? 1 : undefined, archived: options.archived === true ? 1 : undefined };
     return this.http.request('GET', '/api/chats', { query, parse: parseList('chats', parseChat) });
+  }
+
+  /** A page of a gallery ("lab/shots"): its items newest first, and its sections. */
+  gallery(name: string, query: { readonly section?: string; readonly before_seq?: number; readonly limit?: number } = {}): Promise<GalleryPage> {
+    return this.http.request('GET', `/api/galleries/${encodeURIComponent(name)}`, { query: { ...query }, parse: parseGalleryPage });
   }
 
   timeline(chat: string, query: TimelineQuery = {}): Promise<Page<Entry>> {

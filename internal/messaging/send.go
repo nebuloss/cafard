@@ -177,8 +177,11 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 	} else if md.Section != "" {
 		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "section groups the images of a gallery; this message does not go to a gallery channel.")
 	}
-	if strings.TrimSpace(text) == "" && len(m.Images) == 0 && len(blobs) == 0 && len(m.Logs) == 0 {
-		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "A message needs text, an image or a log attachment.")
+	if md.Refs, err = s.collectRefs(ctx, from, t.ch, text, m.GalleryRefs); err != nil {
+		return store.Entry{}, err
+	}
+	if strings.TrimSpace(text) == "" && len(m.Images) == 0 && len(blobs) == 0 && len(m.Logs) == 0 && len(md.Refs) == 0 {
+		return store.Entry{}, dto.Errorf(dto.CodeBadRequest, "A message needs text, an image, a log attachment or a gallery ref.")
 	}
 
 	if ok, wait := s.sendLimit.Take(from.Name); !ok {
@@ -214,7 +217,7 @@ func (s *Service) SendMessage(ctx context.Context, from auth.Principal, in SendI
 		md.Choices = &c
 	}
 	var rawMeta json.RawMessage
-	if md.Choices != nil || md.Choice != "" || md.Section != "" {
+	if md.Choices != nil || md.Choice != "" || md.Section != "" || len(md.Refs) > 0 {
 		if rawMeta, err = json.Marshal(md); err != nil {
 			return store.Entry{}, err
 		}

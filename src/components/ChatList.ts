@@ -6,7 +6,7 @@ import type { Chat, Counts, Entry, Stream } from '@/model/types.ts';
 import type { CafardApi } from '@/net/CafardApi.ts';
 import type { FeedEvents } from '@/net/LiveFeed.ts';
 import { ApiError } from '@/net/ApiError.ts';
-import { chatHref, imagesLabel, messageTime, previewText } from '@/render/format.ts';
+import { chatHref, galleryImagesLabel, imagesLabel, messageTime, previewText } from '@/render/format.ts';
 import { ChatRowRenderer } from '@/render/renderers/ChatRowRenderer.ts';
 import { Component } from '@/components/Component.ts';
 import { popupMenu, type MenuItem } from '@/components/PopupMenu.ts';
@@ -92,7 +92,8 @@ export class ChatList extends Component {
   entry(e: Entry): void {
     if (e.kind !== 'message' || e.chat === undefined) return;
     const first = e.text.trim().split('\n')[0] ?? '';
-    const text = first === '' ? imagesLabel(e.attachments?.filter((a) => a.type === 'image').length ?? 0) : first;
+    const images = imagesLabel(e.attachments?.filter((a) => a.type === 'image').length ?? 0);
+    const text = first !== '' ? first : images !== '' ? images : galleryImagesLabel(e.gallery_refs?.length ?? 0);
     for (const row of Dom.findAll<HTMLElement>('a.chat-row', this.root).filter((r) => r.dataset['chat'] === e.chat)) {
       Dom.setText(Dom.find('[data-slot="preview"]', row), previewText({ ...(e.sender === undefined ? {} : { sender: e.sender.name }), text }));
       Dom.setText(Dom.find('[data-slot="time"]', row), messageTime(e.ts, this.clock.now()));

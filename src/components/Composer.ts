@@ -59,6 +59,8 @@ export class Composer extends Component<HTMLFormElement> {
     private readonly doc: Document,
     /** Asks for a log slice of a bound stream (the "+" menu). */
     private readonly attach: (stream: string, mode: 'last' | 'from-now') => Promise<PendingLog | null>,
+    /** Opens "attach from gallery", when the chat has galleries. */
+    private readonly openPicker: (() => void) | null = null,
   ) {
     super(root);
   }
@@ -103,6 +105,11 @@ export class Composer extends Component<HTMLFormElement> {
       delete this.root.dataset['drop'];
       this.tray.addFiles(imageFiles((event as DragEvent).dataTransfer));
     });
+    const picker = Dom.find('[data-action="gallery-picker"]', this.root);
+    if (picker !== null && this.openPicker !== null) {
+      const open = this.openPicker;
+      this.bag.listen(picker, 'click', () => open());
+    }
     const cancel = Dom.find('[data-action="cancel-reply"]', this.root);
     if (cancel !== null) this.bag.listen(cancel, 'click', () => this.setReply(undefined));
     this.bag.listen(this.root, 'click', (event) => {
@@ -123,6 +130,13 @@ export class Composer extends Component<HTMLFormElement> {
     Dom.setText(Dom.find('[data-slot="reply-text"]', this.root), quote);
     if (bar !== null) bar.hidden = seq === undefined;
     if (seq !== undefined) this.text.focus();
+  }
+
+  /** Writes a gallery ref at the end of the text (the gallery picker). */
+  insertRef(ref: string): void {
+    const t = this.text.value;
+    this.text.value = t === '' || /\s$/.test(t) ? `${t}${ref} ` : `${t} ${ref} `;
+    this.text.focus();
   }
 
   addLog(log: PendingLog): void {

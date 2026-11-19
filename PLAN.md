@@ -903,6 +903,50 @@ are shown and the one rule above; nothing is rewritten.
 - **API.** `GET /api/galleries/{project/name}?section=&before_seq=&limit=`
   returns a `GalleryPage` (CONTRACTS.md section 3).
 
+### 6.4 Gallery artifacts in chat
+
+A chat message can show gallery items without copying them, so a
+conversation about a fix points at its screenshots, and the gallery stays
+the one place they live (and age out by retention).
+
+- **Stable links.** `/g/<project>/<gallery>/<seq>` is one item;
+  `/g/<project>/<gallery>?section=<name>` a section; `/g/<project>` the
+  project's galleries (the "Galleries" entry of the project's part of the
+  chat list).
+- **Ref syntax** for agents and people writing text:
+  `[[<project>/<gallery>#<seq>]]` for an item,
+  `[[<project>/<gallery>|<section>]]` for a section. A link to an item or a
+  section page (relative or with any host) counts the same. The MCP `send`
+  also takes `gallery_refs` (item seqs); so does the `POST /api/messages`
+  form (`gallery_refs`, repeated or comma separated).
+- **Checks at send.** Refs go in a chat channel's messages only (not a
+  gallery's, not a direct message), at most 10 per message, and only to
+  galleries of the same project. Each `gallery_refs` seq must be an image
+  item of such a gallery that the sender can read, else the send fails
+  with one sentence whatever the reason (missing, not an image, another
+  project, no grant), so it tells nothing about what the sender cannot
+  see. A ref or link in the text that fails the same checks stays plain
+  text. The refs are stored in the message's `meta.refs`
+  (`{gallery, seq}` or `{gallery, section}`); nothing is copied.
+- **Per reader.** Each reader gets the refs resolved for itself
+  (`Entry.gallery_refs`): an item with its title, section and thumbnail; a
+  section with its first four images and its count. A ref to a gallery the
+  reader cannot read is `{state: "unavailable"}` and nothing else; an item
+  retention removed is `gone`. `meta.refs` never leaves the server, and
+  the ref text that became a card is taken out of the text the web shows.
+- **Chat.** A card per ref under the message: the thumbnail, the title and
+  "#gallery / section" for an item; a strip and "N images in #gallery"
+  for a section; "gallery item unavailable" or "no longer available"
+  otherwise. Without the bundle a card is a link to the item or section
+  page; with it a tap opens the viewer on the card's images.
+- **Composer.** In a chat channel of a project with galleries the reader
+  can see, "Attach from gallery" (bundle only) lists the galleries, a
+  gallery's sections and images; picking writes the ref in the message,
+  picking a section writes the section ref.
+- **Agents.** `get_message` lists each ref, marked as a reference, with
+  its image while the call is under its 6 images. Previews of a message
+  with nothing but refs say "[N gallery images]".
+
 ### Questions to the human
 
 `ask_human(question, choices?, channel?, timeout_s)` works like this:
@@ -1061,7 +1105,7 @@ Agents pay for every token, so:
 |---|---|---|
 | `whoami` | | principal name, kind, scopes |
 | `list_principals` | `kind?` | name, kind, last_seen (who can be messaged) |
-| `send` | `text`, `to?` (principal = direct message, `@humans`, or none = broadcast; section 6), `channel?` (`general`, ignored for a direct message), `reply_to?`, `images?` (base64 + mime, at most 6; through `cafard mcp` also `image_paths?`, local files, section 7 Transports), `logs?` (at most 5, section 6.2: `{stream\|channel, from_seq, to_seq?, grep?, min_severity?, title?}`), `section?` (gallery channels only, section 6.3) | `seq`, and per log attachment the resolved line count |
+| `send` | `text`, `to?` (principal = direct message, `@humans`, or none = broadcast; section 6), `channel?` (`general`, ignored for a direct message), `reply_to?`, `images?` (base64 + mime, at most 6; through `cafard mcp` also `image_paths?`, local files, section 7 Transports), `logs?` (at most 5, section 6.2: `{stream\|channel, from_seq, to_seq?, grep?, min_severity?, title?}`), `section?` (gallery channels only, section 6.3), `gallery_refs?` (item seqs, chat channels only, section 6.4) | `seq`, and per log attachment the resolved line count |
 | `list_channels` | `include_archived?` (false) | name, kind (`chat` or `gallery`, with a gallery's sections and their counts), title, topic, bound patterns and the streams they currently match (with status), followed or not, unread count, last activity |
 | `create_channel` | `name`, `title?`, `topic?`, `streams?` (patterns), `surface?` (`markers`), `kind?` (`chat`) | the channel; the caller follows it |
 | `update_channel` | `name`, `rename?`, `title?`, `topic?`, `add_streams?`, `remove_streams?`, `surface?`, `archived?`, `kind?` | the channel after the change; writes a marker. `rename` is for the creator or an admin, runtime channels only |
@@ -1129,8 +1173,10 @@ Set the MCP `instructions` string to a short guide, roughly:
 > images, or run cafard send --image FILE TEXT in a shell. Post screenshots
 > to a gallery channel of your project when one exists (list_projects and
 > list_channels show them): one image per message, its text a short title,
-> and a batch grouped under one section name (send section=...). Do not
-> send acknowledgements or thanks to other agents.
+> and a batch grouped under one section name (send section=...). To show
+> gallery images in a chat, pass their seqs in gallery_refs, or write
+> [[project/gallery#seq]] in the text; nothing is copied. Do not send
+> acknowledgements or thanks to other agents.
 
 `cafard mcp` appends a sentence of its own when it offers `image_paths`.
 
@@ -1190,7 +1236,7 @@ two.
 | Path | Purpose |
 |---|---|
 | `/`, `/c/{channel}`, `/dm/{principal}` | **Chats**. The main screen: the chat list, the conversation (human drops, agent messages, open questions, event rows), the composer, and the logs of the channel's bound streams (section 9.6.3) |
-| `/g/{project}/{gallery}`, `/g/{project}/{gallery}/{seq}` | **Galleries**: a gallery channel's screenshots by section, and one item's stable page (section 6.3) |
+| `/g/{project}`, `/g/{project}/{gallery}`, `/g/{project}/{gallery}/{seq}` | **Galleries**: a project's galleries, a gallery channel's screenshots by section, and one item's stable page (sections 6.3 and 6.4) |
 | `/live` | Live log view: stream picker, severity filter, regexp filter, follow/pause, ANSI colours, tap a line to copy its seq, attach this line, attach from here on, or select a range |
 | `/streams` | Sources with status (`connected`, `idle`, `down`), rate, drops, claim holder |
 | `/agents` | Admin only (admin interface). Principals, last seen, tokens (create or revoke; a token is shown once), the admin password |

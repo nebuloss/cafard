@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>Galleries of Lab - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="galleries" class="shell">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="bar">
+    
+    <svg class="mark" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg>
+    
+    <h1>Galleries of Lab</h1>
+    <span class="spacer"></span>
+    
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    <span class="avatar" title="admin (human)">A</span>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Main">
+  <a class="nav-item" href="/" aria-current="page">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="badge" data-badge="chats">2</span></span>
+    <span class="nav-label">Chats</span>
+  </a>
+  <a class="nav-item" href="/live">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg></span>
+    <span class="nav-label">Live</span>
+  </a>
+  <a class="nav-item" href="/streams">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="badge dot" data-badge="sources-down" title="A source is down" hidden></span></span>
+    <span class="nav-label">Sources</span>
+  </a>
+  
+  <a class="nav-item rail-only" href="/projects">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg></span>
+    <span class="nav-label">Projects</span>
+  </a>
+  <a class="nav-item rail-only" href="/agents">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg></span>
+    <span class="nav-label">Agents</span>
+  </a>
+  <a class="nav-item rail-only" href="/pair">
+    <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg></span>
+    <span class="nav-label">Pair</span>
+  </a>
+  
+  <details class="nav-more">
+    <summary class="nav-item">
+      <span class="nav-icon"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></span>
+      <span class="nav-label">More</span>
+    </summary>
+    <div class="menu" role="menu">
+      
+      <a class="menu-item bar-only" role="menuitem" href="/projects"><svg aria-hidden="true"><use href="/static/icons.svg#folder"></use></svg>Projects</a>
+      <a class="menu-item bar-only" role="menuitem" href="/agents"><svg aria-hidden="true"><use href="/static/icons.svg#smart_toy"></use></svg>Agents</a>
+      <a class="menu-item bar-only" role="menuitem" href="/pair"><svg aria-hidden="true"><use href="/static/icons.svg#qr_code"></use></svg>Pair a phone</a>
+      
+      <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+        <input type="hidden" name="next" value="/g/lab">
+        <span class="menu-caption">Theme</span>
+        <span class="segmented">
+          <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
+          <button type="submit" name="theme" value="light" aria-pressed="false">Light</button>
+          <button type="submit" name="theme" value="dark" aria-pressed="false">Dark</button>
+        </span>
+      </form>
+      <form method="post" action="/signout">
+        <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out admin</button>
+      </form>
+    </div>
+  </details>
+</nav>
+
+
+<main id="main">
+
+
+<section class="page-wide galleries">
+  <h2>Galleries of Lab</h2>
+  
+  <ul class="list galleries-list">
+    
+    <li>
+      <a class="grow gallery-card" href="/g/lab/shots">
+        <span class="title">#lab/shots Screenshots</span>
+        <span class="subtitle">3 images in 2 sections</span>
+        <span class="gallery-strip"><img src="/blob/27f6d11a5d3139511b7e9c6aaa476794b12136ec3ea030af5ae7f757683e8c17?v=thumb" alt="after submit ..." loading="lazy" decoding="async"><img src="/blob/5cbff2b233e3b01e8339c71de45ee40cd3d91f649d3fe059a99b5c3450625613?v=thumb" alt="login page" loading="lazy" decoding="async"><img src="/blob/15b82a8c7f15df5e8f92abe6f31342ff55c327203b700abc36ba9ee8f5a33a71?v=thumb" alt="boot splash" loading="lazy" decoding="async"></span>
+      </a>
+    </li>
+    
+  </ul>
+  
+</section>
+
+</main>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+
+</body>
+</html>

@@ -76,7 +76,7 @@ func galleryItem(e store.Entry) (dto.GalleryItem, bool) {
 	}
 	gallery := strings.TrimPrefix(e.Stream, "chan:")
 	return dto.GalleryItem{Seq: e.Seq, Chat: e.Stream, Title: previewText(e.Text, itemTitle), Section: readMeta(e).Section,
-		Image: ImageDTO(e.Attachments[i]), Href: ItemHref(gallery, e.Seq)}, true
+		Image: ImageDTO(e.Attachments[i]), Href: ItemHref(gallery, e.Seq), Ref: ItemRef(gallery, e.Seq)}, true
 }
 
 // Gallery is the gallery channel p names and may read.

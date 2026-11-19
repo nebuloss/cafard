@@ -70,6 +70,12 @@ export function imagesLabel(n: number): string {
   return n === 1 ? '[1 image]' : `[${n} images]`;
 }
 
+/** What a message that only points at gallery images shows as its preview, like messaging.GalleryImagesLabel. */
+export function galleryImagesLabel(n: number): string {
+  if (n === 0) return '';
+  return n === 1 ? '[1 gallery image]' : `[${n} gallery images]`;
+}
+
 /** A line count, like pages.LinesText. */
 export function linesText(n: number, openEnded: boolean): string {
   return `${n === 1 ? '1 line' : `${n} lines`}${openEnded ? ' so far' : ''}`;
@@ -148,7 +154,12 @@ export function itemTitle(text: string): string {
   return runes.length > 140 ? `${runes.slice(0, 140).join('')}...` : t;
 }
 
-/** A section's heading, like pages.sectionLabel. */
+/** What a message writes to show a gallery section, like messaging.SectionRef. */
+export function sectionRef(gallery: string, section: string): string {
+  return `[[${gallery}|${section}]]`;
+}
+
+/** A section's heading, like pages.SectionLabel. */
 export function sectionLabel(name: string): string {
   return name === '' ? 'Unsorted' : name;
 }

@@ -96,7 +96,9 @@ describe('the gallery page', () => {
   it('adds new items live, first in their section, which moves to the top', () => {
     const { sources } = start();
     expect(sources[0]?.url).toContain('chat=chan%3Alab%2Fshots');
-    expect(sources[0]?.url).toContain('since_seq=12');
+    const next = document.querySelector<HTMLElement>('[data-component="GalleryView"]')?.dataset['nextSeq'];
+    expect(next).toMatch(/^[1-9][0-9]*$/);
+    expect(sources[0]?.url).toContain(`since_seq=${next ?? ''}`);
     sources[0]?.emit('entry', item(20, 'splash v2', undefined, 'c'));
     expect(groups()).toEqual(['', 'login flow']);
     expect(titles('')).toEqual(['splash v2', 'boot splash']);

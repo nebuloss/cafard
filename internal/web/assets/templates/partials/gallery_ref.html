@@ -1,0 +1,6 @@
+{{- /* A gallery ref in a message (tpl-gallery-ref): the item's thumbnail,
+     or a section's first few, with a title and a line under it. A plain
+     link to the item's or the section's page; the bundle opens the viewer
+     on the thumbnails instead. Unavailable and gone refs are text only.
+     Data: GalleryRefView. */ -}}
+<a class="gallery-ref"{{if .Href}} href="{{.Href}}"{{end}} data-state="{{.State}}"{{if .Section}} data-kind="section"{{end}}><span class="gallery-ref-thumbs" data-slot="thumbs">{{range .Thumbs}}<img src="{{.Src}}" alt="{{.Alt}}" data-full="{{.Full}}" loading="lazy" decoding="async">{{end}}</span><span class="gallery-ref-text"><span class="gallery-ref-title" data-slot="title">{{.Title}}</span><span class="gallery-ref-meta" data-slot="meta">{{.Meta}}</span></span></a>

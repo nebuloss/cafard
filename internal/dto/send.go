@@ -13,6 +13,9 @@ type SendRequest struct {
 	Staged  string        `json:"staged,omitempty"`
 	// Section groups a gallery item with others (gallery channels only).
 	Section string `json:"section,omitempty"`
+	// GalleryRefs are seqs of gallery items of the channel's project the
+	// message points at, without copying their images.
+	GalleryRefs []int64 `json:"gallery_refs,omitempty"`
 }
 
 // ImageUpload is an inline image of a SendRequest.

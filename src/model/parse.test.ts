@@ -48,6 +48,7 @@ const parsers: Record<string, (raw: unknown) => unknown> = {
   chat_direct: (raw) => parseChat(raw),
   chat_gallery: (raw) => parseChat(raw),
   entry_gallery_item: (raw) => parseEntry(raw),
+  entry_gallery_refs: (raw) => parseEntry(raw),
   gallery_page: parseGalleryPage,
   overview: parseOverview,
   share: parseShare,
@@ -60,7 +61,7 @@ const parsers: Record<string, (raw: unknown) => unknown> = {
 // Fixtures the bundle never reads: request bodies, and what only programs
 // receive.
 const notYet = new Set([
-  'channel_create', 'channel_create_gallery', 'channel_update', 'send_request', 'send_request_gallery', 'log_accepted', 'stream_list', 'token_create', 'pairing_create', 'mark_create',
+  'channel_create', 'channel_create_gallery', 'channel_update', 'send_request', 'send_request_gallery', 'send_request_refs', 'log_accepted', 'stream_list', 'token_create', 'pairing_create', 'mark_create',
   'chat_prefs', 'chat_read', 'ack_request',
 ]);
 

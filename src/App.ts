@@ -74,6 +74,9 @@ export class App {
     this.pages.register('chat', (doc) => new ChatPage(doc, this.services));
     this.pages.register('drop', (doc) => new DropPage(doc, this.services));
     this.pages.register('gallery', (doc) => new GalleryPage(doc, this.services));
+    // Plain pages of links: the shell only.
+    this.pages.register('galleries', (doc) => new PairPage(doc, this.services));
+    this.pages.register('item', (doc) => new PairPage(doc, this.services));
   }
 
   start(): Disposable {

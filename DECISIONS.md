@@ -3,6 +3,40 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-19: gallery artifacts in chat
+
+PLAN section 6.4. Choices the brief left open:
+
+- **Ref syntax `[[project/gallery#seq]]` and `[[project/gallery|section]]`.**
+  Double brackets are rare in logs and code, so text that only looks like
+  a ref is unlikely; `#seq` reads like the `#channel` and `seq` agents
+  already use; `|` separates a free-form section name, which is why
+  section names cannot hold `[`, `]` or `|`. The project is always
+  written: refs only work inside one project, and a full name never
+  becomes ambiguous when another project gets a gallery of the same name.
+  Links to item and section pages count too, with any host, because
+  people paste addresses; a pasted link that happens to match a real item
+  of the sender's project becomes a card, which is what they meant.
+- **Refs are resolved when read, and stored by name and seq** in
+  `meta.refs`, so each reader sees what its grants allow, a removed item
+  says so, and the gallery is known (for the access check) after its item
+  is gone. `meta.refs` is dropped from every DTO: it would name galleries
+  to readers who may not see them.
+- **One refusal sentence** for every bad `gallery_refs` seq (missing,
+  not an image, another project, no grant), so a probe learns nothing.
+  Refs written in the text are kept or left as plain text silently: they
+  are the sender's words, not a request.
+- **The text a card replaces is taken out of what the web shows** (and of
+  the chat list's preview), so a message reads "before and after:" above
+  its cards, not the raw ref. Agents' tools keep the text as written; they
+  get the refs listed after it.
+- **Section refs show the newest four images and the count;** an item ref
+  shows one. Unsorted items cannot be referred to as a section (they are
+  not one batch).
+- **The picker writes refs into the text** instead of a hidden field, so
+  the person sees what is sent, can move or delete it, and a message
+  waiting offline in the upload queue needs nothing new.
+
 ## 2026-11-19: gallery channels
 
 Asked for by the user: agents that test a UI post screenshots in batches,

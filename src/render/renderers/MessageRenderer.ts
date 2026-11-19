@@ -5,6 +5,7 @@ import type { SlotTemplate } from '@/render/SlotTemplate.ts';
 import { textSegments } from '@/render/TextSegments.ts';
 import type { ImageRenderer } from '@/render/renderers/ImageRenderer.ts';
 import type { LogAttachmentRenderer } from '@/render/renderers/LogAttachmentRenderer.ts';
+import type { GalleryRefRenderer } from '@/render/renderers/GalleryRefRenderer.ts';
 
 export const MESSAGE_ATTRIBUTES = ['data-seq', 'data-mine', 'data-sender-kind', 'id'] as const;
 
@@ -31,6 +32,7 @@ export class MessageRenderer implements EntryRenderer {
     private readonly images: ImageRenderer | null,
     private readonly logs: LogAttachmentRenderer | null,
     private readonly context: MessageContext,
+    private readonly refs: GalleryRefRenderer | null = null,
   ) {}
 
   render(entry: Entry): HTMLElement {
@@ -42,7 +44,13 @@ export class MessageRenderer implements EntryRenderer {
     t.children('body', ...textSegments(entry.segments, entry.text));
     const grid = this.images?.grid(imagesOf(entry)) ?? null;
     const logs = this.logs;
-    t.children('attachments', grid, ...(logs === null ? [] : logsOf(entry).map((a) => logs.render(a))));
+    const refs = this.refs;
+    t.children(
+      'attachments',
+      grid,
+      ...(logs === null ? [] : logsOf(entry).map((a) => logs.render(a))),
+      ...(refs === null ? [] : (entry.gallery_refs ?? []).map((r) => refs.render(r))),
+    );
     t.text('reply-quote', entry.reply_to === undefined ? '' : (this.context.quote?.(entry.reply_to) ?? `reply to message ${entry.reply_to}`));
     t.text('seen-by', seenText(entry.seen_by));
     return t.root;

@@ -83,6 +83,7 @@ var twinSlots = map[string][]string{
 	"tpl-upload-status":      {"label", "progress", "retry"},
 	"tpl-needs-you-question": {"sender", "time", "body", "choices", "reply-form", "answer", "chat"},
 	"tpl-gallery-item":       {"img", "title"},
+	"tpl-gallery-ref":        {"thumbs", "title", "meta"},
 }
 
 var pageTwins = map[string][]string{
@@ -94,19 +95,20 @@ var pageTwins = map[string][]string{
 	"project":  {"tpl-toast"},
 	"live":     {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
 	"home": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
-		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-toast"},
+		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-gallery-ref", "tpl-toast"},
 	"chat": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
-		"tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
-	"drop":    {"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
-	"gallery": {"tpl-gallery-item", "tpl-toast"},
-	"item":    {"tpl-toast"},
+		"tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-gallery-ref", "tpl-toast"},
+	"drop":      {"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
+	"gallery":   {"tpl-gallery-item", "tpl-toast"},
+	"item":      {"tpl-toast"},
+	"galleries": {"tpl-toast"},
 }
 
 var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
 	"projects": "/projects", "project": "/projects/lab",
 	"home": "/", "chat": "/c/lab/dut1", "drop": "/drop",
-	"gallery": "/g/lab/shots", "item": "", // the item's seq is known once seeded
+	"gallery": "/g/lab/shots", "galleries": "/g/lab", "item": "", // the item's seq is known once seeded
 }
 
 var templateRE = regexp.MustCompile(`(?s)<template id="(tpl-[a-z-]+)">(.*?)</template>`)

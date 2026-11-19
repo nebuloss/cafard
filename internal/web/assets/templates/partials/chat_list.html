@@ -15,6 +15,7 @@
     <h3 class="list-subheading">Archived</h3>
     <div class="chat-rows" data-section="archived" data-project="{{.Name}}">{{range .Archived}}{{template "partials/chat_row.html" .}}{{end}}</div>
     {{end}}
+    {{if .Galleries}}<p class="project-galleries body-small"><a class="chip small" href="{{.Galleries}}"><svg aria-hidden="true"><use href="/static/icons.svg#image"></use></svg>Galleries</a></p>{{end}}
     {{if .Sinks}}<p class="project-sinks body-small"><span class="muted">Logs</span>{{range .Sinks}} <a class="chip small" href="{{.Href}}">{{.Name}}</a>{{end}}</p>{{end}}
   </section>
   {{else}}

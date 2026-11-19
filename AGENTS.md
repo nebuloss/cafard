@@ -44,6 +44,9 @@ What exists:
   `internal/messaging/gallery.go` reads items and sections, and
   `internal/web/pages/gallery.go` serves `/g/<project>/<gallery>` and each
   item's page, `src/pages/GalleryPage.ts` the viewer and live tiles.
+  Chat messages point at gallery items with refs (PLAN 6.4;
+  `internal/messaging/refs.go`), shown as cards and picked from the
+  composer (`GalleryPicker`).
 
 ## Conventions come from the sibling projects
 
@@ -294,6 +297,12 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   whole `meta` struct). The gallery fixtures come from `seedGallery`,
   which only `TestEveryPageCarriesItsTwins` and the gallery tests call,
   so the other web tests keep their chat counts.
+- **Gallery refs: never put `meta.refs` in a DTO.** `BaseDTO` drops it
+  and strips the ref text a card replaces; a new path that hands an
+  entry's `Meta` or `Text` to a browser must go through it, or it names
+  galleries to readers without a grant. The per-reader resolution is
+  `refDTOs`; a ref the reader cannot see is `{state: "unavailable"}` and
+  must stay that bare.
 
 ## Rules that are easy to break
 

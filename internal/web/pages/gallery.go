@@ -18,6 +18,7 @@ import (
 // viewer instead and adds new items live.
 
 func (s *Site) mountGalleries(mux *http.ServeMux) {
+	mux.HandleFunc("GET /g/{project}", s.Auth(auth.ScopeRead, s.galleriesPage))
 	mux.HandleFunc("GET /g/{project}/{name}", s.Auth(auth.ScopeRead, s.galleryPage))
 	mux.HandleFunc("GET /g/{project}/{name}/{seq}", s.Auth(auth.ScopeRead, s.itemPage))
 }
@@ -70,8 +71,8 @@ type galleryData struct {
 	NextSeq int64
 }
 
-// sectionLabel is a section's heading: "Unsorted" for the items without.
-func sectionLabel(name string) string {
+// SectionLabel is a section's heading: "Unsorted" for the items without.
+func SectionLabel(name string) string {
 	if name == "" {
 		return "Unsorted"
 	}
@@ -122,7 +123,7 @@ func (s *Site) galleryPage(w http.ResponseWriter, r *http.Request, p auth.Princi
 		data.Section = *section
 	}
 	for _, sec := range page.Sections {
-		data.Sections = append(data.Sections, sectionLink{Label: sectionLabel(sec.Name), Href: sec.Href, Items: sec.Items,
+		data.Sections = append(data.Sections, sectionLink{Label: SectionLabel(sec.Name), Href: sec.Href, Items: sec.Items,
 			Active: section != nil && *section == sec.Name})
 	}
 	// Items come newest first, so a section's first item places it.
@@ -132,7 +133,7 @@ func (s *Site) galleryPage(w http.ResponseWriter, r *http.Request, p auth.Princi
 		if !ok {
 			i = len(data.Groups)
 			at[it.Section] = i
-			data.Groups = append(data.Groups, galleryGroup{Name: it.Section, Label: sectionLabel(it.Section)})
+			data.Groups = append(data.Groups, galleryGroup{Name: it.Section, Label: SectionLabel(it.Section)})
 		}
 		data.Groups[i].Items = append(data.Groups[i].Items, GalleryItem(it))
 	}
@@ -154,6 +155,7 @@ type itemData struct {
 	Item                                            GalleryItemView
 	Image                                           string // the agent-size image, for the page
 	Newer, Older                                    string
+	Ref                                             string
 }
 
 // itemPage is an item's stable link: the image, its title and section,
@@ -180,7 +182,7 @@ func (s *Site) itemPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	}
 	section := it.Section
 	data := itemData{Gallery: ch.Name, GalleryHref: messaging.GalleryHref(ch.Name, nil), SectionHref: messaging.GalleryHref(ch.Name, &section),
-		SectionLabel: sectionLabel(section), Item: GalleryItem(it)}
+		SectionLabel: SectionLabel(section), Item: GalleryItem(it), Ref: it.Ref}
 	if it.Image.Preview {
 		data.Image = it.Image.URL + "?v=agent"
 	}
@@ -197,4 +199,50 @@ func (s *Site) itemPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	l := s.Shell(r, &p, title, "item", "chats")
 	l.Back = data.SectionHref
 	s.Render(w, http.StatusOK, "item", l, []string{"tpl-toast"}, data)
+}
+
+type galleryCard struct {
+	Name, Title, Href string
+	Sections, Items   int
+	Thumbs            []GalleryItemView
+}
+
+type galleriesData struct {
+	Project, Label string
+	Galleries      []galleryCard
+}
+
+// galleriesPage lists a project's galleries, the "Galleries" entry of
+// its section of the chat list.
+func (s *Site) galleriesPage(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	ctx := r.Context()
+	project := r.PathValue("project")
+	acc := s.d.Projects.Access(ctx, p)
+	pr, err := s.d.Projects.Project(ctx, project)
+	if err != nil || !acc.Sees(project) {
+		s.Fail(w, r, &p, http.StatusNotFound, "No such project", "There is no project "+strconv.Quote(project)+" you can see.")
+		return
+	}
+	chs, err := s.chats.svc.GalleriesOf(ctx, p, project)
+	if err != nil {
+		s.Oops(w, r, &p, err)
+		return
+	}
+	data := galleriesData{Project: project, Label: pr.Label()}
+	for _, ch := range chs {
+		page, err := s.chats.svc.GalleryPage(ctx, ch, nil, 0, 4)
+		if err != nil {
+			s.Oops(w, r, &p, err)
+			return
+		}
+		c := galleryCard{Name: ch.Name, Title: ch.Title, Href: messaging.GalleryHref(ch.Name, nil), Sections: len(page.Sections)}
+		for _, sec := range page.Sections {
+			c.Items += sec.Items
+		}
+		for _, it := range page.Items {
+			c.Thumbs = append(c.Thumbs, GalleryItem(it))
+		}
+		data.Galleries = append(data.Galleries, c)
+	}
+	s.Render(w, http.StatusOK, "galleries", s.Shell(r, &p, "Galleries of "+pr.Label(), "galleries", "chats"), []string{"tpl-toast"}, data)
 }

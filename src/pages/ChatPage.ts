@@ -11,6 +11,7 @@ import { ChatList } from '@/components/ChatList.ts';
 import { Composer } from '@/components/Composer.ts';
 import { ConversationView } from '@/components/ConversationView.ts';
 import { ElementScroller } from '@/components/ElementScroller.ts';
+import { GalleryPicker } from '@/components/GalleryPicker.ts';
 import { ImageViewer } from '@/components/ImageViewer.ts';
 import { LogsPane } from '@/components/LogsPane.ts';
 import { QuestionCard } from '@/components/QuestionCard.ts';
@@ -140,7 +141,10 @@ export class ChatPage implements Page {
     if (form !== null) {
       const tray = new AttachmentTray(Dom.find('[data-slot="tray"]', form) ?? doc.createElement('div'), r.chip, Number(form.dataset['maxFiles'] ?? '10'));
       bag.add(tray.mount());
-      composer = new Composer(form, chat, tray, queue, services.clock, doc, (s, mode) => this.attachFrom(s, mode, toast));
+      const pickerEl = Dom.find<HTMLDialogElement>('[data-component="GalleryPicker"]', form);
+      const picker = pickerEl === null ? null : new GalleryPicker(pickerEl, services.api, (ref) => composer?.insertRef(ref));
+      if (picker !== null) bag.add(picker.mount());
+      composer = new Composer(form, chat, tray, queue, services.clock, doc, (s, mode) => this.attachFrom(s, mode, toast), picker === null ? null : () => picker.open());
       bag.add(composer.mount());
       const uploads = Dom.find('[data-slot="uploads"]', form);
       if (uploads !== null) bag.add(new UploadStatus(uploads, r.upload, queue, chat).mount());
