@@ -3,6 +3,128 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-19: projects, sinks and grants
+
+Asked for by the user: a Discord-like organisation where the admin makes
+projects, gives each its chats and log sinks, its retention, and decides
+who sees what, so each project keeps the history of the data sent and of
+the agents' replies. PLAN section 4 ("Projects, sinks and grants") is the
+model; CONTRACTS sections 1.10, 2, 3.3 and 5 the interfaces. The choices
+among the options the brief left open, with their reasons:
+
+- **Stream ids embed the project after the kind, with `/`:**
+  `chan:<project>/<channel>` and `<kind>:<project>/<sink>`. A glob star
+  stops at `/` (the AGENTS gotcha), which here is what we want:
+  `chan:lab/*` and `*:lab/*` are exactly one project's channels and log
+  streams, so grants turn into globs the hub and the store already match.
+  Patterns that meant every channel became `chan:*/*`. Another separator
+  (`.`, `~`) would have let `chan:*` keep matching, but `.` is legal in
+  names and `~` already joins the two names of a direct conversation.
+  `dm:<a>~<b>` is unchanged and outside projects. A project is never
+  renamed, since its name is in every id.
+- **One stream per sink and transport,** no sub-streams: a sink `lab/dut1`
+  holds `serial:lab/dut1`, `syslog:lab/dut1`, `netconsole:lab/dut1`,
+  `push:lab/dut1` and `otlp:lab/dut1`. Per-host or per-service
+  sub-streams (`syslog:lab/rack/host1`) would have needed a second
+  separator that globs cross, or doubled every pattern (`*:lab/*` and
+  `*:lab/*/*`); the host and the service stay in each entry's `host` and
+  `app`, and a sink per host is one form away when someone wants them
+  apart. Keeping the transport as the kind keeps the status (a serial port
+  is down, a UDP source only idle) and the transport column of Sources.
+- **Channel rows keep one key,** `channels.name` = `<project>/<name>`, so
+  `'chan:' || name`, the bindings and the follows keep their joins.
+  Every project gets `#general` when it is made; `general` and `dm` stay
+  reserved. A `channel` argument (MCP, `POST /api/messages`) is
+  `project/name`, or a bare name only one project visible to the caller
+  has; `send` and `ask_human` default to `general` resolved the same way,
+  and an ambiguous name is `unknown_channel` listing the qualified ones.
+- **Grants, with credential scopes as a cap.** A token's, session's or
+  pairing's scopes stay (they still shape `tools/list`), and everything
+  else is their intersection with the grant of the thing touched; without
+  a grant nothing is visible. This is the brief's recommendation and the
+  smallest change to the auth code: scopes, `Require` and `AddTool`
+  behave as before. `ingest` is a project-wide grant only (a channel holds
+  no logs to write into). A channel grant covers the channel and the log
+  streams its bindings match, so an agent given `#dut1` can still read
+  `channel=dut1`; to keep that from widening itself, changing bindings and
+  creating, renaming, archiving or deleting channels need `message` on the
+  whole project. Bindings must stay inside the channel's project.
+- **Direct messages** need the two principals to share a project (any
+  grant in it), or one of them to be the admin; reading stays for the two
+  parties. `list_principals` shows the principals sharing a project with
+  the caller, and `admin`. Without this a principal with no grant could
+  still reach everyone by DM.
+- **Sink tokens** are a `sink` column on `tokens` (`ON DELETE CASCADE`, so
+  deleting a sink revokes them), always kind `device` with `ingest` only.
+  They write into their sink whatever `stream` the request names: one
+  credential, one place. A principal with an `ingest` grant on a project
+  may instead name the sink (`stream=dut1` or `lab/dut1`, kind prefix
+  ignored; OTLP's `service.name`, else `host.name`). That second path gives
+  the grant scope `ingest` a meaning, and is what keeps existing push
+  clients and OTLP exporters working after the upgrade (below).
+- **Unrouted logs are dropped and counted,** per transport (`syslog`,
+  `netconsole`, `http`, `otlp`) in `status`, shown to the admin on Sources
+  and in `GET /api/streams` (`unrouted`), with one debug line per minute
+  per transport. `POST /api/log` answers 200 with `accepted: 0` and
+  `dropped`, not an error: `cafard push` spools and retries on errors, and
+  a line no sink wants would retry forever. OTLP answers the standard
+  `partial_success` with the records rejected and a sentence saying why.
+- **Source addresses** are per sink, IPs or CIDRs, shared by syslog and
+  netconsole. The most specific prefix wins, then the oldest sink, so a
+  `/32` inside a sink's `/24` can go elsewhere. `syslog.allow` still
+  filters first. The table is read into memory and swapped on change.
+- **Serial ports belong to sinks,** at most one each (`sink_serial`). The
+  port type and its validation moved from `internal/ingest/serial` to
+  `internal/projects` (`SerialPort`; `serial.Port` is an alias), because
+  serial imports deps, which holds the projects service. The manager
+  reconciles on every sink change: a new port starts, a removed one stops
+  with a "port removed" marker, a changed one restarts. The hardware
+  fakes and tests are unchanged.
+- **Retention per project.** Four nullable columns; a new project copies
+  the config's `retention:` values, and NULL (only the migrated project)
+  is filled from the config at the next start, since a SQL migration
+  cannot read the file. `retention.streams` overrides still win for line
+  age. The config limits stay the limits of what is outside projects:
+  direct messages, their images, streams without a project. A project's
+  `blobs_max_bytes` counts the blobs its messages reference and trims the
+  oldest of them; a blob shared with another project goes with it.
+- **Migration of an existing install** (`0070_projects.sql`, then the Go
+  step `0071_projects_import` the store runs once): every channel and log
+  stream moves into one project, `imported` (the brief allowed `default`
+  or `imported`; one project means the yaml import below continues the
+  same streams). Entries are re-pointed with `UPDATE entries SET stream`
+  in the migration, before the writer starts; the text and the FTS index
+  are untouched, and seq order is unchanged. This is the one write to
+  entries outside the writer, like the FTS rebuild of 0050, and it costs a
+  rewrite of the stream index: a few minutes on a large database, logged.
+  Bindings, follows, claims and the `stream`, `streams` and `channel` of
+  log attachments are rewritten too. A sink is made for every old log
+  stream name that is a valid sink name, with the address as its source
+  when the name is an IP (syslog and netconsole used the IP when they had
+  no name). Every existing principal but `admin` gets a grant on the whole
+  of `imported` with the union of its tokens' and sessions' scopes (people
+  with neither get `read message`), so agents and phones keep what they
+  had. Syslog from hosts that named themselves, and so have no IP on
+  record, is dropped until the admin adds their address to a sink.
+- **The yaml import runs once per item:** at every start, each `serial`
+  port and `netconsole.names` entry not recorded in `config_imports`
+  becomes a sink of `imported` (made if missing), and a warning says to
+  remove the keys from the file. Recording them means a sink the admin
+  deleted does not come back. The keys still load for this version.
+  `channels:` keeps working: a bare name is in `imported`, `project/name`
+  elsewhere (the project is made if missing).
+- **Access is cached** per principal and credential; every change through
+  the projects service drops the cache, and entries expire after 5 s so a
+  grant made by `cafard token create --grant` (another process) applies
+  without a restart. Pairing redemption adds its grants in the same
+  transaction as the session.
+- **The admin UI** is two pages on the admin interface, `/projects` and
+  `/projects/{name}`, with plain form posts (no JSON API for admin
+  writes), as `/agents` and `/pair` are. Projects cannot be deleted yet.
+- **CLI:** `cafard token create --sink project/sink` and `--grant
+  project[:channel]=scopes` (repeatable); `cafard pair --grant` the same.
+  No `cafard project` command: projects are made on the admin interface.
+
 ## 2026-11-19: screenshots by path through `cafard mcp`, and `cafard send`
 
 Asked for by the user: an agent's screenshot is a file on disk, and

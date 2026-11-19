@@ -43,6 +43,7 @@ at each other's work:
 | `internal/status` | in-memory source status (connected, rates, drops, line state) | 0 |
 | `internal/textclean` | line splitting, ANSI stripping, dedupe, truncation, the agent output format | 0 |
 | `internal/auth` | tokens, sessions, pairings, scopes, the `Authenticator`, CSRF check, exposure guard | 0 (tokens), C (sessions, pairing) |
+| `internal/projects` | projects, sinks (source addresses, serial ports), grants, the per-principal `Access`, sink routing, the one-time import of the old config keys | projects |
 | `internal/mcpserver` | the MCP server, transports, log tools | 0; tools added by A, E |
 | `internal/ingest/httpapi` | `POST /api/log` | 0 |
 | `internal/ingest/{syslog,netconsole,otlp}` | listeners and parsers | B |
@@ -74,6 +75,7 @@ type Deps struct {
 	Tokens    *auth.Tokens
 	Admin     *auth.Admin      // the admin password and in-memory admin sessions
 	Janitor   *store.Janitor   // Add(store.Task) for acks, blobs, claims, sessions
+	Projects  *projects.Service // projects, sinks, grants and Access (section 1.10)
 	Blobs     BlobStore        // nil until track A; an interface, see below
 	Messaging Messaging        // nil until track A; an interface, see below
 	Clock     clock.Clock      // interface { Now() time.Time; After(d) <-chan time.Time }
@@ -248,9 +250,10 @@ type Scope string // "ingest" | "read" | "message" | "serial_write" | "admin"
 type Principal struct {
 	Name      string
 	Kind      string   // "agent" | "human" | "device"
-	Scopes    ScopeSet
+	Scopes    ScopeSet // a cap: grants decide where they apply (1.10)
 	TokenID   int64    // 0 for a session
 	SessionID int64    // 0 for a bearer token
+	Sink      string   // "project/sink" for a sink token, else ""
 }
 
 type Authenticator interface {
@@ -289,6 +292,63 @@ type Messaging interface {
 Tracks B, C and E code against these interfaces, and use fakes until A
 lands.
 
+`Visible` applies grants (1.10) to every entry, logs included: a log
+entry is visible when the viewer may read its stream, a channel message
+when it may read the channel, a direct message to its two parties only.
+`ResolveChannel` takes `project/name`, or a bare `name` that only one
+project visible to the principal in the context has, and returns the
+bindings the caller may read.
+
+### 1.10 Projects and access
+
+```go
+// internal/projects
+type Project struct {
+	Name, Title string
+	CreatedAt   time.Time
+	Retention   Limits // the four limits; 0 = forever or no limit
+}
+
+type Sink struct {
+	ID            int64
+	Project, Name string           // stream ids end in project + "/" + name
+	Title         string
+	Sources       []netip.Prefix   // syslog and netconsole senders
+	Serial        *SerialPort      // at most one port; serial.Port is this type, Name is project/name
+}
+
+type Grant struct {
+	ID                 int64
+	Principal, Project string
+	Channel            string        // "" = the whole project
+	Scopes             auth.ScopeSet // read, message, ingest (project only), serial_write
+}
+
+// Access is what one principal may reach, from its grants capped by its
+// credential's scopes. The admin session reaches everything.
+type Access struct{ /* ... */ }
+func (s *Service) Access(ctx context.Context, p auth.Principal) *Access
+func (a *Access) All() bool                          // the admin
+func (a *Access) Projects() []string                 // projects with any grant
+func (a *Access) Can(stream string, sc auth.Scope) bool // chan:, dm: and log streams
+func (a *Access) LogPatterns() []string              // globs of readable log streams; nil = all
+func (a *Access) ChannelPatterns() []string          // chan: globs of readable channels; nil = all
+func (a *Access) ProjectScopes(project string) auth.ScopeSet // project grants only
+
+// Routing: what ingest asks.
+func (s *Service) SinkForAddr(ip netip.Addr) (Sink, bool)           // syslog, netconsole
+func (s *Service) SinkForIngest(ctx context.Context, p auth.Principal, name string) (Sink, bool) // HTTP, OTLP
+func (s *Service) SerialPorts() []serial.Port      // what the serial manager runs
+func (s *Service) OnSinksChanged(f func())         // after a sink is created, changed or deleted
+func ProjectOf(stream string) string               // "lab" for serial:lab/dut1 and chan:lab/x; "" for dm: and unprefixed ids
+```
+
+- Grants are cached per principal and credential; every write through the
+  service drops the cache, and entries also expire after 5 s so grants
+  added from the CLI (another process) apply without a restart.
+- `ProjectOf` is the only parser of stream ids into projects; everything
+  that checks access goes through `Access.Can`.
+
 ---
 
 ## 2. Routes
@@ -318,7 +378,7 @@ mux serves every other route too, by handing it to the public mux.
 | Method | Path | Auth | Scope | CSRF | Notes |
 |---|---|---|---|---|---|
 | GET | `/` | session | read | - | home: chat list, overview on wide screens. No session: 303 to `/signin` |
-| GET | `/c/{name}` | session | read | - | channel; `?view=logs`, `?f=`, `?before_seq=` |
+| GET | `/c/{project}/{name}` | session | read (grant) | - | channel; `?view=logs`, `?f=`, `?before_seq=` |
 | GET | `/dm/{peer}` | session | read | - | direct conversation with `peer` |
 | GET | `/drop` | session | message | - | quick-drop form; `?share=<id>` preloads shared files |
 | GET | `/live` | session | read | - | query `streams, channel, from_seq, to_seq, sev, re, kinds` |
@@ -326,13 +386,25 @@ mux serves every other route too, by handing it to the public mux.
 | GET | `/agents` | session | admin | - | principals, tokens, password change *(admin interface)* |
 | GET | `/pair` | session | admin | - | pairing *(admin interface)* |
 | GET | `/pair/{id}/qr.svg` | session | admin | - | QR image of a pending pairing *(admin interface)* |
+| GET | `/projects` | session | admin | - | projects and the create form *(admin interface)* |
+| POST | `/projects` | session | admin | SO | form `name, title`; 303 to `/projects/{name}` *(admin interface)* |
+| GET | `/projects/{project}` | session | admin | - | channels, sinks, retention, members, sign-in links *(admin interface)* |
+| POST | `/projects/{project}/retention` | session | admin | SO | form `lines_max_age, lines_max_bytes, messages_max_age, blobs_max_bytes` (durations and sizes as in the config; 0 = none) *(admin interface)* |
+| POST | `/projects/{project}/channels` | session | admin | SO | form `name, title, topic, patterns` (one per line) *(admin interface)* |
+| POST | `/projects/{project}/sinks` | session | admin | SO | form `name, title, sources` (one IP or CIDR per line), `serial_kind` (`none\|device\|rfc2217\|tcp`), `serial_address, baud, data_bits, parity, stop_bits, writable` *(admin interface)* |
+| POST | `/projects/{project}/sinks/{sink}` | session | admin | SO | same form, edits the sink *(admin interface)* |
+| POST | `/projects/{project}/sinks/{sink}/delete` | session | admin | SO | stops its port, revokes its tokens, keeps its history *(admin interface)* |
+| POST | `/projects/{project}/sinks/{sink}/tokens` | session | admin | SO | form `label`; renders the project page with the sink token shown once *(admin interface)* |
+| POST | `/projects/{project}/grants` | session | admin | SO | form `principal, kind, channel` (empty = whole project), `scopes` (repeated) *(admin interface)* |
+| POST | `/projects/{project}/grants/{id}/delete` | session | admin | SO | *(admin interface)* |
+| POST | `/projects/{project}/pairings` | session | admin | SO | form `principal` or `new_name`, `channel`, `scopes`; renders the project page with the link and its QR *(admin interface)* |
 | GET | `/signin` | public | - | - | admin interface: the password form; public: "ask the administrator for a sign-in link" |
 | POST | `/signin` | public | - | SO | form `password`; opens an admin session (cookie `cafard_admin`); 303 to `next` or `/`; 10 a minute per address *(admin interface; 404 on the public one)* |
 | POST | `/password` | session | admin | SO | form `current, new, repeat`; ends every admin session; 303 to `/signin?changed=1` *(admin interface)* |
 | POST | `/signout` | session | - | SO | ends the admin session or the browser session; 303 to `/signin` |
 | GET | `/p/{code}` | public | - | - | redeems a pairing code, sets the cookie, 303 to `/` |
 | POST | `/theme` | session | - | SO | form `theme=system\|light\|dark`, cookie, 303 back |
-| POST | `/pair` | session | admin | SO | form `principal` or `new_name`; 303 to `/pair` *(admin interface)* |
+| POST | `/pair` | session | admin | SO | form `principal` or `new_name`, `grants` (`project[:channel]=scopes`, one per line); 303 to `/pair` *(admin interface)* |
 | POST | `/share` | session | message | SO | Web Share Target, multipart `text, title, url, files[]`; see 2.4 |
 | GET | `/seen` | session | message | same-origin `Sec-Fetch-Site` only | `?seqs=1,2`: the no-JS read beacon in `<noscript>` (a 1x1 GIF); acks those messages |
 | POST | `/tokens` | session | admin | SO | no-JS token creation; renders `/agents` showing the token once *(admin interface)* |
@@ -347,12 +419,12 @@ set.
 
 | Method | Path | Auth | Scope | Package |
 |---|---|---|---|---|
-| POST | `/api/log` | bearer | ingest | `ingest/httpapi` |
-| POST | `/v1/logs` | bearer | ingest | `ingest/otlp` |
+| POST | `/api/log` | bearer | ingest + a sink (token or grant) | `ingest/httpapi`; `{accepted, last_seq, dropped}` |
+| POST | `/v1/logs` | bearer | ingest + a sink (token or grant) | `ingest/otlp`; unrouted records are rejected in `partial_success` |
 | POST | `/v1/traces`, `/v1/metrics` | - | - | 404 |
 | GET, POST, DELETE | `/mcp` | bearer | read (tools check their own, section 5) | `mcpserver` |
 | GET | `/api/events` | any | read | `web/sse` (section 4) |
-| GET | `/blob/{sha}` | any | read + `BlobStore.VisibleTo` | `web/api`; `?v=thumb\|agent`; 404 when not visible |
+| GET | `/blob/{sha}` | any | read + `BlobStore.VisibleTo` | `web/api`; `?v=thumb\|agent`; 404 when not visible (a log snapshot also needs every stream it covers readable) |
 | GET | `/healthz` | public | - | `200 ok <version>` |
 | GET | `/static/*`, `/app/main.js`, `/manifest.webmanifest`, `/sw.js`, `/icons.svg` | public | - | `web/assets`; `sw.js` at the root for scope `/` |
 
@@ -365,20 +437,21 @@ The DTOs are in section 3.
 |---|---|---|---|---|
 | GET | `/api/me` | read | | `Me` |
 | GET | `/api/principals` | read | `?kind=` | `{principals: Principal[]}` |
-| GET | `/api/chats` | read | `?archived=1&all=1` | `{chats: Chat[]}`, in list order |
+| GET | `/api/projects` | read | | `{projects: Project[]}`, the visible ones |
+| GET | `/api/chats` | read | `?archived=1&all=1&project=` | `{chats: Chat[]}`, in list order |
 | GET | `/api/overview` | read | | `Overview` |
 | GET | `/api/chats/{chat}/timeline` | read | `?before_seq=&since_seq=&limit=50&f=` | `Page<Entry>` (messages + event rows per `surface`, `f`) |
 | PUT | `/api/chats/{chat}/prefs` | message | `{pinned?, muted?, followed?}` | `Chat` |
 | POST | `/api/chats/{chat}/read` | message | `{up_to_seq}` | `{acked: n}` |
 | POST | `/api/acks` | message | `{seqs: []}` | `{acked: n}` |
-| POST | `/api/channels` | message | `ChannelCreate` | `Chat` (201) |
-| PATCH | `/api/channels/{name}` | message (rename, archive: creator or admin) | `ChannelUpdate` | `Chat` |
-| DELETE | `/api/channels/{name}` | message (creator or admin) | `?confirm={name}` | 204 |
+| POST | `/api/channels` | message (project grant) | `ChannelCreate` | `Chat` (201) |
+| PATCH | `/api/channels/{name}` | message (project grant; rename, archive: creator or admin) | `ChannelUpdate` | `Chat` |
+| DELETE | `/api/channels/{name}` | message (project grant; creator or admin) | `?confirm={name}` | 204 |
 | POST | `/api/messages` | message | multipart, section 3.4 | `Entry` (201), or 303 for a form post |
 | GET | `/api/messages/{seq}` | read | | `Entry` |
 | GET | `/api/messages/{seq}/attachments/{index}` | read | `?since_seq=&limit=` | `Page<Entry>` (lines of a log attachment) |
 | GET | `/api/shares/{id}` | message | | `Share` (staged files from `/share`) |
-| GET | `/api/streams` | read | `?channel=` | `{streams: Stream[]}` |
+| GET | `/api/streams` | read | `?channel=&project=` | `{streams: Stream[], unrouted?: {transport: count}}` (`unrouted`: admin only) |
 | GET | `/api/streams/match` | read | `?pattern=` | `{streams: Stream[]}` (glob preview) |
 | GET | `/api/entries` | read | `?streams=&channel=&since_seq=&before_seq=&from_seq=&to_seq=&sev=&re=&kinds=&limit=` | `Page<Entry>` (never `chan:*`/`dm:*`) |
 | GET | `/api/entries/{seq}/context` | read | `?before=20&after=20` | `Page<Entry>` with `focus_seq` |
@@ -390,9 +463,14 @@ The DTOs are in section 3.
 | DELETE | `/api/sessions/{id}` | admin, or own | | 204 |
 | POST | `/api/pairings` | admin | `{principal?, new_name?, scopes?}` (`admin` refused) | `Pairing` *(admin interface)* |
 
-`{chat}` is a chat id: `chan:<name>` or `dm:<peer>`, where peer is the
-other principal. The server builds `dm:<a>~<b>` itself, so the client
-never sorts names.
+`{chat}` is a chat id: `chan:<project>/<name>` or `dm:<peer>`, where peer
+is the other principal. The server builds `dm:<a>~<b>` itself, so the
+client never sorts names. `{chat}` and `{name}` (`<project>/<name>`) carry
+a `/`, so clients escape them (`%2F`); the mux matches the escaped segment.
+
+Every route above also applies grants (PLAN section 4, "Projects, sinks
+and grants"): what the caller may not read answers 404 or is left out of
+lists; a write without the grant answers 403 `forbidden`, naming it.
 
 ### 2.4 Share target
 
@@ -489,12 +567,23 @@ type LogAttachment = {
   grep?: string; min_severity?: number; title?: string;
   lines: number; first_ts?: string; last_ts?: string;
   snapshot: boolean; expired: boolean;
+  hidden?: boolean;                    // the viewer may not read every stream: no lines, no preview, no snapshot
   preview: Entry[];                    // first 5 lines
 };
 
+type Project = {
+  name: string; title?: string; created_at: string;
+  scopes: Scope[];                     // the viewer's project-wide scopes (capped); every scope for the admin
+  channels: string[];                  // visible chat ids, "chan:lab/dut1"
+  sinks: string[];                     // sink names, when the viewer may read the project's logs
+  retention: { lines_max_age_s: number; lines_max_bytes: number; messages_max_age_s: number; blobs_max_bytes: number }; // 0 = none
+};
+
 type Chat = {
-  id: string;                          // "chan:dut1" | "dm:codex-build"
+  id: string;                          // "chan:lab/dut1" | "dm:codex-build"
   kind: "channel" | "direct";
+  project?: string;                    // channels only
+  project_title?: string;
   name: string; title?: string; topic?: string;
   peer?: Principal;                    // direct only
   patterns: string[];                  // channel bindings
@@ -513,6 +602,7 @@ type StreamState = "connected" | "idle" | "down";
 
 type Stream = {
   id: string; kind: string; transport: string; labels: Record<string, string>;
+  project?: string; sink?: string;     // "lab", "dut1" for serial:lab/dut1
   status: StreamState; last_seq: number; last_activity?: string;
   rate_per_min: number; dropped: number;
   claim?: { principal: string; note?: string; expires_at: string };
@@ -531,7 +621,7 @@ type Counts = {
   chats: { id: string; unread: number; open_questions: number }[];  // only chats with a change or non-zero
 };
 
-type ChannelCreate = { name: string; title?: string; topic?: string; patterns?: string[]; surface?: Chat["surface"] };
+type ChannelCreate = { name: string; project?: string; title?: string; topic?: string; patterns?: string[]; surface?: Chat["surface"] };
 type ChannelUpdate = {
   rename?: string; title?: string; topic?: string;
   add_patterns?: string[]; remove_patterns?: string[];
@@ -544,7 +634,8 @@ type TokenCreated = Token & {
   snippets: { label: string; language: "shell" | "toml" | "json" | "env"; text: string }[];
 };
 type Session = { id: number; label: string; principal: string; user_agent?: string; created_at: string; expires_at: string; current: boolean };
-type Pairing = { id: number; url: string; qr_url: string; expires_at: string; principal?: string; new_name?: string };
+type Pairing = { id: number; url: string; qr_url: string; expires_at: string; principal?: string; new_name?: string; grants?: string[] }; // "lab:dut1=read,message"
+type IngestResult = { accepted: number; last_seq: number; dropped?: number };   // POST /api/log
 type Share = { id: string; text?: string; files: ImageAttachment[]; expires_at: string };
 ```
 
@@ -554,8 +645,8 @@ Multipart form fields:
 
 | Field | Meaning |
 |---|---|
-| `chat` | target chat id (`chan:dut1`, `dm:codex-build`). The bundle always sends this |
-| `channel`, `to` | the MCP-style alternative to `chat` (scripts, iOS Shortcut). `to=<principal>` means a DM; `to=@humans` addresses humans in `channel` (default `general`) |
+| `chat` | target chat id (`chan:lab/dut1`, `dm:codex-build`). The bundle always sends this |
+| `channel`, `to` | the MCP-style alternative to `chat` (scripts, iOS Shortcut). `to=<principal>` means a DM; `to=@humans` addresses humans in `channel` (`project/name`, or a name only one of the sender's projects has; default `general`, resolved the same way) |
 | `text` | at most 32 KiB |
 | `reply_to` | seq |
 | `choice` | the chosen answer when replying to a question (must be one of its choices) |
@@ -590,9 +681,9 @@ There is one connection per page. The query picks the scope:
 | Page | Query | `entry` events carry |
 |---|---|---|
 | home | `?scope=home` | messages visible to the viewer in followed chats (for previews and Overview) |
-| chat | `?chat=chan:dut1` | the chat's messages, and every entry of its bound streams (the client sends lines to the logs pane and event rows to the timeline, per `surface`) |
+| chat | `?chat=chan:lab/dut1` | the chat's messages, and every entry of its bound streams the viewer may read (the client sends lines to the logs pane and event rows to the timeline, per `surface`) |
 | chat (direct) | `?chat=dm:codex-build` | the conversation's messages |
-| live | `?streams=&channel=&kinds=&sev=&re=` | matching non-message entries (`kinds=message` adds messages visible to the viewer; with `channel=`, that channel's messages only) |
+| live | `?streams=&channel=&kinds=&sev=&re=` | matching non-message entries of streams the viewer may read (`kinds=message` adds messages visible to the viewer; with `channel=`, that channel's messages only) |
 | streams | `?scope=status` | none |
 | any | `&since_seq=N` or the `Last-Event-ID` header | replay after N first (at most 5000 entries; beyond that a `reset`) |
 
@@ -609,7 +700,9 @@ Every connection also receives `counts` and `stream_status`.
 | `reset` | - | `{reason}` | the subscriber lagged, or the replay was too long. The client reloads through the JSON API, then reconnects |
 
 - A heartbeat comment `: ping` is sent every 20 s.
-- Messages always pass `Messaging.Visible` for the viewer.
+- Messages always pass `Messaging.Visible` for the viewer, and so do log
+  entries (grants): the hub filter is built from `Access.LogPatterns`,
+  and the handler checks each entry again.
 
 ---
 
@@ -617,12 +710,22 @@ Every connection also receives `counts` and `stream_status`.
 
 | Scope | Tools |
 |---|---|
-| read | `whoami`, `list_principals`, `list_streams`, `read`, `tail`, `wait_for`, `search`, `context`, `list_channels`, `channel_timeline`, `inbox`, `get_message`, `get_log_attachment`, `wait_message`, `list_claims` |
+| read | `whoami`, `list_projects`, `list_principals`, `list_streams`, `read`, `tail`, `wait_for`, `search`, `context`, `list_channels`, `channel_timeline`, `inbox`, `get_message`, `get_log_attachment`, `wait_message`, `list_claims` |
 | message | `send`, `ask_human`, `ack`, `mark`, `follow`, `unfollow`, `create_channel`, `update_channel`, `delete_channel`, `claim`, `release` |
 | serial_write (+ claim held, + stream `writable`) | `serial_write`, `serial_control` |
 
 - **Tool list.** A tool the token lacks the scope for is left out of
   `tools/list`, so agents are not offered tools that will fail.
+- **Grants.** Every tool applies them on top of the scope (PLAN section 4,
+  "Projects, sinks and grants"): a stream, channel or message the caller
+  may not read is unknown to it (`not_found`, `unknown_channel`, or left
+  out of a list), and a write without the grant is `forbidden`.
+- **Projects.** `list_projects` returns `{projects: Project[]}`.
+  `list_streams`, `list_channels`, `inbox` and `search` take an optional
+  `project`. A `channel` argument is `project/name`, or a bare `name` when
+  only one visible project has it; `send` and `ask_human` default to
+  `general` resolved the same way. Channel ids in results are
+  `project/name`.
 - **Errors.** A tool error is an MCP result with `isError: true`. The text
   content is the same sentence as `error.message` in section 3.2.
   Structured content is `{code, message, retry_after_s?}`, with the codes
@@ -654,6 +757,8 @@ Every connection also receives `counts` and `stream_status`.
 | `live` | `pages/live.html` | `LivePage` | C (LogView in M3), page in M5 |
 | `streams` | `pages/streams.html` | `StreamsPage` | C |
 | `agents` | `pages/agents.html` | `AgentsPage` | C |
+| `projects` | `pages/projects.html` | none | projects |
+| `project` | `pages/project.html` | `ProjectPage` | projects |
 | `pair` | `pages/pair.html` | `PairPage` | C |
 | `signin` | `pages/signin.html` | none | C |
 
@@ -671,6 +776,11 @@ Each partial below is rendered twice:
 | Template id | Partial | `data-slot` names | Attributes the client may set | Pages |
 |---|---|---|---|---|
 | `tpl-chat-row` | `partials/chat_row.html` | `name`, `preview`, `time`, `unread`, `questions`, `dots` | `href`, `data-chat`, `data-pinned`, `data-muted`, `data-archived` | home, chat |
+
+The chat list groups its rows in one `<section data-project="<name>">` per
+project and a `data-project=""` section for direct chats; the bundle puts a
+row in the section of its `Chat.project`. Sources group stream cards the
+same way, by `Stream.project` (`""` for streams outside projects).
 | `tpl-stream-dot` | `partials/stream_dot.html` | none | `data-status`, `title` | home, chat, streams |
 | `tpl-message` | `partials/message.html` | `sender`, `sender-kind`, `time`, `body`, `reply-quote`, `attachments`, `seen-by`, `menu` | `data-seq`, `data-mine`, `data-sender-kind`, `id` (`m<seq>`) | chat, home (overview) |
 | `tpl-question` | `partials/question.html` | `sender`, `time`, `body`, `choices`, `reply-form`, `answer` | `data-seq`, `data-open`, `id` (`m<seq>`); the hidden inputs (`data-field`) get their `value` | chat, home |

@@ -208,10 +208,15 @@ module path does not match its remote. Do not copy that mismatch.
   `sessions.scopes` when a session is created (sign-in or pairing). One
   token per agent instance (`claude-laptop`, `codex-build`) is how agents
   get distinct identities.
-- **Stream**: one source of entries. Its id is `kind:name`:
-  - `serial:dut1`, `syslog:<host>` and `netconsole:<name>` for devices.
-  - `push:<name>` for the push client.
-  - `chan:<name>` for message channels; `chan:general` exists by default.
+- **Stream**: one source of entries. Its id is `kind:name`, and every
+  stream but a direct conversation belongs to a project (section 4,
+  "Projects, sinks and grants"):
+  - `serial:<project>/<sink>`, `syslog:<project>/<sink>`,
+    `netconsole:<project>/<sink>` for devices.
+  - `push:<project>/<sink>` for the push client, `otlp:<project>/<sink>`
+    for OTLP.
+  - `chan:<project>/<name>` for message channels; every project has
+    `chan:<project>/general`.
   - `dm:<a>~<b>` for one direct conversation: the two principal names,
     sorted, joined by `~` (`dm:claude-laptop~guillaume`).
 
@@ -220,10 +225,11 @@ module path does not match its remote. Do not copy that mismatch.
   Stream status is `connected | idle | down`: idle after 5 minutes with no
   entry; down when a serial port is disconnected or a TCP peer is lost.
   UDP, HTTP and OTLP sources are never down, only idle.
-- **Channel**: a chat, and the main unit of work (section 6.1). It has a
-  name, a title, a topic, and **bound streams**: the device logs it is
-  about, given as stream ids or globs (`serial:dut1`, `syslog:dut1*`). A
-  channel's messages live in stream `chan:<name>`. Its bindings decide which
+- **Channel**: a chat, and the main unit of work (section 6.1). It
+  belongs to a project and has a name, a title, a topic, and **bound
+  streams**: the device logs of its project it is about, given as stream
+  ids or globs (`serial:lab/dut1`, `syslog:lab/dut1*`). A channel's
+  messages live in stream `chan:<project>/<name>`. Its bindings decide which
   logs its log pane shows, which markers show up in the chat, and which
   streams agents read by default when they pass `channel`.
 - **Follow**: a principal following a chat (`chan:<name>` or
@@ -318,7 +324,7 @@ CREATE TABLE claims (
   note TEXT, expires_at INTEGER NOT NULL
 );
 CREATE TABLE channels (
-  name TEXT PRIMARY KEY,                     -- slug; its messages are in stream chan:<name>
+  name TEXT PRIMARY KEY,                     -- <project>/<slug>; messages in stream chan:<name>
   title TEXT, topic TEXT,
   surface TEXT NOT NULL DEFAULT 'markers',   -- none | markers | errors (section 6.1)
   created_by TEXT NOT NULL, created_at INTEGER NOT NULL,
@@ -342,6 +348,39 @@ CREATE TABLE blobs (
   width INTEGER, height INTEGER, created_at INTEGER NOT NULL,
   agent_sha256 TEXT, thumb_sha256 TEXT
 );
+CREATE TABLE projects (                      -- section 4, "Projects, sinks and grants"
+  name TEXT PRIMARY KEY,                     -- slug, embedded in stream ids, never renamed
+  title TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+  lines_max_age INTEGER, lines_max_bytes INTEGER,   -- ns and bytes, 0 = no limit;
+  messages_max_age INTEGER, blobs_max_bytes INTEGER -- NULL = take the config value at start
+);
+CREATE TABLE sinks (
+  id INTEGER PRIMARY KEY,
+  project TEXT NOT NULL REFERENCES projects(name) ON DELETE CASCADE,
+  name TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+  UNIQUE (project, name)
+);
+CREATE TABLE sink_sources (                  -- syslog and netconsole senders
+  sink INTEGER NOT NULL REFERENCES sinks(id) ON DELETE CASCADE,
+  prefix TEXT NOT NULL,                      -- an IP or a CIDR, masked
+  PRIMARY KEY (sink, prefix)
+) WITHOUT ROWID;
+CREATE TABLE sink_serial (                   -- at most one port per sink
+  sink INTEGER PRIMARY KEY REFERENCES sinks(id) ON DELETE CASCADE,
+  device TEXT, rfc2217 TEXT, tcp TEXT,       -- exactly one is set
+  baud INTEGER, data_bits INTEGER, parity TEXT, stop_bits REAL,
+  writable INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE grants (
+  id INTEGER PRIMARY KEY,
+  principal TEXT NOT NULL REFERENCES principals(name) ON DELETE CASCADE,
+  project TEXT NOT NULL REFERENCES projects(name) ON DELETE CASCADE,
+  channel TEXT,                              -- NULL = the whole project, else a channel name
+  scopes TEXT NOT NULL                       -- read message ingest serial_write
+);
+CREATE UNIQUE INDEX grants_target ON grants(principal, project, coalesce(channel, ''));
+CREATE TABLE config_imports (key TEXT PRIMARY KEY, at INTEGER NOT NULL); -- yaml imported once
+-- tokens gain sink (a sink token writes only there); pairings gain grants.
 CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL);
 ```
 
@@ -395,8 +434,10 @@ In-memory publish/subscribe.
 | Messages, age | 90 days (they are small and valuable) |
 | Blobs, total size | 5 GB |
 
-- Entries in `chan:*` and `dm:*` streams follow message retention. Device
-  streams follow line retention, markers included.
+- Entries in channel and `dm:*` streams follow message retention. Device
+  streams follow line retention, markers included. The limits are per
+  project; this table is the default of a new project and the limit of
+  what is outside projects (section 4, "Projects, sinks and grants").
 - Per-stream overrides are allowed in the config (`retention.streams`,
   section 11).
 - A janitor runs every 10 minutes:
@@ -407,6 +448,108 @@ In-memory publish/subscribe.
   5. Delete expired claims (each writes a "claim expired" marker through
      the writer), expired sessions and pairings, and `follows` rows of
      deleted chats.
+
+### Projects, sinks and grants
+
+cafard is organised like Discord: **projects** hold the chats and the log
+**sinks** of one piece of work, and the admin decides who sees what with
+**grants**. The point is to keep, per project, the history of the data sent
+and of what the agents replied. Decisions and their reasons are in
+DECISIONS.md ("Projects, sinks and grants").
+
+- **Project.** A row of `projects`: `name` (a slug with the charset of
+  principal names, `[a-z0-9][a-z0-9._-]{0,39}`; stream ids embed it, so it
+  never changes), `title`, `created_at`, and its retention:
+  `lines_max_age`, `lines_max_bytes`, `messages_max_age`,
+  `blobs_max_bytes`, where 0 means forever or no limit. A new project
+  copies the `retention:` config values. Every project has a `#general`
+  channel, made with it.
+- **Stream ids.** `chan:<project>/<channel>` for a channel,
+  `<kind>:<project>/<sink>` for a sink's logs, one stream per transport:
+  `serial`, `syslog`, `netconsole`, `push` (`POST /api/log`, `cafard
+  push`) and `otlp`. `dm:<a>~<b>` stays outside projects. A glob star
+  stops at `/`, so `chan:lab/*` is the channels of `lab` and `*:lab/*` its
+  log streams, while "every channel" is `chan:*/*`. The source host and
+  service stay in each entry's `host` and `app`.
+- **Sink.** A named log source owned by a project (`sinks`: project,
+  name with the principal charset, title). Logs reach it three ways, all
+  managed on the admin interface and stored in the database:
+  1. **Tokens.** A sink token (kind `device`, scope `ingest` only) writes
+     only into its sink, whatever stream it names: `POST /api/log` and
+     `cafard push` land in `push:<project>/<sink>`, OTLP in
+     `otlp:<project>/<sink>`. A token whose principal has an `ingest`
+     grant on a project may instead name the sink: `stream=<sink>` or
+     `<project>/<sink>` (a kind prefix is ignored), and OTLP uses
+     `service.name`, else `host.name`, as the sink name.
+  2. **Source addresses.** A sink lists IP addresses and CIDRs
+     (`sink_sources`). A syslog or netconsole datagram from one of them
+     lands in `syslog:<project>/<sink>` or `netconsole:<project>/<sink>`;
+     the most specific prefix wins, then the oldest sink. This replaces
+     `netconsole.names`; `syslog.allow` still filters first.
+  3. **Serial port.** At most one per sink (`sink_serial`: local `device`,
+     `rfc2217` or raw `tcp`, line settings, `writable`), read into
+     `serial:<project>/<sink>`. The serial manager reconciles its running
+     ports whenever a sink is created, changed or deleted.
+
+  **Logs that match no sink are dropped**, never stored: syslog and
+  netconsole from unknown addresses, and HTTP or OTLP from tokens with no
+  sink and no matching ingest grant. Each drop counts in status per
+  transport (shown to the admin on Sources and in `GET /api/streams`),
+  with a debug log line at most once a minute per transport. `POST
+  /api/log` answers 200 with `accepted: 0` and `dropped`; OTLP answers a
+  `partial_success` that rejects them.
+
+  Deleting a sink stops its port, revokes its tokens and keeps its history,
+  which ages out by the project's retention.
+- **Grants.** `grants(principal, project, channel, scopes)`: `channel` NULL
+  grants the whole project, else one of its channels. Scopes are `read`,
+  `message`, `ingest` (project grants only) and `serial_write`. The rules:
+  - A principal with no grant sees nothing: no channel, stream, message,
+    blob or other principal. The admin session sees everything.
+  - Credentials keep their scopes as a **cap**: what a token, a browser
+    session or a pairing may do anywhere is the intersection of its scopes
+    and the grant of the thing it touches. `tools/list` still follows the
+    token's scopes.
+  - A project grant covers every channel and log stream of the project.
+  - A channel grant covers that channel's messages, and the log streams
+    its bindings match (read them, `mark` and `claim` them with
+    `message`, `serial_write` on a bound serial stream). Bindings stay
+    inside the channel's project; changing them, and creating, renaming,
+    archiving or deleting channels, needs `message` on the whole project,
+    so a channel grant cannot widen itself.
+  - A direct conversation is visible to its two parties only. Sending one
+    needs the two principals to share a project (any grant in it), or one
+    of them to be the admin. `list_principals` lists the principals that
+    share a project with the caller, and `admin`.
+  - `@humans` in a channel reaches the humans who can read it.
+  - A sink token has no grant and reads nothing.
+- **People.** A pairing link carries grants (`project[:channel]=scopes`);
+  redeeming it adds them to the person, merging with what they have.
+  The project page makes such links for itself.
+- **Enforced everywhere data is read or written:** the MCP tools,
+  resources and their notifications, `/api/*`, SSE (the hub's viewer
+  filter and the handler both check, as for messages), the chat, Live and
+  Sources pages, blobs, and log attachments: an attachment's lines, preview
+  and snapshot show only when the reader can read every stream it covers;
+  otherwise the card says it is hidden.
+- **Retention per project.** The janitor applies each project's limits to
+  its streams: `messages_max_age` to `chan:<project>/*`, `lines_max_age`
+  to its log streams (a `retention.streams` override still wins),
+  `lines_max_bytes` to the total of its log streams, and `blobs_max_bytes`
+  to the blobs its messages reference. The `retention:` config values are
+  the defaults of new projects and the limits of everything outside
+  projects (direct messages and their images, and any stream without a
+  project).
+- **Upgrading an install.** Migration `0070` creates the tables and moves
+  every existing channel and log stream into a project `imported`
+  (`serial:dut1` becomes `serial:imported/dut1`, `chan:dut1`
+  `chan:imported/dut1`, with bindings, follows, claims and log attachments
+  rewritten), makes a sink for each old stream name that is a valid sink
+  name (with its address when the name is an IP), and grants every
+  existing principal the whole project with the scopes its tokens and
+  sessions had, so nothing is lost and nobody is locked out. At start,
+  the config's `serial` list and `netconsole.names` are imported once into
+  `imported` as sinks, with a warning to remove them from the file.
 
 ---
 
@@ -430,9 +573,11 @@ Every ingester normalises input through `textclean`:
   - `text/plain`: one line or many.
   - `application/x-ndjson`: one object per line,
     `{text, ts?, severity?, host?, app?, stream?}`.
-- **Stream id:** `push:<name>`, unless the name already has a kind prefix.
+- **Stream id:** `push:<project>/<sink>`: the token's sink, or the sink
+  `stream` names in a project where the principal has an `ingest` grant.
+  Lines that reach no sink are dropped and counted.
 - **Auth:** a bearer token with the `ingest` scope.
-- **Response:** `{"accepted": n, "last_seq": s}`.
+- **Response:** `{"accepted": n, "last_seq": s, "dropped": d}`.
 
 ### 5.2 Message upload endpoint
 
@@ -471,8 +616,9 @@ The same endpoint must also accept a plain HTML form post with no JavaScript
   whole line as text with severity 6.
 - **TCP framing:** octet counting (RFC 6587) or newline-delimited, detected
   per connection from the first byte.
-- **Stream id:** `syslog:<hostname from the message, else the source IP>`.
-  The facility goes into the entry's `meta`.
+- **Stream id:** `syslog:<project>/<sink>`, the sink whose source
+  addresses hold the sender's IP; nothing is stored from other addresses.
+  The hostname goes into `host`, the facility into the entry's `meta`.
 - **Allowlist:** optional source CIDRs.
 
 ### 5.4 Netconsole
@@ -480,8 +626,8 @@ The same endpoint must also accept a plain HTML form post with no JavaScript
 - **Listen:** UDP on `:6666`.
 - **Format:** extended netconsole headers (`<level>,<seq>,<ts>,<flags>;msg`)
   are parsed when present.
-- **Stream id:** `netconsole:<name>`. The config maps IP addresses to names,
-  and the IP is used when no name is set.
+- **Stream id:** `netconsole:<project>/<sink>`, by source address as for
+  syslog. The old `netconsole.names` map is imported into sinks once.
 - **README:** document the kernel command line,
   `netconsole=@/,6666@<server-ip>/`.
 
@@ -528,7 +674,9 @@ What each kind of port supports:
   1 s to 30 s.
 - Write a `marker` entry on disconnect and on reconnect, so agents see the
   gap.
-- Stream id: `serial:<name>`.
+- Stream id: `serial:<project>/<sink>`. Ports are defined per sink on the
+  admin interface; the `serial:` config list is imported once into the
+  project `imported`.
 - Prefer stable device paths (`/dev/serial/by-id/...`) and say so in the
   README.
 
@@ -590,8 +738,10 @@ exporter can send logs by pointing its endpoint at cafard.
     to 2. If the number is unset, parse `severity_text`.
   - `time_unix_nano` becomes `src_ts`, falling back to
     `observed_time_unix_nano`.
-  - Stream id: `otlp:<service.name>`, else `otlp:<host.name>`, else
-    `otlp:unknown`. `host.name` becomes `host` and `service.name` becomes
+  - Stream id: `otlp:<project>/<sink>`: the token's sink, else the sink
+    named by `service.name`, else `host.name`, in a project where the
+    principal has an `ingest` grant; records that reach no sink are
+    rejected in `partial_success`. `host.name` becomes `host` and `service.name` becomes
     `app`.
   - Resource and record attributes, trace id and span id are kept in the
     entry's `meta`, capped at 4 KiB of JSON.
@@ -642,8 +792,9 @@ The inbox of principal P holds the messages where all of these are true:
 
 Every reader has its own acks, so two agents both see a human's photo.
 
-All channels are readable by every principal with the `read` scope. Following
-only decides what reaches the inbox; it is not access control. Following
+A channel is readable by the principals with a `read` grant on it or on
+its project (section 4, "Projects, sinks and grants"). Following only
+decides what reaches the inbox; it is not access control. Following
 happens automatically:
 
 - an agent follows a channel when it creates it, sends to it, or reads it
@@ -994,6 +1145,7 @@ two.
 | `/streams` | Sources with status (`connected`, `idle`, `down`), rate, drops, claim holder |
 | `/agents` | Admin only (admin interface). Principals, last seen, tokens (create or revoke; a token is shown once), the admin password |
 | `/pair` | Admin only (admin interface). QR code to sign a phone in (section 10) |
+| `/projects`, `/projects/{name}` | Admin only (admin interface). Projects, their channels, sinks, retention and members (section 4, "Projects, sinks and grants") |
 | `/drop` | Plain quick-drop form with a chat picker (no-JS fallback of the quick drop sheet) |
 | `/signin` | The admin password form on the admin interface; on the public one, a note to ask the administrator for a sign-in link (DECISIONS, "Admin password and split interfaces") |
 
@@ -1541,6 +1693,17 @@ Expanded (840-1199 px) and large (>= 1200 px), inside a chat:
   minutes, a principal picker (an existing human, or a new human whose
   name the admin types), and the list of active sessions, each with
   revoke.
+- **Projects (`/projects`, `/projects/{name}`, admin).** The list of
+  projects with a create form; per project its channels (create), its
+  sinks (create, edit the source addresses and the serial port, delete,
+  make a sink token shown once), its retention, and its members: agents
+  and people with their grants (add, remove), and a sign-in link with a
+  QR code that grants this project or one of its channels.
+- **Grouped by project.** The chat list, Sources and the Live stream
+  picker group channels and streams under their project, Discord-like:
+  one section per project with its channels (or sinks), and the direct
+  conversations in a section of their own. Both server-rendered, so the
+  Chats and Sources pages still work without the bundle.
 
 #### 9.6.6 Empty states
 
@@ -1649,6 +1812,11 @@ Scopes are `ingest`, `read`, `message`, `serial_write` and `admin`.
   pairing that created it into `sessions.scopes`.
 - A paired phone session gets `read message ingest`. `device` principals
   get `ingest` only.
+- Scopes are a cap. Reaching a project, a channel or a stream also needs a
+  grant (section 4, "Projects, sinks and grants"); a sink token needs none
+  and can only write into its sink. `cafard token create --sink
+  project/sink` makes one; `--grant project[:channel]=scopes` (repeatable)
+  grants the principal, and so does `cafard pair --grant`.
 - The scope each route and MCP tool needs is in CONTRACTS.md sections 2
   and 5.
 
@@ -1685,7 +1853,8 @@ the address cannot be parsed or resolved.
    default, `--ttl` up to 24 hours).
 1. The admin opens `/pair` and gets a QR code holding a one-time code (valid
    5 minutes, single use). Codes are stored hashed in the `pairings` table,
-   with the chosen principal, or the name the admin typed for a new human.
+   with the chosen principal, or the name the admin typed for a new human,
+   and the grants the link gives (section 4, "Projects, sinks and grants").
 2. Scanning it on the phone (on the public interface) creates that human
    principal, or reuses the one chosen on `/pair`, and sets an HttpOnly,
    SameSite=Lax session cookie, valid 30 days and renewed while used.
@@ -1705,8 +1874,9 @@ the address cannot be parsed or resolved.
 - **Syslog and netconsole:** unauthenticated by nature. The CIDR allowlist is
   optional, and the README says plainly that anyone on the LAN can write
   lines.
-- **serial_write and serial_control:** gated three times (config, scope and
-  claim).
+- **serial_write and serial_control:** gated four times (the port is
+  `writable`, the token's scope, a `serial_write` grant on the stream, and
+  the claim).
 - **OTLP:** same bearer tokens as the rest of ingest (`ingest` scope).
 - **Why static tokens rather than OAuth.** The MCP authorization spec
   defines OAuth 2.1 for the HTTP transport, with protected resource
@@ -1758,9 +1928,10 @@ syslog:
 
 netconsole:
   udp: ":6666"
-  names: { "10.0.50.42": dut1 }
+  # names: { "10.0.50.42": dut1 }   # deprecated: imported once into sinks
 
-retention:
+retention:                          # defaults of new projects, and the limits
+                                    # of what is outside projects
   lines_max_age: 336h
   lines_max_bytes: 2GB
   messages_max_age: 2160h
@@ -1787,7 +1958,8 @@ otlp:
   enabled: true
   max_body_mib: 8
 
-channels:                           # reapplied at every start
+channels:                           # reapplied at every start; a bare name is in
+                                    # the project imported, project/name elsewhere
   - name: general                   # may set title and topic only
     topic: anything not about one device
   - name: dut1
@@ -1795,14 +1967,10 @@ channels:                           # reapplied at every start
     streams: [serial:dut1, netconsole:dut1, "syslog:dut1*"]
     surface: markers
 
-serial:
-  - name: dut1
-    device: /dev/serial/by-id/usb-FTDI_FT232R_A1B2C3-if00-port0
-    baud: 115200
-    data_bits: 8
-    parity: none                    # none | even | odd | mark | space
-    stop_bits: 1
-    writable: false
+# serial:                          # deprecated: imported once into sinks of the
+#   - name: dut1                    # project imported; ports are set per sink now
+#     device: /dev/serial/by-id/usb-FTDI_FT232R_A1B2C3-if00-port0
+#     baud: 115200
 ```
 
 Port 8790 is a Default; the other projects use 8781 (grafit) and 3000
