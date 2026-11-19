@@ -190,7 +190,7 @@ func (s *Site) projectSide(ctx context.Context, p auth.Principal, project, activ
 func (s *Site) galleryCount(ctx context.Context, p auth.Principal, c dto.Chat) (string, error) {
 	ch, err := s.chats.svc.Gallery(ctx, p, strings.TrimPrefix(c.ID, "chan:"))
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	page, err := s.chats.svc.GalleryPage(ctx, ch, nil, 0, 1)
 	if err != nil {

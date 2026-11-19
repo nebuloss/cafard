@@ -156,7 +156,7 @@ func (s *Site) logsPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	q.Del("channel")
 	q.Set("streams", glob)
 	path := view.LogsHref(project, sink)
-	live, status, err := s.liveData(ctx, p, q, path, r.URL.RequestURI(), true)
+	live, status, err := s.logsView(ctx, p, q, path, r.URL.RequestURI(), true)
 	if err != nil {
 		s.Oops(w, r, &p, err)
 		return

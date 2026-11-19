@@ -71,7 +71,7 @@ var sevLabels = []sevOption{
 }
 
 func (s *Site) live(w http.ResponseWriter, r *http.Request, p auth.Principal) {
-	data, status, err := s.liveData(r.Context(), p, r.URL.Query(), "/live", r.URL.RequestURI(), false)
+	data, status, err := s.logsView(r.Context(), p, r.URL.Query(), "/live", r.URL.RequestURI(), false)
 	if err != nil {
 		s.Oops(w, r, &p, err)
 		return
@@ -88,11 +88,11 @@ func adminNav(p auth.Principal) string {
 	return ""
 }
 
-// liveData is a logs view: the filters of q, the lines they select and
+// logsView is a logs view: the filters of q, the lines they select and
 // the quick drop a range is attached through. The form posts to action;
 // with fixed, q's streams come from the page (a project's sinks) and the
 // form offers no stream or channel of its own.
-func (s *Site) liveData(ctx context.Context, p auth.Principal, q url.Values, action, back string, fixed bool) (liveData, int, error) {
+func (s *Site) logsView(ctx context.Context, p auth.Principal, q url.Values, action, back string, fixed bool) (liveData, int, error) {
 	data := liveData{Follow: true}
 	status := http.StatusOK
 	f, apiErr := view.ParseLogFilter(q)
