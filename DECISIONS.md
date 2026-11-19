@@ -3,6 +3,77 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-19: projects first
+
+Asked for by the user: the UI "is not intuitive at all"; projects should
+be the main view, Discord-like, and work on a phone first. PLAN 9.2 and
+9.6 now describe it; CONTRACTS 2.1 and 6 the routes, pages and twins.
+
+- **Addresses under the project.** `/projects/<p>` is the project view;
+  its pages are `/c/<chat>`, `/g` and `/g/<gallery>[/<seq>]`, `/logs` and
+  `/logs/<sink>`, and the admin's `/settings`. One prefix per project
+  reads well and makes "where am I" a property of the address. `/p/` is
+  pairing redemption, and `/projects` was already the admin's list, so
+  the view goes one level down (`/projects/<p>`) and the admin page it
+  replaces moves to `/settings`. The admin's form posts keep their
+  addresses (`/projects/<p>/sinks` and so on): they are not pages, and
+  scripts and tests post to them; they now come back to `/settings`.
+- **The old addresses redirect** with 308 and their query (`/c/<p>/<chat>`,
+  `/g/<p>`, `/g/<p>/<gallery>`, `/g/<p>/<gallery>/<seq>`), without an
+  auth check of their own, since the target checks and the redirect
+  tells nothing. Agents' messages, `cafard send` output from before and
+  bookmarks carry them. Gallery links pasted in either form still become
+  ref cards (`galleryLinkRE`), and `ChatHref`, `GalleryHref`, `ItemHref`
+  and their TypeScript twins build the new form.
+- **`/projects/<p>` answers 303 to the latest chat** (else `#general`,
+  else a gallery, else the logs) instead of rendering it, so the address
+  bar, the composer's redirects and the side list's highlight are the
+  chat's. A project the viewer may not see, or that does not exist, is
+  the same 404.
+- **Home stays home with one project.** It holds "Needs you", the direct
+  messages and the admin's New project and Admin; redirecting a single
+  project away would hide them. The overview pane stays on wide screens.
+- **A side list, not a second page of channels.** Every project page
+  puts the same list first: a sidebar from 840 px, a drawer below. On a
+  phone the project opens on a chat and the list is one tap away (the
+  menu button), as Discord does; a list page of its own would add a step
+  to every chat change. The direct conversations get the same list,
+  which is the page itself at `/dm`.
+- **The drawer works without the bundle** through `:target`: the menu
+  button is a link to `#side`, the close button and the scrim links to
+  `#main`. The bundle's `SideNav` turns the link into a toggle with
+  `data-open` (no history entry), Esc and focus, so `.only-scripted` is
+  not needed for it.
+- **Sinks in the list carry one dot per stream** (a sink has up to five,
+  one per transport) and the icon the worst state (down, then
+  connected, then idle), with the time of the last line; the dots reuse
+  `partials/stream_dot.html`, so `stream_status` updates them as it does
+  a chat row's. Sinks are listed only to viewers with project-wide read,
+  as `dto.Project.Sinks` already does.
+- **Live and Sources stay, folded into projects.** Their addresses keep
+  working for everyone (log attachment and event row links go to Live,
+  grant-filtered as before), and they are in the Admin menu; inside a
+  project its logs pages show the sources' cards and the Live view on
+  `*:<p>/*` or `*:<p>/<sink>` with the Live filters but the stream
+  picker, plus "Open in Live" for the rest. A stream chip of a chat
+  header opens its sink's logs. The logs pages accept a sink name with no
+  sink row (a deleted sink keeps its history) and show only what the
+  viewer's grants let it read.
+- **Navigation: Projects, Direct, Admin, More.** The Projects badge counts
+  the open questions for the viewer and Direct the unread direct
+  messages (the old Chats badge, split); the Admin item carries the
+  "source down" dot. The admin's menu (`/admin`) lists Projects, Agents,
+  sign-in links, Sources and Live, and the unrouted drops. Keys: `g p`,
+  `g d`, `g l`, `g s`.
+- **Track C's shell changed** (CONTRACTS 7.3 asks for a note here):
+  `layout.html` gained the drawer's menu button and a kicker line (the
+  project) above the title, `nav.html` the items above, and the sprite
+  the `menu` and `expand_more` glyphs. The CSS keeps the tokens and
+  themes; the project view is a section of its own at the end.
+- **Project unread counts are summed from `counts.chats`** on both sides
+  (`projectUnread`, `projectTotals`), so no new DTO or SSE event was
+  needed; a muted chat already counts zero there.
+
 ## 2026-11-19: gallery artifacts in chat
 
 PLAN section 6.4. Choices the brief left open:

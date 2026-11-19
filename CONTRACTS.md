@@ -380,18 +380,27 @@ mux serves every other route too, by handing it to the public mux.
 
 | Method | Path | Auth | Scope | CSRF | Notes |
 |---|---|---|---|---|---|
-| GET | `/` | session | read | - | home: chat list, overview on wide screens. No session: 303 to `/signin` |
-| GET | `/c/{project}/{name}` | session | read (grant) | - | channel; `?view=logs`, `?f=`, `?before_seq=` |
-| GET | `/dm/{peer}` | session | read | - | direct conversation with `peer` |
+| GET | `/` | session | read | - | home: the visible projects as cards, Direct messages, Needs you, overview on wide screens. No session: 303 to `/signin` |
+| GET | `/projects/{project}` | session | read (grant) | - | the project view: 303 to its most recently active chat, else `#general`, else a gallery, else its logs; 404 when not visible |
+| GET | `/projects/{project}/c/{name}` | session | read (grant) | - | channel, with the project's side list; `?view=logs`, `?f=`, `?before_seq=` |
+| GET | `/projects/{project}/g` | session | read (grant) | - | the project's galleries |
+| GET | `/projects/{project}/g/{gallery}` | session | read (grant) | - | a gallery's grid; `?section=`, `?before_seq=` |
+| GET | `/projects/{project}/g/{gallery}/{seq}` | session | read (grant) | - | one gallery item's stable page |
+| GET | `/projects/{project}/logs` | session | read (grant) | - | the live logs of every sink of the project (`*:<project>/*`, what the viewer may read), its sources, the Live filters but `streams` and `channel` |
+| GET | `/projects/{project}/logs/{sink}` | session | read (grant) | - | the same for one sink (`*:<project>/<sink>`) |
+| GET | `/c/{project}/{name}`, `/g/{project}`, `/g/{project}/{gallery}`, `/g/{project}/{gallery}/{seq}` | public | - | - | 308 to the `/projects/{project}/...` address, query kept (links in messages and refs carry them) |
+| GET | `/dm` | session | read | - | the direct conversations |
+| GET | `/dm/{peer}` | session | read | - | direct conversation with `peer`, with the direct conversations' side list |
 | GET | `/drop` | session | message | - | quick-drop form; `?share=<id>` preloads shared files |
-| GET | `/live` | session | read | - | query `streams, channel, from_seq, to_seq, sev, re, kinds` |
-| GET | `/streams` | session | read | - | sources |
+| GET | `/live` | session | read | - | query `streams, channel, from_seq, to_seq, sev, re, kinds`; in the nav for the admin, a link target for everyone (log attachments) |
+| GET | `/streams` | session | read | - | sources; in the nav for the admin |
+| GET | `/admin` | session | admin | - | the admin's menu: Projects, Agents, sign-in links, Sources, Live, unrouted drops *(admin interface)* |
 | GET | `/agents` | session | admin | - | principals, tokens, password change *(admin interface)* |
 | GET | `/pair` | session | admin | - | pairing *(admin interface)* |
 | GET | `/pair/{id}/qr.svg` | session | admin | - | QR image of a pending pairing *(admin interface)* |
 | GET | `/projects` | session | admin | - | projects and the create form *(admin interface)* |
-| POST | `/projects` | session | admin | SO | form `name, title`; 303 to `/projects/{name}` *(admin interface)* |
-| GET | `/projects/{project}` | session | admin | - | channels, sinks, retention, members, sign-in links *(admin interface)* |
+| POST | `/projects` | session | admin | SO | form `name, title` (on home and `/projects`); 303 to `/projects/{name}/settings` *(admin interface)* |
+| GET | `/projects/{project}/settings` | session | admin | - | channels, sinks, retention, members, sign-in links, with the project's side list *(admin interface)*. The posts below keep their address and 303 back here |
 | POST | `/projects/{project}/retention` | session | admin | SO | form `lines_max_age, lines_max_bytes, messages_max_age, blobs_max_bytes` (durations and sizes as in the config; 0 = none) *(admin interface)* |
 | POST | `/projects/{project}/channels` | session | admin | SO | form `name, title, topic, patterns` (one per line) *(admin interface)* |
 | POST | `/projects/{project}/sinks` | session | admin | SO | form `name, title, sources` (one IP or CIDR per line), `serial_kind` (`none\|device\|rfc2217\|tcp`), `serial_address, baud, data_bits, parity, stop_bits, writable` *(admin interface)* |
@@ -610,7 +619,7 @@ type GalleryItem = {
   seq: number; chat: string;           // "chan:lab/screens"
   title: string;                       // first line of the text, at most 140 characters
   section?: string; image: ImageAttachment;
-  href: string;                        // "/g/lab/screens/48433"
+  href: string;                        // "/projects/lab/g/screens/48433"
   ref: string;                         // "[[lab/screens#48433]]", what a message writes to show it
 };
 type GalleryRef = {                    // "unavailable": the reader may not see it, and nothing else is set
@@ -713,7 +722,7 @@ There is one connection per page. The query picks the scope:
 | home | `?scope=home` | messages visible to the viewer in followed chats (for previews and Overview) |
 | chat | `?chat=chan:lab/dut1` | the chat's messages, and every entry of its bound streams the viewer may read (the client sends lines to the logs pane and event rows to the timeline, per `surface`) |
 | chat (direct) | `?chat=dm:codex-build` | the conversation's messages |
-| live | `?streams=&channel=&kinds=&sev=&re=` | matching non-message entries of streams the viewer may read (`kinds=message` adds messages visible to the viewer; with `channel=`, that channel's messages only) |
+| live, a project's logs | `?streams=&channel=&kinds=&sev=&re=` (a project's logs: `streams=*:<project>/*` or `*:<project>/<sink>`) | matching non-message entries of streams the viewer may read (`kinds=message` adds messages visible to the viewer; with `channel=`, that channel's messages only) |
 | streams | `?scope=status` | none |
 | any | `&since_seq=N` or the `Last-Event-ID` header | replay after N first (at most 5000 entries; beyond that a `reset`) |
 
@@ -789,22 +798,36 @@ Every connection also receives `counts` and `stream_status`.
 
 | `data-page` | Template | Page class | Track |
 |---|---|---|---|
-| `home` | `pages/home.html` | `HomePage` | D |
-| `chat` | `pages/chat.html` (channel and direct) | `ChatPage` | D |
+| `home` | `pages/home.html` (the projects) | `HomePage` | D, projects first |
+| `chat` | `pages/chat.html` (`/projects/{project}/c/{name}` and `/dm/{peer}`) | `ChatPage` | D |
+| `direct` | `pages/direct.html` (`/dm`) | `PairPage` (the shell and the side list) | projects first |
 | `drop` | `pages/drop.html` | `DropPage` | D |
-| `gallery` | `pages/gallery.html` (`/g/{project}/{gallery}`) | `GalleryPage` | galleries |
-| `item` | `pages/item.html` (`/g/{project}/{gallery}/{seq}`) | `PairPage` (the shell only) | galleries |
-| `galleries` | `pages/galleries.html` (`/g/{project}`) | `PairPage` (the shell only) | galleries |
+| `gallery` | `pages/gallery.html` (`/projects/{project}/g/{gallery}`) | `GalleryPage` | galleries |
+| `item` | `pages/item.html` (`/projects/{project}/g/{gallery}/{seq}`) | `PairPage` (the shell and the side list) | galleries |
+| `galleries` | `pages/galleries.html` (`/projects/{project}/g`) | `PairPage` (the shell and the side list) | galleries |
+| `logs` | `pages/logs.html` (`/projects/{project}/logs[/{sink}]`) | `LivePage` (with the sources' cards) | projects first |
 | `live` | `pages/live.html` | `LivePage` | C (LogView in M3), page in M5 |
 | `streams` | `pages/streams.html` | `StreamsPage` | C |
+| `admin` | `pages/admin.html` | `PairPage` (the shell only) | projects first |
 | `agents` | `pages/agents.html` | `AgentsPage` | C |
 | `projects` | `pages/projects.html` | `PairPage` (the shell only) | projects |
-| `project` | `pages/project.html` | `PairPage` (the shell, and the countdown of its sign-in codes) | projects |
+| `project` | `pages/project.html` (`/projects/{project}/settings`) | `PairPage` (the shell, the side list, and the countdown of its sign-in codes) | projects |
 | `pair` | `pages/pair.html` | `PairPage` | C |
 | `signin` | `pages/signin.html` | none | C |
 
 `layout.html` holds the shell (top bar, nav rail and bar, `main`, toast
-region, dialog root) and includes `partials/nav.html`.
+region, dialog root) and includes `partials/nav.html` (Projects, Direct,
+Admin for the admin, More). On a page with a side list (`Layout.Side`)
+the top bar has the drawer's link to `#side`, and `Layout.Kicker` (the
+project) above the title.
+
+**The project view.** Every page of a project and of the direct
+conversations puts `partials/side_nav.html` (`aside#side.side
+[data-component=SideNav]`) first in a `.project-view`, then its content.
+SideNav (`src/components/SideNav.ts`) is the drawer, the switcher's
+badges and the sinks; the `nav.side-list[data-component=ChatList]`
+inside it holds the chat rows. `mountShell` mounts both on any page that
+has them.
 
 ### 6.2 Partials with a `<template>` twin
 
@@ -816,30 +839,39 @@ Each partial below is rendered twice:
 
 | Template id | Partial | `data-slot` names | Attributes the client may set | Pages |
 |---|---|---|---|---|
-| `tpl-chat-row` | `partials/chat_row.html` | `name`, `preview`, `time`, `unread`, `questions`, `dots` | `href`, `data-chat`, `data-pinned`, `data-muted`, `data-archived` | home, chat |
-| `tpl-stream-dot` | `partials/stream_dot.html` | none | `data-status`, `title` | home, chat, streams |
+| `tpl-chat-row` | `partials/chat_row.html` | `name`, `preview`, `time`, `unread`, `questions`, `dots` | `href`, `data-chat`, `data-pinned`, `data-muted`, `data-archived` | home, chat, direct, gallery, item, galleries, logs, project |
+| `tpl-stream-dot` | `partials/stream_dot.html` | none | `data-status`, `title` | home, chat, streams, direct, gallery, item, galleries, logs, project |
 | `tpl-message` | `partials/message.html` | `sender`, `sender-kind`, `time`, `body`, `reply-quote`, `attachments`, `seen-by`, `menu` | `data-seq`, `data-mine`, `data-sender-kind`, `id` (`m<seq>`) | chat, home (overview) |
 | `tpl-question` | `partials/question.html` | `sender`, `time`, `body`, `choices`, `reply-form`, `answer` | `data-seq`, `data-open`, `id` (`m<seq>`); the hidden inputs (`data-field`) get their `value` | chat, home |
 | `tpl-choice` | inside `question.html` (`partials/choice`) | `label` | `data-choice`, `disabled`, `value` (the submit button's choice) | chat, home |
 | `tpl-event-row` | `partials/event_row.html` | `stream`, `time`, `text`, `open` | `data-seq`, `data-severity`, `data-kind`, `href` on `open` | chat, home |
-| `tpl-line` | `partials/line.html` | `time`, `stream`, `sev`, `text` | `data-seq`, `data-sev`, `data-tone` (0-7), `data-selected`, `data-kind` (`message` for a message row in Live) | chat, live, home (log attachment previews) |
-| `tpl-marker` | `partials/marker.html` | `time`, `text` | `data-seq` | chat, live |
+| `tpl-line` | `partials/line.html` | `time`, `stream`, `sev`, `text` | `data-seq`, `data-sev`, `data-tone` (0-7), `data-selected`, `data-kind` (`message` for a message row in Live) | chat, live, logs, home (log attachment previews) |
+| `tpl-marker` | `partials/marker.html` | `time`, `text` | `data-seq` | chat, live, logs |
 | `tpl-image` | `partials/image.html` | `img`, `more` | `src` (only `/blob/...`), `alt`, `width`, `height`, `data-sha`, `href` on the root (only `/blob/...`) | chat, home, drop |
 | `tpl-log-attachment` | `partials/log_attachment.html` | `streams`, `title`, `lines`, `span`, `preview`, `open`, `state` | `href` on `open` (only `/live?...` or `#`), `data-snapshot`, `data-expired`, `data-open-ended` | chat, home |
-| `tpl-attachment-chip` | `partials/attachment_chip.html` | `label`, `remove` | `data-kind`, `data-index` | chat, home, drop, live |
+| `tpl-attachment-chip` | `partials/attachment_chip.html` | `label`, `remove` | `data-kind`, `data-index` | chat, home, drop, live, logs |
 | `tpl-upload-status` | `partials/upload_status.html` | `label`, `progress`, `retry` | `data-state`, `value` on progress | all with a composer |
 | `tpl-toast` | `partials/toast.html` | `text`, `action` | `data-tone` | all |
-| `tpl-stream-card` | `partials/stream_card.html` | `name`, `status`, `transport`, `rate`, `last`, `preview`, `dropped`, `claim`, `line-state`, `open` | `data-stream`, `data-status`, `href` on `open` | streams |
-| `tpl-gallery-item` | `partials/gallery_item.html` | `img`, `title` | `href` (`/g/...`), `data-seq`, `data-full` (only `/blob/...`); `src` (only `/blob/...`), `alt`, `width`, `height` on `img` | gallery |
-| `tpl-gallery-ref` | `partials/gallery_ref.html` | `thumbs`, `title`, `meta` | `href` (`/g/...`), `data-state` (`ok`, `unavailable`, `gone`), `data-kind` (`section`) | chat, home |
+| `tpl-stream-card` | `partials/stream_card.html` | `name`, `status`, `transport`, `rate`, `last`, `preview`, `dropped`, `claim`, `line-state`, `open` | `data-stream`, `data-status`, `href` on `open` | streams, logs |
+| `tpl-gallery-item` | `partials/gallery_item.html` | `img`, `title` | `href` (`/projects/<p>/g/...`), `data-seq`, `data-full` (only `/blob/...`); `src` (only `/blob/...`), `alt`, `width`, `height` on `img` | gallery |
+| `tpl-gallery-ref` | `partials/gallery_ref.html` | `thumbs`, `title`, `meta` | `href` (only `/projects/<p>/g/...`), `data-state` (`ok`, `unavailable`, `gone`), `data-kind` (`section`) | chat, home |
 | `tpl-needs-you-question` | `partials/needs_you.html` (`partials/needs_you_question`) | as `tpl-question`, plus `chat` (link to the question in its chat) | as `tpl-question`, plus `href` on `chat` (same-origin) | home |
 
-The chat list groups its channel rows in one `<section class="project-chats"
-data-project="<name>">` per project, each with its `data-section="channels"`
-(and, when listed, `unfollowed` and `archived`) rows carrying the same
-`data-project`; direct chats are in the one `data-section="direct"`. The
-bundle puts a new row in the section of its state and `Chat.project`, and
-leaves it to the next load when the page has no such section. Sources group
+A project's side list holds its chat rows in `data-section="channels"`,
+`unfollowed` and `archived` (the last two in a `<details>`, when not
+empty) and its gallery rows in `data-section="galleries"`, each carrying
+`data-project`; a gallery's row also says "N images" (`.chat-items`, not
+a slot). Its sinks are `a.sink-row[data-sink="<project>/<sink>"]
+[data-status]`, with one `.stream-dot` per stream of the sink in
+`.sink-dots` and the time of the last line in `data-slot="time"`; the
+switcher's projects are `[data-switch="<name>"]` with their unread in
+`data-slot="unread"`, and the direct messages' in `data-slot="direct"`.
+The direct conversations' list has one `data-section="direct"`. The
+bundle puts a new row in the section of its state, kind and
+`Chat.project`, and leaves it to the next load when the page has no such
+section. Home's cards are `a.project-card[data-project]` and
+`a.direct-card[data-direct]`, with `unread`, `questions`, `preview` and
+`time` slots (server-only, no twin). Sources group
 stream cards in `.stream-group[data-project]`, by `Stream.project` (`""`
 for streams outside projects, listed last); the bundle makes a group for a
 project the page did not have.
@@ -849,7 +881,8 @@ project the page did not have.
 These are on the page from the start, and the bundle only attaches
 behaviour to them:
 
-- `nav`, `channel_header`, `channel_dialog`, `composer`, `quick_drop_sheet`
+- `nav`, `side_nav` (the project view's side list), `channel_header`, `channel_dialog`, `composer`, `quick_drop_sheet`
+- `live_pane` (`/live` and a project's logs), `stream_head`, `project_form` (home and `/projects`)
 - `image_viewer`, `range_bar`, `filter_bar`, `logs_pane`, `line_menu`, `overview`
 - `token_dialog`, `pair_panel`, `shortcuts_dialog`, `empty_*`
 - `sink_form`, `grant_fields` (the project page)

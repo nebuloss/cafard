@@ -36,14 +36,20 @@ What exists:
   in-memory sink routes, and computes each principal's `Access`. Every
   channel and log stream is in a project; logs reach a project only
   through its sinks; nothing is visible without a grant but to the admin
-  session. The admin runs projects at `/projects` (admin interface);
-  `cafard token create --grant|--sink` and `cafard pair --grant` do it
-  from a shell.
+  session. The admin runs projects at `/projects` and each one's
+  `/projects/<p>/settings` (admin interface); `cafard token create
+  --grant|--sink` and `cafard pair --grant` do it from a shell.
+- **Projects first** (PLAN 9.6.3; DECISIONS 2026-11-19, "projects
+  first"): home is the projects; every page of a project lives under
+  `/projects/<p>` (`/c/<chat>`, `/g/...`, `/logs[/<sink>]`, `/settings`)
+  and shares the side list `partials/side_nav.html` (`pages/side.go`,
+  `src/components/SideNav.ts`); `/dm` lists the direct conversations and
+  `/admin` is the admin's menu. The old `/c/...` and `/g/...` redirect.
 - **Galleries** (PLAN section 6.3; DECISIONS 2026-11-19, "gallery
   channels"): a channel's `kind` is `chat` or `gallery`;
   `internal/messaging/gallery.go` reads items and sections, and
-  `internal/web/pages/gallery.go` serves `/g/<project>/<gallery>` and each
-  item's page, `src/pages/GalleryPage.ts` the viewer and live tiles.
+  `internal/web/pages/gallery.go` serves `/projects/<project>/g/<gallery>`
+  and each item's page, `src/pages/GalleryPage.ts` the viewer and live tiles.
   Chat messages point at gallery items with refs (PLAN 6.4;
   `internal/messaging/refs.go`), shown as cards and picked from the
   composer (`GalleryPicker`).
@@ -304,6 +310,36 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   `refDTOs`; a ref the reader cannot see is `{state: "unavailable"}` and
   must stay that bare.
 
+- **Project view: a page of a project puts the side list first.** Build
+  it with `Site.projectSide` (or `directSide`), wrap the page in
+  `<div class="project-view">` after `partials/side_nav.html`, set
+  `Layout.Side` and `Layout.Kicker`, and list `tpl-chat-row` and
+  `tpl-stream-dot` among its twins, or the bundle's side list cannot add
+  rows. `mountShell` mounts SideNav and its ChatList on any page that has
+  them: a page class must not mount a second ChatList on it.
+- **Project view: links go through the builders.** `view.ChatHref`,
+  `view.ProjectHref`, `view.LogsHref`, `view.SettingsHref`,
+  `messaging.GalleryHref`/`ItemHref` and their twins in
+  `src/render/format.ts`; the old `/c/` and `/g/` forms only redirect,
+  and `GalleryRefRenderer` drops any card `href` that is not
+  `/projects/<p>/g/...`. A new address form a person may paste needs
+  `galleryLinkRE` too.
+- **Project view: the drawer is `:target` without the bundle.** The menu
+  button links to `#side` and the close links to `#main`; SideNav
+  intercepts them. Do not give the side list another id, and keep
+  `body.shell main:has(> .project-view)` as written: `main:has(...)`
+  alone loses to `body.shell main` and the page keeps its padding.
+- **Project view: the web fixtures are written with the bundle built.**
+  CI runs the Go tests after `npm run build`; without `main.js` a chat
+  page acks what it renders, and the pages rendered after it (the side
+  lists' and home's badges) differ from the committed ones. `seed` makes
+  the sinks `lab/dut1` and `lab/bench-pi`, which the side lists and the
+  logs pages show.
+- **Project view: the admin's `GET /projects/<p>` is gone;** it is the
+  public project view. The settings page is `/projects/<p>/settings` on
+  the admin mux (in `adminRoutes`), and its form posts kept their
+  addresses.
+
 ## Rules that are easy to break
 
 - **No `innerHTML` and its relatives in `src/`.** Log lines and messages come
@@ -311,8 +347,9 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
 - **No frontend framework and no CSS framework.** Plain DOM in TypeScript
   classes, as in grafit. `PLAN.md` section 9.4 lists the allowed patterns and
   the problem each one solves; don't add others.
-- **The Chats pages and the Sources (`/streams`) page must work without
-  the bundle.** A test pins this.
+- **The Chats pages, the Sources (`/streams`) page and a project's logs
+  (`/projects/<p>/logs`) must work without the bundle,** the side list
+  and its drawer included. A test pins this.
 - **Only the writer goroutine writes `entries`** (and `entries_fts`).
   Everything else sends entries to it. Other tables are written directly
   in their own short transactions, and any marker they produce goes

@@ -502,11 +502,28 @@ Open `public_url` (or `http://<host>:8790`) in a browser:
   and scan the QR code with the phone within 5 minutes. Each code works
   once. The page also lists signed-in browsers, each with a revoke button.
   `cafard pair --name NAME [--ttl 2h]` prints such a link from a shell.
-- **Projects** (`/projects`, admin) lists the projects and makes new
-  ones. A project's page holds its channels, its log sinks (sender
-  addresses, serial port, sink tokens), its retention, its members with
-  their grants, and one-time sign-in links that grant a person the
-  project or one of its channels.
+- **Home** (`/`) is your projects: one card each, with its unread count,
+  its latest message and how many chats, galleries and sinks it holds,
+  then **Direct messages**, and **Needs you** on top. The admin also gets
+  **New project** and **Admin** there.
+- **A project** (`/projects/<project>`) opens on its most recently active
+  chat. Its side list (a sidebar on a wide screen, a drawer behind the
+  menu button on a phone) holds its **Chats**, its **Galleries** with
+  their image counts, its **Logs** (every sink live together, or one
+  sink, with the status of each), and for the admin its **Settings**. The
+  name at the top of the list switches to another project.
+- **A project's logs** (`/projects/<project>/logs`, or `/logs/<sink>`)
+  list its sources with their status, rate and last line, then the lines,
+  following live, with the severity, regexp and kind filters of Live.
+  "Open in Live" opens the same streams with every filter.
+- **Admin** (`/admin`, admin interface) holds what is not inside one
+  project: **Projects** (`/projects`: make one, and each one's settings at
+  `/projects/<project>/settings`: channels, log sinks with their sender
+  addresses, serial port and sink tokens, retention, members with their
+  grants, and one-time sign-in links that grant a person the project or
+  one of its channels), **Agents and tokens**, **Sign-in links** (pair a
+  phone), the global **Sources** and **Live**, and the logs dropped
+  because no sink took them.
 - **Sources** (`/streams`) shows the sources you may read, one group per
   project, with status, kind and transport, rate, last activity, last
   line and drops, and updates live. The admin also sees how many lines
@@ -515,13 +532,20 @@ Open `public_url` (or `http://<host>:8790`) in a browser:
   `?from_seq=&to_seq=`) with ANSI colours, filters in the URL (`streams`,
   `sev`, `re`, `kinds`), and follows new lines; scroll up to pause, `f` to
   toggle. The stream field suggests each project's logs (`*:lab/*`), and
-  the channel picker groups channels by project.
-- **Chats** (`/`) lists one section per project with its channels and
-  links to the logs of its sinks, then the direct conversations.
+  the channel picker groups channels by project. Sources and Live stay
+  open to everyone at their address (log attachments link to Live); the
+  navigation lists them for the admin, and a project's logs bring them
+  inside the project for everyone else.
 - **Agents** (`/agents`, admin) lists principals and tokens, creates a
   token (shown once, with ready-to-paste Claude Code, Codex, MCP JSON,
   OpenTelemetry and `cafard push` snippets) and revokes them.
-- The theme (system, light, dark) and sign out are under "More".
+- The navigation is **Projects**, **Direct** and, for the admin,
+  **Admin**; the theme (system, light, dark) and sign out are under
+  "More".
+
+Links from before the project view still work: `/c/<project>/<chat>`
+and `/g/<project>/...` redirect to `/projects/<project>/c/<chat>` and
+`/projects/<project>/g/...`, with their query.
 
 Pages work without JavaScript; live updates need it. Set `secure: true`
 behind HTTPS so the session cookie is HTTPS-only. Without the bundle
@@ -529,15 +553,17 @@ behind HTTPS so the session cookie is HTTPS-only. Without the bundle
 
 ## Chats (track D, M3)
 
-Home (`/`) is the chat list, with **Needs you** on top: questions agents
-asked you (`ask_human`, or addressed to you by name), each answerable
-right there with one button per choice or a free reply, then direct
-conversations with unread messages. Below come the channels (pinned
-first, then by last activity), the direct conversations, and **Show all**
-(channels you unfollowed) and **Archived**. On a wide screen the overview
-beside the list shows what needs you and the latest activity.
+Home (`/`) has **Needs you** on top: questions agents asked you
+(`ask_human`, or addressed to you by name), each answerable right there
+with one button per choice or a free reply, then direct conversations
+with unread messages. Below come the project cards and the direct
+messages. On a wide screen the overview beside them shows what needs you
+and the latest activity. A project's side list orders its chats pinned
+first, then by last activity, with the channels you unfollowed and the
+archived ones folded at the bottom; the direct conversations have the
+same list at `/dm`.
 
-- **A chat** is `/c/<channel>` or `/dm/<principal>`: the latest 50
+- **A chat** is `/projects/<project>/c/<channel>` or `/dm/<principal>`: the latest 50
   messages, with **Older** for the ones before, filter chips (All,
   Questions, Events, Mine, With images), markers of the bound streams as
   one-line event rows (and error lines with the `errors` surface), and the
@@ -558,6 +584,8 @@ beside the list shows what needs you and the latest activity.
 - **Channel settings** (the gear): title, topic, bound streams (globs are
   previewed as you type), what the chat shows from them, follow, pin,
   mute, and for the creator or an admin rename, archive and delete.
+- **New channel**: the `+` beside a project's Chats (with JavaScript, for
+  whoever may post to the whole project), or the project settings.
 - **Quick drop**: the camera button on home opens a sheet with a chat
   picker (it remembers the last chat), the camera and the photo picker:
   a photo of a screen is two taps away. Without JavaScript it is the
@@ -569,8 +597,9 @@ beside the list shows what needs you and the latest activity.
   `chat=chan:general`, `text`, `files[]`, with your token as a bearer).
 - Unread counts, question badges, the document title (`(2) cafard`) and
   the app icon badge update live; a message counts as read once it has
-  been on screen for a second. **Keys** on a desktop: `/` focus, `g c`,
-  `g l`, `g s` to go to Chats, Live and Sources, `?` for the list, Esc.
+  been on screen for a second. **Keys** on a desktop: `/` focus, `g p`,
+  `g d`, `g l`, `g s` to go to the projects, the direct messages, Live and
+  Sources, `?` for the list, Esc.
 
 Without JavaScript the chats still work: answering, sending text and
 photos, older pages, filters and the logs view are links and plain
@@ -582,11 +611,11 @@ A channel can be a **gallery** instead of a chat (pick the kind under
 "New channel" on the project page, or "Make it a gallery" later; agents
 pass `create_channel(kind=gallery)`). Every message there is one image
 with its text as the title, and `send(section=...)` (or `cafard send
---section`) groups a batch. `/g/<project>/<gallery>` shows the grid,
-newest section first, with a filter per section; each image has its own
-page `/g/<project>/<gallery>/<seq>`, and with JavaScript a tap opens the
-viewer and new screenshots appear live. The chat list links a project's
-galleries.
+--section`) groups a batch. `/projects/<project>/g/<gallery>` shows the
+grid, newest section first, with a filter per section; each image has its
+own page `/projects/<project>/g/<gallery>/<seq>`, and with JavaScript a
+tap opens the viewer and new screenshots appear live. The project's side
+list lists its galleries with their image counts.
 
 To show screenshots in a chat of the same project, an agent passes
 `gallery_refs` (seqs) to `send`, or writes `[[lab/shots#4812]]` for one
@@ -695,19 +724,20 @@ It posts to `POST /api/messages` as the token's principal (scope
 
 ```text
 seq 4812 in #lab/general
-http://10.0.50.2:8790/c/lab/general#m4812
+http://10.0.50.2:8790/projects/lab/c/general#m4812
 ```
 
 `--channel project/channel`, or a bare name only one of your projects has
 (default: the `general` of the one project you may post in), `--to PRINCIPAL` for a direct message
 or `--to @humans`, `--reply-to SEQ`, `--section NAME` (a gallery
 channel's batch, at most 80 characters; the printed link is then the
-image's own page, `/g/lab/shots/<seq>`), `--image FILE` (repeat it; png,
+image's own page, `/projects/lab/g/shots/<seq>`), `--image FILE` (repeat it; png,
 jpeg, webp, gif or heic, 10 files of 20 MiB with the default
 `images:` limits). `-` reads the text from stdin. `--server` and
 `--token` default to `CAFARD_SERVER` and `CAFARD_TOKEN`, as for `push`.
 In the chat a message of images shows its thumbnails (tap one for the
-viewer), and the chat list reads `[2 images]` when it has no text.
+viewer), and the chat's row and its project's card read `[2 images]`
+when it has no text.
 
 ### `cafard term`: a serial terminal that also pushes
 

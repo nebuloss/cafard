@@ -882,19 +882,20 @@ are shown and the one rule above; nothing is rewritten.
   without control characters or `[`, `]`, `|`. A section on a message to a
   chat channel or a direct message is refused. Items without a section are
   "Unsorted".
-- **The page** `/g/{project}/{gallery}`: section chips (All, then each
+- **The page** `/projects/{project}/g/{gallery}`: section chips (All, then each
   section with its count, the one with the newest item first), and the
   items newest first, grouped under section headings in the same order.
   `?section=NAME` shows one section (`?section=` the unsorted items).
   Paging is by seq (`?before_seq=`, 60 items a page). Each tile is a link
-  to the item's own page `/g/{project}/{gallery}/{seq}`: the image (agent
+  to the item's own page `/projects/{project}/g/{gallery}/{seq}`: the image (agent
   variant), its title and section, and newer/older within the section, so
   the gallery works without the bundle. With the bundle a tap opens the
   image viewer on the tiles of that section (previous and next stay in
   it), and the newest page follows the channel's feed: a new item goes
-  first in its section, which moves to the top. The chat list's row of a
-  gallery leads to the grid; the grid links to the conversation and the
-  conversation's header back to the grid.
+  first in its section, which moves to the top. The project's side list
+  (section 9.6.3) lists its galleries with their image counts and leads
+  to the grid; the grid links to the conversation and the conversation's
+  header back to the grid. The older `/g/...` addresses redirect (308).
 - **Agents** see the kind in `list_channels` (with the sections, newest
   first, and their counts) and `list_projects` (the galleries and their
   section names), and the server instructions ask them to post
@@ -909,14 +910,17 @@ A chat message can show gallery items without copying them, so a
 conversation about a fix points at its screenshots, and the gallery stays
 the one place they live (and age out by retention).
 
-- **Stable links.** `/g/<project>/<gallery>/<seq>` is one item;
-  `/g/<project>/<gallery>?section=<name>` a section; `/g/<project>` the
-  project's galleries (the "Galleries" entry of the project's part of the
-  chat list).
+- **Stable links.** `/projects/<project>/g/<gallery>/<seq>` is one item;
+  `/projects/<project>/g/<gallery>?section=<name>` a section;
+  `/projects/<project>/g` the project's galleries (the "Galleries" heading
+  of the project's side list). The `/g/<project>/...` addresses they had
+  first redirect there (308, query kept), so links already written keep
+  working.
 - **Ref syntax** for agents and people writing text:
   `[[<project>/<gallery>#<seq>]]` for an item,
   `[[<project>/<gallery>|<section>]]` for a section. A link to an item or a
-  section page (relative or with any host) counts the same. The MCP `send`
+  section page (relative or with any host, of either address form) counts
+  the same. The MCP `send`
   also takes `gallery_refs` (item seqs); so does the `POST /api/messages`
   form (`gallery_refs`, repeated or comma separated).
 - **Checks at send.** Refs go in a chat channel's messages only (not a
@@ -1224,9 +1228,13 @@ them. As in grafit, the bundle is built by Vite into
 
 - **Chats page.** The compose form is a plain `<form method=post
   enctype=multipart/form-data>` that works without JS. The thread renders
-  server-side, the latest 50 messages and event rows. The chat list and
-  the "Logs" toggle are links (`/c/dut1?view=logs`).
-- **Sources page (`/streams`).** Fully server-rendered.
+  server-side, the latest 50 messages and event rows. The project's side
+  list and the "Logs" toggle are links (`/projects/lab/c/dut1?view=logs`);
+  on a phone the side list is a drawer opened by a link to `#side` (CSS
+  `:target`).
+- **Sources page (`/streams`), and a project's logs
+  (`/projects/{project}/logs`).** Fully server-rendered, the sources and
+  the lines.
 - **Live updates** (the live page, new messages, the logs pane following)
   require the bundle (SSE). Without it, the logs views render the range in
   the query (section 9.6.4), or the last 500 lines when there is none, and
@@ -1239,13 +1247,19 @@ two.
 
 | Path | Purpose |
 |---|---|
-| `/`, `/c/{channel}`, `/dm/{principal}` | **Chats**. The main screen: the chat list, the conversation (human drops, agent messages, open questions, event rows), the composer, and the logs of the channel's bound streams (section 9.6.3) |
-| `/g/{project}`, `/g/{project}/{gallery}`, `/g/{project}/{gallery}/{seq}` | **Galleries**: a project's galleries, a gallery channel's screenshots by section, and one item's stable page (sections 6.3 and 6.4) |
-| `/live` | Live log view: stream picker, severity filter, regexp filter, follow/pause, ANSI colours, tap a line to copy its seq, attach this line, attach from here on, or select a range |
-| `/streams` | Sources with status (`connected`, `idle`, `down`), rate, drops, claim holder |
+| `/` | **Projects** (home): a card per project the viewer sees (unread, last activity, counts of chats, galleries and sinks), Direct messages, "Needs you", the overview on wide screens; the admin's New project and Admin (section 9.6.3) |
+| `/projects/{project}` | **The project view**: opens on its most recently active chat (303), with the project's side list on every page below (section 9.6.3) |
+| `/projects/{project}/c/{channel}`, `/dm/{principal}` | **Chats**: the conversation (human drops, agent messages, open questions, event rows), the composer, and the logs of the channel's bound streams (section 9.6.3) |
+| `/dm` | The direct conversations |
+| `/projects/{project}/g`, `/projects/{project}/g/{gallery}`, `/projects/{project}/g/{gallery}/{seq}` | **Galleries**: a project's galleries, a gallery channel's screenshots by section, and one item's stable page (sections 6.3 and 6.4) |
+| `/projects/{project}/logs`, `/projects/{project}/logs/{sink}` | **A project's logs**: its sources with their status, then the Live view of every sink, or one, with the Live filters but the stream picker |
+| `/c/...`, `/g/...` | The addresses before the project view: 308 to their `/projects/...` place |
+| `/live` | Live log view: stream picker, severity filter, regexp filter, follow/pause, ANSI colours, tap a line to copy its seq, attach this line, attach from here on, or select a range. In the Admin menu; open to everyone as a link target |
+| `/streams` | Sources with status (`connected`, `idle`, `down`), rate, drops, claim holder. In the Admin menu; open to everyone |
+| `/admin` | Admin only (admin interface). The admin's menu: Projects, Agents and tokens, sign-in links, the global Sources and Live, unrouted drops |
 | `/agents` | Admin only (admin interface). Principals, last seen, tokens (create or revoke; a token is shown once), the admin password |
 | `/pair` | Admin only (admin interface). QR code to sign a phone in (section 10) |
-| `/projects`, `/projects/{name}` | Admin only (admin interface). Projects, their channels, sinks, retention and members (section 4, "Projects, sinks and grants") |
+| `/projects`, `/projects/{name}/settings` | Admin only (admin interface). Projects and the create form; a project's channels, sinks, retention and members (section 4, "Projects, sinks and grants") |
 | `/drop` | Plain quick-drop form with a chat picker (no-JS fallback of the quick drop sheet) |
 | `/signin` | The admin password form on the admin interface; on the public one, a note to ask the administrator for a sign-in link (DECISIONS, "Admin password and split interfaces") |
 
@@ -1339,6 +1353,8 @@ src/
     QuickDropSheet.ts  NeedsYou.ts  Overview.ts
     Composer.ts  AttachmentTray.ts  ConversationView.ts  StreamPicker.ts  FilterBar.ts
     ChatList.ts  ChannelHeader.ts  ChannelDialog.ts  LogsPane.ts  EventRow.ts
+    SideNav.ts                   the project view's side list: drawer toggle, sinks, switcher badges
+    ProjectCards.ts              home's project cards: badges and latest message
     ConnectionBadge.ts  Toast.ts  UploadStatus.ts
     QuestionCard.ts              binds the choice buttons and the reply form of a rendered card
   pages/
@@ -1429,10 +1445,10 @@ only. There is no device sniffing and no layout logic in TypeScript.
 
 | Class | Width | Navigation | Chats page | Live page |
 |---|---|---|---|---|
-| compact | < 600 px | bottom navigation bar | one column | one column, filters in a bottom sheet |
-| medium | 600-839 px | navigation rail | one column, max 720 px | filter bar inline |
-| expanded | 840-1199 px | navigation rail | chat list + conversation; logs replace the list | full filter bar, column layout |
-| large | >= 1200 px | navigation rail | chat list + conversation + logs pane (bound channels) | same, wider text column |
+| compact | < 600 px | bottom navigation bar | one column; the side list is a drawer | one column, filters in a bottom sheet |
+| medium | 600-839 px | navigation rail | one column, max 720 px; the side list is a drawer | filter bar inline |
+| expanded | 840-1199 px | navigation rail | side list + conversation; logs replace the conversation | full filter bar, column layout |
+| large | >= 1200 px | navigation rail | side list + conversation + logs pane (bound channels) | same, wider text column |
 
 Four layout widths, as custom properties next to grafit's `--page-narrow` and
 `--page-wide`:
@@ -1464,14 +1480,15 @@ Every page shares one shell:
 
   | Item | Icon | Badge | Compact bar | Rail |
   |---|---|---|---|---|
-  | Chats `/` | chat | open questions for you + unread direct messages | yes | yes |
-  | Live `/live` | terminal | none | yes | yes |
-  | Sources `/streams` | sensors | error dot if a source is down | yes | yes |
-  | Agents `/agents` | smart_toy | none | in "More", admin only | yes, admin only |
-  | Pair `/pair` | qr_code | none | in "More", admin only | yes, admin only |
+  | Projects `/` | folder | open questions for you | yes | yes |
+  | Direct `/dm` | chat | unread direct messages | yes | yes |
+  | Admin `/admin` | key | error dot if a source is down | admin only | admin only |
 
-  On compact screens, "More" also holds the theme switch (system, light,
-  dark) and sign out.
+  Live, Sources, Agents, Pair and Projects are entries of the Admin page;
+  inside a project, its logs pages take the place of Live and Sources
+  (DECISIONS 2026-11-19, "projects first").
+
+  "More" holds the theme switch (system, light, dark) and sign out.
 
 - **Icons.** Material Symbols are inlined as an SVG sprite
   (`static/icons.svg`, only the glyphs used). They are not loaded from a
@@ -1486,60 +1503,108 @@ Every page shares one shell:
 - **Safe areas.** Use `env(safe-area-inset-*)` on the top bar, the bottom
   bar and the composer.
 
-#### 9.6.3 Chats (`/`, `/c/{channel}`, `/dm/{principal}`)
+#### 9.6.3 Projects and chats (`/`, `/projects/{project}/...`, `/dm/...`)
 
-The web UI is organised by **chats**: channels (section 6.1) and direct
-conversations. A channel bound to streams is a workspace that holds the
-conversation and the device logs together. Every chat has its own URL, so a
-link to `/c/dut1` can be shared or bookmarked. `/dm/{principal}` shows the
-stream `dm:<me>~<principal>`. Routes are in CONTRACTS.md section 2.
+The web UI is organised like Discord, **projects first** (DECISIONS
+2026-11-19, "projects first"): home lists the projects, and a project's
+pages share a side list of its **chats** (channels, section 6.1), its
+**galleries** (6.3), its **logs** (its sinks, section 4) and, for the
+admin, its **settings**. Direct conversations are outside projects, with
+a list of their own. A channel bound to streams is a workspace that holds
+the conversation and the device logs together. Every page has its own
+URL, so a link to `/projects/lab/c/dut1` can be shared or bookmarked.
+`/dm/{principal}` shows the stream `dm:<me>~<principal>`. Routes are in
+CONTRACTS.md section 2.
 
-**Home (`/`) is the chat list**, with what needs you on top. This is the
-usual messaging-app pattern: the list on the phone, the list plus an
-overview on a desktop.
+**Home (`/`) is the projects**, with what needs you on top, even when
+the viewer sees one project only (no redirect: home is where "Needs you"
+and the direct messages are).
 
 Compact (the phone), home:
 
 ```
 +--------------------------+
-| cafard       [search] [+]|  search filters the list; + new channel
+| cafard                   |
 +--------------------------+
 | NEEDS YOU                |  only when non-empty
 | ? claude-laptop  #dut1   |  open question for you, answerable here
 |   Power-cycle dut1?      |
 |   [done] [can't] [open]  |
-| @ codex-build  1 unread  |  unread direct message
-+--------------------------+
-| CHANNELS                 |
-| * # dut1   ** 10:44   2  |  pinned; one dot per bound stream; unread
-|     codex: image v42 r.. |  last message or event preview
-|   # run-42  *  10:30     |
-|   # general    09:12     |
-| DIRECT                   |
-|   @ codex-build  10:42 1 |
-|   @ claude-laptop 10:01  |
+| PROJECTS                 |
+| [L] Lab bench  10:44  3  |  a card: title, last activity, unread
+|     #dut1 codex: image.. |  the latest message, with its chat
+|     2 chats, 1 gallery, 2 sinks
+| [R] Rack 2     09:12     |
+| [@] Direct messages   1  |  the direct conversations' list
+| [+ New project] [Admin]  |  admin only
 |            [cam] [drop]  |  extended FAB: quick drop
 +--------------------------+
-|  Chats   Live   Sources  |
+| Projects  Direct  Admin  |
 +--------------------------+
 ```
 
+A project, compact, with its drawer open (the menu button of the top bar):
+
+```
++------------------+-------+
+| Lab bench v   [x]|       |  switcher: All projects, each project, Direct
+| CHATS          + |       |  + new channel (bundle)
+| # dut1  * ? 3    |  the  |  dots per bound stream, questions, unread
+| # general        | page, |
+| > Not followed   | under |
+| GALLERIES        | a     |
+| # shots 12 images|scrim  |
+| LOGS             |       |
+| > All logs       |       |
+| ((o)) dut1 *  10:44      |  dot per stream of the sink, last line time
+| ((o)) bench-pi * 09:30   |
+| (gear) Settings  |       |  admin only
++------------------+-------+
+```
+
 - **Needs you.** Open questions addressed to you (`@humans` or your
-  principal), answerable from the list without opening the chat, then
+  principal), answerable from home without opening the chat, then
   direct conversations with unread messages. It is hidden when empty.
-- **Order.** Pinned channels first, then by last activity, which counts
-  messages and bound-stream events. Direct conversations come after the
-  channels, by last activity.
-- **Rows.**
-  - Each row has: the name, one status dot per bound stream (`connected`,
-    `idle` or `down`), the time of last activity, and the unread count.
-  - A preview line shows the last message, or the last event row.
-  - Muted chats are greyed and never counted (see read state below).
-  - A long press, or right-click on a desktop, offers: pin, mute,
-    follow/unfollow, mark read, settings.
-- **More rows.** Humans follow every channel by default. Channels they
-  unfollowed are behind "Show all", and archived ones behind "Archived",
-  both at the bottom.
+- **Project cards.** One per project the viewer sees: its title, the
+  unread messages and open questions of its chats (badges), the time and
+  one line of its latest message (`#chat sender: text`), and how many
+  chats, galleries and sinks it has. Unread counts follow the SSE
+  `counts` event, the line the `entry` events of the home feed.
+- **The project view** `/projects/{project}` opens on the project's most
+  recently active chat, else `#general` (a 303, so the address is the
+  chat's). Its pages: a chat `/c/{channel}`, the galleries `/g` and each
+  gallery `/g/{gallery}`, the logs of every sink `/logs` or of one
+  `/logs/{sink}`, and for the admin `/settings`.
+- **Side list.** From 840 px a sidebar (`--pane-list`), below a drawer
+  over the page; without the bundle the menu button is a link to `#side`
+  and CSS `:target` opens it, with the bundle `SideNav` toggles it (Esc,
+  the scrim and its close button shut it). Its rows are compact: an icon
+  (`#`, the sink's sensor), the name, status dots, the badges, a bold
+  name when something is unread, and the page shown highlighted.
+  - **Chats**: the followed channels, pinned first, then by last
+    activity, which counts messages and bound-stream events; "Not
+    followed" and "Archived" fold below (`<details>`).
+  - **Galleries**: each gallery and its image count.
+  - **Logs**: "All logs", then each sink with one status dot per stream
+    (`connected`, `idle` or `down`; the icon shows the worst) and the
+    time of its last line, live from `stream_status`. Only for viewers
+    who may read the project's logs.
+  - **Settings**: the admin's project page (channels, sinks, retention,
+    members, sign-in links), on the admin interface only.
+- **Header.** The top bar shows the project above the page's title (the
+  channel's name); the side list's head is the project switcher. On wide
+  screens a back arrow returns to home; on a phone the drawer has "All
+  projects".
+- **A project's logs** list the sources of its sinks (the Sources cards)
+  above the Live view on `*:<project>/*` or `*:<project>/<sink>`, with
+  Live's filters but the stream picker; "Open in Live" opens the same
+  streams on `/live`, which keeps every filter.
+- **Rows.** A chat row has the name, one status dot per bound stream,
+  the time of last activity, the unread count and, outside the compact
+  side list, a preview line (the last message, or the last event row).
+  Muted chats are greyed and never counted (see read state below). A long
+  press, or right-click on a desktop, offers: pin, mute, follow/unfollow,
+  mark read, settings.
 - **Quick drop.** The extended FAB opens the composer as a bottom sheet:
   - Its chat picker defaults to the last chat you dropped into.
   - The camera button opens the camera directly.
@@ -1547,11 +1612,12 @@ Compact (the phone), home:
     leaving home.
   - The Android share target (`/share`) opens the same sheet, prefilled
     with the shared files.
-- **Back stack.** Opening a chat pushes `/c/{name}`. The top bar's back
-  arrow and the system back gesture return to the list, and the list keeps
-  its scroll position.
-- **Without the bundle**, home is the same list rendered by the server. The
-  quick drop is a link to `/drop`, a plain form page with the chat picker.
+- **Back stack.** Opening a chat pushes its URL; the system back gesture
+  returns to the page before.
+- **Without the bundle**, every page is the same server-rendered HTML: the
+  cards, the side list and the switcher are links and `<details>`, the
+  drawer a `:target`. The quick drop is a link to `/drop`, a plain form
+  page with the chat picker.
 
 Compact, inside a bound channel:
 
@@ -1581,8 +1647,8 @@ Compact, inside a bound channel:
 ```
 
 Inside a chat on compact screens the bottom navigation bar is hidden, to
-give the conversation and the composer the height. Back returns to the
-list, where the bar is.
+give the conversation and the composer the height. The drawer leads to
+the other chats and back to home, where the bar is.
 
 "Logs" swaps the conversation for a `LogView` of the bound streams, merged,
 with the Live page's filters. The composer stays, so you can answer while
@@ -1592,25 +1658,24 @@ Expanded (840-1199 px) and large (>= 1200 px), inside a chat:
 
 ```
 +----+------------+------------------------------+----------------------+
-|rail| chats      | #dut1  DUT 1 (x86 board)     | logs: bound streams  |
-|    | # general  | serial:dut1 * netconsole:dut1| [sev v] [/re/] || [x] |
-|    | # dut1   * | ---------------------------- | 10:42:01 dut1 I ...  |
-|    | # run-42   | conversation (max 720 px)    | 10:42:03 dut1 W ...  |
-|    | direct     |                              | -- marker --         |
-|    |  codex   2 |                              |                      |
-|    |  claude    | [composer]                   |       [v 12 new]     |
+|rail| Lab v      | #dut1  DUT 1 (x86 board)     | logs: bound streams  |
+|    | CHATS    + | serial:dut1 * netconsole:dut1| [sev v] [/re/] || [x] |
+|    | # dut1 * 3 | ---------------------------- | 10:42:01 dut1 I ...  |
+|    | # general  | conversation (max 720 px)    | 10:42:03 dut1 W ...  |
+|    | GALLERIES  |                              | -- marker --         |
+|    | LOGS       |                              |                      |
+|    |  dut1  *   | [composer]                   |       [v 12 new]     |
 +----+------------+------------------------------+----------------------+
 ```
 
 - On **large** screens the logs pane is open by default for a bound
   channel. It is 420 px wide, resizable, and its width is remembered.
-- On **expanded** screens the "Logs" toggle opens the pane in place of the
-  chat list. The list folds to a column of channel initials with unread
-  dots.
+- On **expanded** screens the "Logs" toggle shows the pane in place of
+  the conversation, as on a phone.
 - Unbound channels and direct conversations have no logs pane and no
   toggle.
-- On these screens, **home (`/`) shows the list and an overview pane** in
-  place of a conversation:
+- On these screens, **home (`/`) shows the projects and an overview
+  pane** beside them:
   - "Needs you", as on the phone.
   - Recent activity across followed chats: the latest messages and event
     rows, each linking to its chat.
@@ -1619,14 +1684,14 @@ Expanded (840-1199 px) and large (>= 1200 px), inside a chat:
   No chat is opened automatically. A desktop that lands on a chat by itself
   hides what needs you in the other chats.
 
-**Chat list (all sizes):**
+**Chat rows (all sizes):**
 
-- It is the same component on the phone home and in the desktop list pane
-  (`ChatList`), fed by one server-rendered partial (`partials/chat_row.html`)
-  and its `<template>` twin.
+- The side lists and "Needs you" use one component (`ChatList`), fed by
+  one server-rendered partial (`partials/chat_row.html`) and its
+  `<template>` twin.
 - Unread counts and status dots update live from the SSE `counts` and
-  `stream_status` events.
-- Its rows, order and sections are the ones described for the phone home.
+  `stream_status` events; a new chat lands in the section of its state
+  and kind (a gallery under Galleries).
 - Pinning and muting are per principal, stored server-side in
   `follows.pinned` and `follows.muted` (section 4), so the phone and the
   desktop agree.
@@ -1643,7 +1708,8 @@ Expanded (840-1199 px) and large (>= 1200 px), inside a chat:
 **Channel header:**
 
 - The title and topic.
-- Bound stream chips. Tapping one opens Live filtered to that stream.
+- Bound stream chips. Tapping one opens its sink's logs in the project
+  view (`/projects/<project>/logs/<sink>`).
 - The claim holder, if a bound stream is claimed.
 - A settings button that opens the channel dialog: title, topic, bindings
   (a stream picker that accepts globs and previews what they match),
@@ -1659,7 +1725,9 @@ Expanded (840-1199 px) and large (>= 1200 px), inside a chat:
 
 **Mapping to the Live page:**
 
-- Live stays the global view across all sources.
+- Live stays the global view across all sources (in the Admin menu, and
+  the target of log attachments and event rows); inside a project, its
+  logs pages are Live on its sinks.
 - Its stream picker also accepts a channel, to view that channel's bound
   streams.
 
@@ -1793,17 +1861,20 @@ Expanded (840-1199 px) and large (>= 1200 px), inside a chat:
   minutes, a principal picker (an existing human, or a new human whose
   name the admin types), and the list of active sessions, each with
   revoke.
-- **Projects (`/projects`, `/projects/{name}`, admin).** The list of
-  projects with a create form; per project its channels (create), its
+- **Admin (`/admin`, admin).** The admin's menu: Projects, Agents and
+  tokens, sign-in links (Pair), the global Sources and Live, and the
+  count of logs that reached no sink. Non-admins never see these items.
+- **Projects (`/projects`, `/projects/{name}/settings`, admin).** The list
+  of projects with a create form (also on home); per project its
+  settings, in the project's side list: its channels (create), its
   sinks (create, edit the source addresses and the serial port, delete,
   make a sink token shown once), its retention, and its members: agents
   and people with their grants (add, remove), and a sign-in link with a
   QR code that grants this project or one of its channels.
-- **Grouped by project.** The chat list, Sources and the Live stream
-  picker group channels and streams under their project, Discord-like:
-  one section per project with its channels (or sinks), and the direct
-  conversations in a section of their own. Both server-rendered, so the
-  Chats and Sources pages still work without the bundle.
+- **Grouped by project.** Sources and the Live stream picker group
+  streams and channels under their project; the project view gives each
+  project its own chats and logs. All server-rendered, so the Chats,
+  Sources and project logs pages still work without the bundle.
 
 #### 9.6.6 Empty states
 
@@ -1886,7 +1957,7 @@ a message or a line on its own:
 | Key | Action |
 |---|---|
 | `/` | focus the filter or the composer |
-| `g c` / `g l` / `g s` | go to Chats, Live, Sources |
+| `g p` / `g d` / `g l` / `g s` | go to the projects, the direct messages, Live, Sources |
 | `f` | toggle follow (Live) |
 | `Esc` | close the sheet, dialog or viewer |
 | `Ctrl+Enter` | send from the composer |
