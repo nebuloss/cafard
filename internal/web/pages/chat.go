@@ -288,7 +288,7 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 
 	at := Place{Nav: "direct", Item: chat.ID}
 	if ch != nil {
-		at = Place{Project: ch.Project(), Item: chat.ID}
+		at = placeIn(ch.Project(), chat.ID)
 	}
 	l := s.shellFor(r, p, ChatName(chat), "chat", at)
 	l.Members = data.Members != nil

@@ -25,17 +25,28 @@ import (
 func (s *Site) mountProjects(mux *http.ServeMux) {
 	mux.HandleFunc("GET /projects", s.Auth(auth.ScopeAdmin, s.projectList))
 	mux.Handle("POST /projects", s.Write(auth.ScopeAdmin, s.createProject))
-	mux.HandleFunc("GET /projects/{project}/settings", s.Auth(auth.ScopeAdmin, s.project))
-	mux.Handle("POST /projects/{project}/retention", s.Write(auth.ScopeAdmin, s.saveRetention))
-	mux.Handle("POST /projects/{project}/channels", s.Write(auth.ScopeAdmin, s.createProjectChannel))
-	mux.Handle("POST /projects/{project}/channels/{channel}/kind", s.Write(auth.ScopeAdmin, s.setChannelKind))
-	mux.Handle("POST /projects/{project}/sinks", s.Write(auth.ScopeAdmin, s.saveSink))
-	mux.Handle("POST /projects/{project}/sinks/{sink}", s.Write(auth.ScopeAdmin, s.saveSink))
-	mux.Handle("POST /projects/{project}/sinks/{sink}/delete", s.Write(auth.ScopeAdmin, s.deleteSink))
-	mux.Handle("POST /projects/{project}/sinks/{sink}/tokens", s.Write(auth.ScopeAdmin, s.createSinkToken))
-	mux.Handle("POST /projects/{project}/grants", s.Write(auth.ScopeAdmin, s.saveGrant))
-	mux.Handle("POST /projects/{project}/grants/{id}/delete", s.Write(auth.ScopeAdmin, s.deleteGrant))
-	mux.Handle("POST /projects/{project}/pairings", s.Write(auth.ScopeAdmin, s.createProjectPairing))
+	// A personal space is not the admin's to manage (its owner adds its
+	// members): its settings do not exist.
+	one := func(pattern string, h http.Handler) {
+		mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if projects.Personal(r.PathValue("project")) {
+				http.NotFound(w, r)
+				return
+			}
+			h.ServeHTTP(w, r)
+		}))
+	}
+	one("GET /projects/{project}/settings", s.Auth(auth.ScopeAdmin, s.project))
+	one("POST /projects/{project}/retention", s.Write(auth.ScopeAdmin, s.saveRetention))
+	one("POST /projects/{project}/channels", s.Write(auth.ScopeAdmin, s.createProjectChannel))
+	one("POST /projects/{project}/channels/{channel}/kind", s.Write(auth.ScopeAdmin, s.setChannelKind))
+	one("POST /projects/{project}/sinks", s.Write(auth.ScopeAdmin, s.saveSink))
+	one("POST /projects/{project}/sinks/{sink}", s.Write(auth.ScopeAdmin, s.saveSink))
+	one("POST /projects/{project}/sinks/{sink}/delete", s.Write(auth.ScopeAdmin, s.deleteSink))
+	one("POST /projects/{project}/sinks/{sink}/tokens", s.Write(auth.ScopeAdmin, s.createSinkToken))
+	one("POST /projects/{project}/grants", s.Write(auth.ScopeAdmin, s.saveGrant))
+	one("POST /projects/{project}/grants/{id}/delete", s.Write(auth.ScopeAdmin, s.deleteGrant))
+	one("POST /projects/{project}/pairings", s.Write(auth.ScopeAdmin, s.createProjectPairing))
 }
 
 type projectRowView struct {
@@ -72,6 +83,9 @@ func (s *Site) renderProjects(w http.ResponseWriter, r *http.Request, p auth.Pri
 	}
 	data := projectsData{}
 	for _, pr := range all {
+		if projects.Personal(pr.Name) {
+			continue
+		}
 		sinks, err := s.d.Projects.Sinks(ctx, pr.Name)
 		if err != nil {
 			s.Oops(w, r, &p, err)

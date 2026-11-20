@@ -93,6 +93,12 @@ for (const [title, section] of [['login page', 'login flow'], ['login page after
   i++;
   await send('claude-laptop', { channel: 'lab/shots', text: title, ...(section ? { section } : {}) }, [`shot${i}.png`]);
 }
+// Private channels: the admin's, and one of alice's the admin is in.
+await api('POST', '/api/channels', { name: 'standup', title: 'Daily standup', private: true, members: ['alice', 'claude-laptop'] });
+await api('POST', '/api/channels', { name: 'mockups', kind: 'gallery', private: true, members: ['admin', 'bob'] }, people['alice']);
+await send('claude-laptop', { channel: '~admin/standup', text: 'Yesterday: USB fix on dut1. Today: soak test on Rack 2.' });
+await send('alice', { channel: '~admin/standup', text: 'I will be at the bench after lunch.' });
+await send('alice', { channel: '~alice/mockups', text: 'new settings page' }, ['shot3.png']);
 await send('codex-build', { to: 'admin', text: 'Build 812 is green. Want me to tag it?' });
 await send('claude-laptop', { to: 'admin', text: 'I need the bench at 14:00 for the USB tests.' });
 await send('alice', { to: 'admin', text: 'Can you give bob access to Rack 2?' });

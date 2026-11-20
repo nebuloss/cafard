@@ -236,7 +236,7 @@ func TestChatsShowGalleryRefsAsCards(t *testing.T) {
 		// The composer offers the project's gallery.
 		`data-action="gallery-picker"`, `data-component="GalleryPicker"`, `data-gallery="lab/shots"`,
 		// The left bar's heading of the project's galleries.
-		`<h3 class="tree-heading"><a href="/projects/lab/g">Galleries</a></h3>`,
+		`<h3 class="tree-heading"><a href="/projects/lab/g">Galleries</a><a class="icon-btn small" href="/channels/new?kind=gallery&amp;project=lab" aria-label="New gallery in Lab">`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("chat page lacks %q", want)

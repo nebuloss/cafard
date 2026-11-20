@@ -18,6 +18,9 @@ const shots = [
   ['/projects/lab/logs', 'logs'],
   ['/dm', 'dm-list'],
   ['/dm/codex-build', 'dm-chat'],
+  ['/projects/~admin/c/standup', 'private-chat'],
+  ['/channels/new', 'new-private'],
+  ['/channels/new?project=lab&kind=gallery', 'new-gallery'],
 ];
 for (const [w, h, tag] of [[1280, 800, 'desktop'], [390, 844, 'phone']]) {
   await page.setViewport({ width: w, height: h, deviceScaleFactor: tag === 'phone' ? 2 : 1, isMobile: tag === 'phone', hasTouch: tag === 'phone' });

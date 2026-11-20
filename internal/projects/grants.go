@@ -53,6 +53,10 @@ func ParseGrant(spec string) (Grant, error) {
 		return Grant{}, fmt.Errorf("grant %q: %w", spec, err)
 	}
 	g.Scopes = sc
+	if Personal(g.Project) {
+		// Members of a private channel are added by its owner only.
+		return Grant{}, fmt.Errorf("grant %q: %s is a personal space; its owner adds its members", spec, g.Project)
+	}
 	return g, g.validate()
 }
 
@@ -79,7 +83,7 @@ func FormatGrants(gs []Grant) string {
 }
 
 func (g Grant) validate() error {
-	if err := ValidateName(g.Project); err != nil {
+	if err := validProject(g.Project); err != nil {
 		return err
 	}
 	if g.Channel != "" && !channelNameOK(g.Channel) {

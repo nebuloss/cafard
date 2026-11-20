@@ -1738,6 +1738,29 @@ a.member[href]:hover, a.member[href]:focus-visible { background: color-mix(in sr
 .member[data-following] .member-follows { color: var(--primary); }
 .member-follows::before { content: "\00b7  "; color: var(--on-surface-variant); }
 
+/* The "+" form: a chat or a gallery, and a private one's members. */
+.kind-choice, .member-choice { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: none; }
+.kind-choice legend, .member-choice legend { padding: 0 4px 4px; font-size: 12px; letter-spacing: .4px; color: var(--on-surface-variant); }
+.kind-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--shape-m);
+  cursor: pointer;
+}
+.kind-option:has(input:checked) { border-color: var(--primary); background: var(--secondary-container); color: var(--on-secondary-container); }
+.kind-option input { margin: 0; accent-color: var(--primary); }
+.kind-glyph { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex: 0 0 auto; font-size: 20px; color: var(--on-surface-variant); }
+.kind-text { display: flex; flex-direction: column; }
+.kind-name { font-weight: 500; }
+.member-choice { max-height: 40dvh; overflow-y: auto; gap: 2px; }
+.member-option { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 8px; border-radius: var(--shape-s); cursor: pointer; }
+.member-option:hover { background: color-mix(in srgb, var(--on-surface) var(--state-hover), transparent); }
+.member-option input { margin: 0; accent-color: var(--primary); }
+.member-option-name { flex: 1 1 auto; }
+
 /* /dm: the direct conversations as a page. */
 .dm-list .chat-rows { gap: 2px; }
 

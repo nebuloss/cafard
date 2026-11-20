@@ -143,7 +143,7 @@ func (s *Site) galleryPage(w http.ResponseWriter, r *http.Request, p auth.Princi
 	if before > 0 {
 		data.Newer = base
 	}
-	l := s.ShellAt(r, &p, "#"+ch.Local(), "gallery", Place{Project: ch.Project(), Item: ch.Stream()})
+	l := s.ShellAt(r, &p, "#"+ch.Local(), "gallery", placeIn(ch.Project(), ch.Stream()))
 	s.Render(w, http.StatusOK, "gallery", l, galleryTwins, data)
 }
 
@@ -196,7 +196,7 @@ func (s *Site) itemPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	if title == "" {
 		title = data.Item.Alt
 	}
-	l := s.ShellAt(r, &p, title, "item", Place{Project: ch.Project(), Item: ch.Stream()})
+	l := s.ShellAt(r, &p, title, "item", placeIn(ch.Project(), ch.Stream()))
 	l.Back = data.SectionHref
 	s.Render(w, http.StatusOK, "item", l, []string{"tpl-toast"}, data)
 }
@@ -243,6 +243,6 @@ func (s *Site) galleriesPage(w http.ResponseWriter, r *http.Request, p auth.Prin
 		}
 		data.Galleries = append(data.Galleries, c)
 	}
-	l := s.ShellAt(r, &p, "Galleries", "galleries", Place{Project: project, Item: sideGalleries})
+	l := s.ShellAt(r, &p, "Galleries", "galleries", placeIn(project, sideGalleries))
 	s.Render(w, http.StatusOK, "galleries", l, []string{"tpl-toast"}, data)
 }

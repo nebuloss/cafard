@@ -3,7 +3,7 @@ import type { Disposable } from '@/core/Disposable.ts';
 import type { Chat, Entry, MemberList, Stream } from '@/model/types.ts';
 import { sectionOf } from '@/components/ChatList.ts';
 import { MEMBERS_HIDDEN, MEMBERS_REFRESH_MS } from '@/components/MembersPanel.ts';
-import { projectTotals, SIDE_FOLDS, sinkStatus } from '@/components/SideNav.ts';
+import { directTotal, projectTotals, SIDE_FOLDS, sinkStatus } from '@/components/SideNav.ts';
 import { ChatPage } from '@/pages/ChatPage.ts';
 import { GalleryPage } from '@/pages/GalleryPage.ts';
 import { HomePage } from '@/pages/HomePage.ts';
@@ -122,26 +122,29 @@ describe('the left bar', () => {
     expect(side().querySelector('[data-section="channels"] a.chat-row[data-chat="chan:lab/run-42"]')?.getAttribute('href')).toBe('/projects/lab/c/run-42');
   });
 
-  it('makes a channel in its project from the New channel dialog', async () => {
+  it('offers a chat and a gallery in each project and a private channel, as plain links', () => {
     loadPage('chat');
-    const { services, http } = fakeServices(() => message, () => ({ ...(fixture('chat_channel') as Chat), id: 'chan:lab/run-42', name: 'run-42' }));
-    const assigned: string[] = [];
-    const real = window.location;
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...real, assign: (p: string) => assigned.push(p), hash: '', search: '', pathname: '/projects/lab/c/dut1' } });
+    const plus = (label: string): string | null => side().querySelector(`a[aria-label="${label}"]`)?.getAttribute('href') ?? null;
+    expect(plus('New chat in Lab')).toBe('/channels/new?kind=chat&project=lab');
+    expect(plus('New gallery in Lab')).toBe('/channels/new?kind=gallery&project=lab');
+    expect(plus('New private channel')).toBe('/channels/new');
+    expect(document.querySelector('[data-component="NewChannel"]')).toBeNull();
+  });
+
+  it('puts a private channel under the direct messages, and counts it on their badge', () => {
+    loadPage('chat');
+    const { services, sources } = fakeServices(() => message);
     running = new ChatPage(document, services, new FakeFrames()).start();
-    const dialog = document.querySelector<HTMLDialogElement>('[data-component="NewChannel"]');
-    expect(dialog?.querySelector<HTMLInputElement>('input[name="project"]')?.value).toBe('');
-    // Each project's Chats heading opens it on that project.
-    document.querySelector<HTMLElement>('details[data-project="lab"] [data-action="new-channel"]')?.click();
-    expect(dialog?.querySelector<HTMLInputElement>('input[name="project"]')?.value).toBe('lab');
-    expect(dialog?.querySelector('[data-slot="project-label"]')?.textContent).toBe('Lab');
-    const name = dialog?.querySelector<HTMLInputElement>('input[name="name"]');
-    if (name) name.value = 'run-42';
-    dialog?.querySelector<HTMLElement>('[data-action="create"]')?.click();
-    await flush();
-    expect(http.calls.find((c) => c.path === '/api/channels')?.body).toEqual({ name: 'run-42', project: 'lab' });
-    expect(assigned).toEqual(['/projects/lab/c/run-42']);
-    Object.defineProperty(window, 'location', { configurable: true, value: real });
+    const notes = { ...(fixture('chat_channel') as Chat), id: 'chan:~admin/notes', name: 'notes', project: '~admin', archived: false, followed: true };
+    sources[0]?.emit('chat', notes);
+    const row = side().querySelector('[data-section="private"] a.chat-row[data-chat="chan:~admin/notes"]');
+    expect(row?.getAttribute('href')).toBe('/projects/~admin/c/notes');
+    expect(side().querySelector('[data-section="channels"] a.chat-row[data-chat="chan:~admin/notes"]')).toBeNull();
+    const c = { open_questions: 0, unread_direct: 1, sources_down: 0, chats: [{ id: 'chan:~admin/notes', unread: 2, open_questions: 0 }, { id: 'chan:lab/dut1', unread: 5, open_questions: 0 }] };
+    expect(directTotal(c)).toBe(3);
+    sources[0]?.emit('counts', c);
+    expect(side().querySelector('[data-badge="direct"]')?.textContent).toBe('3');
+    expect(sectionOf({ ...notes, archived: true })).toBe('');
   });
 });
 

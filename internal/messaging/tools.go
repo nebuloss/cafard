@@ -160,6 +160,8 @@ type createChannelIn struct {
 	Streams []string        `json:"streams,omitempty" jsonschema:"stream ids or globs of the channel's project to bind, e.g. serial:dut1, syslog:dut1*"`
 	Surface dto.Surface     `json:"surface,omitempty" jsonschema:"none, markers (default) or errors: which entries of bound streams the chat shows"`
 	Kind    dto.ChannelKind `json:"kind,omitempty" jsonschema:"chat (default) or gallery: a gallery holds screenshots, one image and a title per message"`
+	Private bool            `json:"private,omitempty" jsonschema:"a private channel in your own space (~<you>/name), read by you and members only; no project, no streams"`
+	Members []string        `json:"members,omitempty" jsonschema:"with private: principals to add, each sharing a project with you"`
 }
 
 type channelOut struct {
@@ -253,7 +255,7 @@ func (s *Service) RegisterTools(m *mcpserver.Server) {
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "wait_message", Description: "Wait for the next message for you (or a reply to reply_to), or timed_out."}, s.toolWaitMessage)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "ask_human", Description: "Ask the humans something, with optional choice buttons, and wait for the first answer. Use it when you need a physical action."}, s.toolAskHuman)
 	mcpserver.AddTool(m, r, mcp.Tool{Name: "list_channels", Description: "The channels: kind (chat or gallery, with a gallery's sections), topic, bound streams and their status, followed or not, unread count, last activity."}, s.toolListChannels)
-	mcpserver.AddTool(m, w, mcp.Tool{Name: "create_channel", Description: "Create a channel, optionally bound to streams (e.g. run-42 bound to serial:dut1), or a gallery for screenshots (kind=gallery). You follow it."}, s.toolCreateChannel)
+	mcpserver.AddTool(m, w, mcp.Tool{Name: "create_channel", Description: "Create a channel, optionally bound to streams (e.g. run-42 bound to serial:dut1), or a gallery for screenshots (kind=gallery); private=true makes it in your own space for you and the members you name. You follow it."}, s.toolCreateChannel)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "update_channel", Description: "Change a channel: title, topic, bindings, surface; rename and archive are for its creator or an admin. Binding changes leave a marker."}, s.toolUpdateChannel)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "delete_channel", Description: "Delete a channel and its messages (creator or admin, runtime channels only)."}, s.toolDeleteChannel)
 	mcpserver.AddTool(m, w, mcp.Tool{Name: "follow", Description: "Follow a channel: its broadcasts reach your inbox."}, s.toolFollow)
@@ -729,7 +731,8 @@ func (s *Service) chatOut(ctx context.Context, p auth.Principal, ch Channel, ver
 }
 
 func (s *Service) toolCreateChannel(ctx context.Context, c *mcpserver.Call, in createChannelIn) (string, channelOut, error) {
-	ch, err := s.CreateChannel(ctx, c.Principal, dto.ChannelCreate{Name: in.Name, Project: in.Project, Title: in.Title, Topic: in.Topic, Patterns: in.Streams, Surface: in.Surface, Kind: in.Kind})
+	ch, err := s.CreateChannel(ctx, c.Principal, dto.ChannelCreate{Name: in.Name, Project: in.Project, Title: in.Title, Topic: in.Topic, Patterns: in.Streams, Surface: in.Surface, Kind: in.Kind,
+		Private: in.Private, Members: in.Members})
 	if err != nil {
 		return "", channelOut{}, err
 	}

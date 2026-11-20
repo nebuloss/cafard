@@ -2,14 +2,11 @@ import { Dom } from '@/core/Dom.ts';
 import type { DisposableBag } from '@/core/Disposable.ts';
 import { ChatList } from '@/components/ChatList.ts';
 import { ConnectionBadge } from '@/components/ConnectionBadge.ts';
-import { closeDialog, openDialog } from '@/components/ImageViewer.ts';
 import { MEMBER_ATTRIBUTES, MembersPanel } from '@/components/MembersPanel.ts';
 import { SideNav } from '@/components/SideNav.ts';
 import { Toast, type ToastTone } from '@/components/Toast.ts';
 import { Shortcuts } from '@/components/Shortcuts.ts';
-import { ApiError } from '@/net/ApiError.ts';
 import { LiveFeed } from '@/net/LiveFeed.ts';
-import { chatHref } from '@/render/format.ts';
 import { CHAT_ROW_ATTRIBUTES, ChatRowRenderer, STREAM_DOT_ATTRIBUTES } from '@/render/renderers/ChatRowRenderer.ts';
 import { SlotTemplate } from '@/render/SlotTemplate.ts';
 import type { Services } from '@/App.ts';
@@ -56,9 +53,9 @@ export function mountShell(doc: Document, services: Services, bag: DisposableBag
 
 /**
  * The left bar, on every signed-in page: the drawer, the trees, the
- * badges and the sinks (SideNav), its chat rows (ChatList, and one for a
- * page's own list in main, as /dm has), and the "New channel" dialog of
- * each project's Chats heading.
+ * badges and the sinks (SideNav), and its chat rows (ChatList, and one for
+ * a page's own list in main, as /dm has). Its "+" are plain links to the
+ * new channel form.
  */
 function mountSide(doc: Document, services: Services, bag: DisposableBag, feed: LiveFeed, notify: Shell['notify']): void {
   const side = Dom.find('[data-component="SideNav"]', doc);
@@ -70,43 +67,6 @@ function mountSide(doc: Document, services: Services, bag: DisposableBag, feed: 
   for (const list of [Dom.find('[data-component="ChatList"]', side), ...Dom.findAll('main [data-component="ChatList"]', doc)]) {
     if (list !== null) bag.add(new ChatList(list, rows, feed.events, services.api, services.clock, (t) => notify(t, 'error'), null).mount());
   }
-  const dialog = Dom.find<HTMLDialogElement>('[data-component="NewChannel"]', side);
-  const buttons = Dom.findAll('[data-action="new-channel"]', side);
-  if (dialog !== null && buttons.length > 0) bindNewChannel(dialog, buttons, services, bag, (path) => doc.defaultView?.location.assign(path));
-}
-
-/** The "New channel" dialog: each project's button opens it on that project; it creates the channel and opens it. */
-export function bindNewChannel(dialog: HTMLDialogElement, buttons: readonly HTMLElement[], services: Services, bag: DisposableBag, go: (path: string) => void): void {
-  for (const button of buttons) {
-    bag.listen(button, 'click', () => {
-      const project = Dom.find<HTMLInputElement>('input[name="project"]', dialog);
-      if (project !== null) project.value = button.dataset['project'] ?? '';
-      Dom.setText(Dom.find('[data-slot="project-label"]', dialog), button.dataset['label'] ?? '');
-      openDialog(dialog);
-    });
-  }
-  bag.listen(dialog, 'click', (event) => {
-    const action = (event.target as Element | null)?.closest<HTMLElement>('[data-action]')?.dataset['action'];
-    if (action === 'close') closeDialog(dialog);
-    if (action !== 'create') return;
-    const value = (n: string): string => Dom.find<HTMLInputElement>(`input[name="${n}"]`, dialog)?.value.trim() ?? '';
-    const patterns = value('patterns').split(',').map((p) => p.trim()).filter((p) => p !== '');
-    const error = Dom.find('[data-slot="error"]', dialog);
-    services.api
-      .createChannel({
-        name: value('name'),
-        ...(value('project') === '' ? {} : { project: value('project') }),
-        ...(value('title') === '' ? {} : { title: value('title') }),
-        ...(patterns.length === 0 ? {} : { patterns }),
-      })
-      .then((chat) => go(chatHref(chat.id)))
-      .catch((e: unknown) => {
-        if (error !== null) {
-          error.hidden = false;
-          error.textContent = e instanceof ApiError ? e.message : 'The channel was not created.';
-        }
-      });
-  });
 }
 
 /** Forms with data-confirm ask before they post. */

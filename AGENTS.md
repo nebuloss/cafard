@@ -343,6 +343,13 @@ scripts/shots/           # a seeded server and Chromium screenshots on dev-build
   `#members`, and the close links to `#main`; SideNav and MembersPanel
   intercept them. Do not give either another id. The CSS hangs on
   `div.app > .side` and `.chat-page[data-members]`: keep that nesting.
+- **Private channels live in personal spaces `~<owner>`** (hidden
+  projects; `projects.Personal`). The admin's `Access` does not reach
+  them without a grant, so never shortcut a check with `Access.All()`:
+  ask `Sees`, `ProjectScopes` or `Can`, which know. A new list of
+  projects must skip `projects.Personal` ones; a new page of a project
+  takes its place from `placeIn`, which sends personal spaces to the
+  direct messages.
 - **Members: `Online` is the web layer's.** `messaging.ChannelMembers`
   takes an `Online` func; the site and the API pass
   `view.Presence.Online` (an open SSE feed, or `last_seen` within 5

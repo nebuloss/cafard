@@ -505,7 +505,12 @@ DECISIONS.md ("Projects, sinks and grants").
   grants the whole project, else one of its channels. Scopes are `read`,
   `message`, `ingest` (project grants only) and `serial_write`. The rules:
   - A principal with no grant sees nothing: no channel, stream, message,
-    blob or other principal. The admin session sees everything.
+    blob or other principal. The admin session sees everything but the
+    personal spaces it has no grant in.
+  - A **personal space** `~<owner>` is a hidden project per principal for
+    its private channels (section 9.6.3): the owner's grant covers it,
+    each member has a channel grant, and grant specs (`cafard token
+    create --grant`, pairing links) cannot name it.
   - Credentials keep their scopes as a **cap**: what a token, a browser
     session or a pairing may do anywhere is the intersection of its scopes
     and the grant of the thing it touches. `tools/list` still follows the
@@ -871,7 +876,7 @@ them. A channel therefore has a **kind**:
   in the gallery's conversation and are not items.
 
 The kind is set at creation (`create_channel(kind=)`, the project page's
-"New channel" form, `POST /api/channels`) and can be changed afterwards
+"New channel" form, the left bar's "+" (`/channels/new`), `POST /api/channels`) and can be changed afterwards
 (`update_channel(kind=)`, "Make it a gallery" / "Make it a chat" on the
 project page; same rights as a binding change, and a marker records it).
 `#general` stays a chat. Changing the kind changes only how the messages
@@ -1115,7 +1120,7 @@ Agents pay for every token, so:
 | `list_principals` | `kind?` | name, kind, last_seen (who can be messaged) |
 | `send` | `text`, `to?` (principal = direct message, `@humans`, or none = broadcast; section 6), `channel?` (`general`, ignored for a direct message), `reply_to?`, `images?` (base64 + mime, at most 6; through `cafard mcp` also `image_paths?`, local files, section 7 Transports), `logs?` (at most 5, section 6.2: `{stream\|channel, from_seq, to_seq?, grep?, min_severity?, title?}`), `section?` (gallery channels only, section 6.3), `gallery_refs?` (item seqs, chat channels only, section 6.4) | `seq`, and per log attachment the resolved line count |
 | `list_channels` | `include_archived?` (false) | name, kind (`chat` or `gallery`, with a gallery's sections and their counts), title, topic, bound patterns and the streams they currently match (with status), followed or not, unread count, last activity |
-| `create_channel` | `name`, `title?`, `topic?`, `streams?` (patterns), `surface?` (`markers`), `kind?` (`chat`) | the channel; the caller follows it |
+| `create_channel` | `name`, `title?`, `topic?`, `streams?` (patterns), `surface?` (`markers`), `kind?` (`chat`), `private?`, `members?` | the channel; the caller follows it. `private` makes it in the caller's personal space, read by the caller and `members` only (section 9.6.3, "Private channels") |
 | `update_channel` | `name`, `rename?`, `title?`, `topic?`, `add_streams?`, `remove_streams?`, `surface?`, `archived?`, `kind?` | the channel after the change; writes a marker. `rename` is for the creator or an admin, runtime channels only |
 | `delete_channel` | `name` | done. Creator or admin, runtime channels only; the channel's messages are deleted with it |
 | `follow` / `unfollow` | `channel` | the follow state |
@@ -1252,6 +1257,7 @@ two.
 | `/projects/{project}` | **A project**: opens on its most recently active chat (303); its pages unfold its tree in the left bar (section 9.6.3) |
 | `/projects/{project}/c/{channel}`, `/dm/{principal}` | **Chats**: the conversation (human drops, agent messages, open questions, event rows), the composer, and the logs of the channel's bound streams (section 9.6.3) |
 | `/dm` | The direct conversations, as a page (the left bar's Direct messages holds the same rows) |
+| `/channels/new` | The "+" of the left bar: a chat or a gallery in a project (`?project=`), or a private one with its members (section 9.6.3) |
 | `/projects/{project}/g`, `/projects/{project}/g/{gallery}`, `/projects/{project}/g/{gallery}/{seq}` | **Galleries**: a project's galleries, a gallery channel's screenshots by section, and one item's stable page (sections 6.3 and 6.4) |
 | `/projects/{project}/logs`, `/projects/{project}/logs/{sink}` | **A project's logs**: its sources with their status, then the Live view of every sink, or one, with the Live filters but the stream picker |
 | `/c/...`, `/g/...` | The addresses before the project view: 308 to their `/projects/...` place |
@@ -1598,9 +1604,27 @@ from the right:
     who may read the project's logs.
   - **Settings**: the admin's project page (channels, sinks, retention,
     members, sign-in links), on the admin interface only.
-- **Direct messages** is the first tree: "All conversations" (`/dm`),
-  then a row per peer with a presence dot (online: a live feed open or a
-  request in the last 5 minutes) and its unread badge.
+- **Direct messages** is the first tree, the reader's own "server":
+  "All conversations" (`/dm`), its **private channels** with a "+", then
+  a row per peer with a presence dot (online: a live feed open or a
+  request in the last 5 minutes) and its unread badge. Its badge counts
+  the unread direct messages and private channels.
+- **Private channels** (DECISIONS 2026-11-20, "private channels") are
+  chats or galleries in a hidden personal space per principal,
+  `~<owner>` (`/projects/~alice/c/notes`, `chan:~alice/notes`). The
+  owner has read and message on the space, each member read and message
+  on the channels they were added to; nobody else sees them, the admin
+  session included, and the space is never listed as a project (not in
+  the left bar's projects, `list_projects`, `/api/projects` or the
+  admin's `/projects`, and it has no settings and no #general). Members
+  are picked among those the owner may reach (a shared project), so a
+  channel reveals no one. Agents reach them over MCP like any channel
+  (`list_channels`, `read`, `send(channel="~alice/notes")`) and make
+  them with `create_channel(private=true, members=[...])`.
+- **The "+"** of a project's Chats and Galleries and of the private
+  channels is a link to one form, `/channels/new`: the kind (chat or
+  gallery), a name, a title, and the bound streams (a project's) or the
+  members (a private one). A plain form, so it works without the bundle.
 - **A project's address** `/projects/{project}` opens on the project's
   most recently active chat, else `#general` (a 303, so the address is
   the chat's). Its pages: a chat `/c/{channel}`, the galleries `/g` and

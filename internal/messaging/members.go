@@ -8,6 +8,7 @@ import (
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
+	"github.com/nebuloss/cafard/internal/projects"
 )
 
 // Online tells whether a principal counts as online: a live feed open, or
@@ -31,7 +32,9 @@ func (s *Service) ChannelMembers(ctx context.Context, viewer auth.Principal, nam
 	if err != nil {
 		return nil, err
 	}
-	reads := map[string]bool{auth.AdminName: true}
+	// The admin reads every channel, but those of a personal space it was
+	// not added to.
+	reads := map[string]bool{auth.AdminName: !projects.Personal(ch.Project())}
 	for _, g := range grants {
 		if (g.Channel == "" || g.Channel == ch.Local()) && g.Scopes.Has(auth.ScopeRead) {
 			reads[g.Principal] = true

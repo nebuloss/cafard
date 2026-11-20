@@ -14,6 +14,8 @@ import { popupMenu, type MenuItem } from '@/components/PopupMenu.ts';
 /** The section of the left bar a chat goes in. */
 export function sectionOf(chat: Chat): string {
   if (chat.kind === 'direct') return 'direct';
+  // A personal space's channel is private, under the direct messages.
+  if (chat.project?.startsWith('~') === true) return chat.archived ? '' : 'private';
   if (chat.archived) return 'archived';
   if (chat.channel_kind === 'gallery') return 'galleries';
   return chat.followed ? 'channels' : 'unfollowed';
@@ -93,8 +95,9 @@ export class ChatList extends Component {
       return;
     }
     const name = sectionOf(chat);
+    if (name === '') return;
     const section = Dom.findAll<HTMLElement>(`[data-section="${name}"]`, this.root)
-      .find((el) => name === 'direct' || el.dataset['project'] === chat.project);
+      .find((el) => name === 'direct' || name === 'private' || el.dataset['project'] === chat.project);
     if (section !== undefined && this.rows !== null) section.prepend(this.rows.render(chat));
   }
 

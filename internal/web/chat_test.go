@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"slices"
@@ -108,6 +109,8 @@ func noBundleChats() map[string][]string {
 			`<aside class="members" id="members" data-component="MembersPanel" data-channel="lab/dut1"`, `href="#members"`,
 			`<section class="member-group" data-group="human"`, `<section class="member-group" data-group="agent"`,
 			`<a class="member" href="/dm/codex-build" data-kind="agent"`,
+			// Each "+" is a link to a plain form.
+			`href="/channels/new?kind=chat&amp;project=lab"`, `href="/channels/new?kind=gallery&amp;project=lab"`, `href="/channels/new" aria-label="New private channel"`,
 		},
 		"/projects/lab/c/dut1?view=logs": {`data-view="logs"`, "U-Boot 2024.04", `class="marker"`, `action="/projects/lab/c/dut1"`},
 		"/dm/codex-build":                {"Build 812 is green.", `name="chat" value="dm:codex-build"`, `data-section="direct"`, `aria-current="page"`},
@@ -493,5 +496,105 @@ func TestChannelMembersShowOnlySharedProjects(t *testing.T) {
 	rec = e.Do("GET", "/api/channels/lab%2Fdut1/members", nil, nil, "Authorization", "Bearer "+rack)
 	if rec.Code == http.StatusOK || strings.Contains(rec.Body.String(), "codex-build") {
 		t.Errorf("an outsider got the members: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// The "+" of the left bar makes a private chat or gallery with members
+// from a plain form, and a project's chat or gallery; a private channel
+// shows to its members only, under their direct messages.
+func TestPrivateChannelsFromTheLeftBar(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	seed(e)
+	ctx := context.Background()
+	so := []string{"Sec-Fetch-Site", "same-origin"}
+	if _, err := e.Stack.Projects.Create(ctx, "rack", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Tokens.EnsurePrincipal(ctx, "rack-agent", auth.KindAgent); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Stack.Projects.SetGrant(ctx, projects.Grant{Principal: "rack-agent", Project: "rack", Scopes: auth.NewScopeSet(auth.ScopeRead, auth.ScopeMessage)}); err != nil {
+		t.Fatal(err)
+	}
+	e.Principal("alice", auth.KindHuman, auth.ScopeRead, auth.ScopeMessage)
+	alice := e.Session("alice", auth.ScopeRead, auth.ScopeMessage)
+	e.Principal("carol", auth.KindHuman, auth.ScopeRead, auth.ScopeMessage)
+	carol := e.Session("carol", auth.ScopeRead, auth.ScopeMessage)
+	admin := e.Admin()
+
+	form := e.Do("GET", "/channels/new", alice, nil).Body.String()
+	for _, want := range []string{`<form class="stack" method="post" action="/channels/new">`, `name="kind" value="chat" checked`, `name="kind" value="gallery"`,
+		`name="members" value="codex-build"`, `name="members" value="carol"`} {
+		if !strings.Contains(form, want) {
+			t.Errorf("the private form lacks %q", want)
+		}
+	}
+	project := e.Do("GET", "/channels/new?project=lab&kind=gallery", alice, nil).Body.String()
+	for _, want := range []string{`name="project" value="lab"`, `name="kind" value="gallery" checked`, `name="patterns"`, `<a class="btn text" href="/projects/lab">Cancel</a>`} {
+		if !strings.Contains(project, want) {
+			t.Errorf("the project's form lacks %q", want)
+		}
+	}
+	if strings.Contains(form, "rack-agent") {
+		t.Error("the private form offers someone alice cannot reach")
+	}
+	post := func(c *http.Cookie, v url.Values) *httptest.ResponseRecorder {
+		t.Helper()
+		return e.Do("POST", "/channels/new", c, v, so...)
+	}
+	rec := post(alice, url.Values{"kind": {"gallery"}, "name": {"pics"}, "members": {"codex-build", "rack-agent"}})
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "There is no principal rack-agent you can reach") ||
+		!strings.Contains(rec.Body.String(), `name="members" value="codex-build" checked`) {
+		t.Errorf("an unreachable member: %d", rec.Code)
+	}
+	rec = post(alice, url.Values{"kind": {"gallery"}, "name": {"pics"}, "members": {"codex-build"}})
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/projects/~alice/g/pics" {
+		t.Fatalf("create = %d %s\n%s", rec.Code, rec.Header().Get("Location"), rec.Body)
+	}
+	rec = post(alice, url.Values{"project": {"lab"}, "kind": {"chat"}, "name": {"run-7"}, "patterns": {"serial:lab/dut1"}})
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/projects/lab/c/run-7" {
+		t.Errorf("a project's chat = %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	if rec := post(alice, url.Values{"project": {"rack"}, "name": {"x"}}); rec.Code != http.StatusNotFound {
+		t.Errorf("a project alice has no grant in: %d", rec.Code)
+	}
+
+	// alice's and codex-build's left bars hold it under the direct
+	// messages; the gallery page opens with them open.
+	home := e.Do("GET", "/", alice, nil).Body.String()
+	if !regexp.MustCompile(`(?s)data-section="private">.*data-chat="chan:~alice/pics"`).MatchString(home) {
+		t.Error("alice's left bar lacks her private gallery")
+	}
+	page := e.Do("GET", "/projects/~alice/g/pics", alice, nil)
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `<details class="tree" data-node="dm" open data-current>`) ||
+		!strings.Contains(page.Body.String(), `<span class="kicker">Private, by alice</span>`) {
+		t.Errorf("the private gallery's page: %d", page.Code)
+	}
+	chats, err := e.svc.Chats(ctx, agentCodex, messaging.ChatsQuery{All: true})
+	if err != nil || !slices.ContainsFunc(chats, func(c dto.Chat) bool { return c.ID == "chan:~alice/pics" }) {
+		t.Errorf("codex-build is not in it: %v", err)
+	}
+	// carol shares lab, the admin reaches every project: neither sees it.
+	for name, c := range map[string]*http.Cookie{"carol": carol, "admin": admin} {
+		if strings.Contains(e.Do("GET", "/", c, nil).Body.String(), "~alice") {
+			t.Errorf("%s's home names alice's space", name)
+		}
+		for _, path := range []string{"/projects/~alice/g/pics", "/projects/~alice/c/pics", "/projects/~alice"} {
+			if rec := e.Do("GET", path, c, nil); rec.Code != http.StatusNotFound {
+				t.Errorf("%s: %s = %d", name, path, rec.Code)
+			}
+		}
+		rec := e.Do("GET", "/api/channels/~alice%2Fpics/members", c, nil)
+		if rec.Code == http.StatusOK || strings.Contains(rec.Body.String(), "codex-build") {
+			t.Errorf("%s gets the members: %d", name, rec.Code)
+		}
+	}
+	for _, path := range []string{"/projects/~alice/settings", "/projects"} {
+		if strings.Contains(e.Do("GET", path, admin, nil).Body.String(), "pics") {
+			t.Errorf("the admin's %s names alice's channel", path)
+		}
+	}
+	if rec := e.Do("GET", "/projects/~alice/settings", admin, nil); rec.Code != http.StatusNotFound {
+		t.Errorf("a personal space has settings: %d", rec.Code)
 	}
 }

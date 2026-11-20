@@ -10,6 +10,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/messaging"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/web/assets"
 	"github.com/nebuloss/cafard/internal/web/view"
 )
@@ -25,20 +26,22 @@ type Place struct {
 	Nav     string // "home", "direct" or "admin": the bar's entry of the page
 	Project string // the project unfolded and marked as the current one
 	Item    string // a chat id, or a side key (sideLogs, sideLogsOf, sideGalleries, sideSettings)
+	Kicker  string // the line above the title, when no project names it
 }
 
 // SideView is partials/side_nav.html (with the layout around it).
 type SideView struct {
 	Home, AdminOn bool
 	Questions     int  // open questions for the reader, on Home
-	DirectOpen    bool // the page is a direct conversation, or /dm
+	DirectOpen    bool // the page is a direct conversation, a private channel, or /dm
 	DirectList    bool // the page is /dm
-	DirectUnread  int
+	DirectUnread  int  // unread direct messages and private channels' messages
 	Direct        []ChatRowView
+	Private       []ChatRowView // the private channels the reader is in
+	NewPrivate    string        // the "+" of the private channels, when the reader may post
 	Projects      []SideProject
 	NoProjects    string
 	SourcesDown   bool // the dot on Admin
-	CanCreate     bool // some project offers "New channel"
 }
 
 // SideProject is one project of the left bar.
@@ -53,7 +56,7 @@ type SideProject struct {
 	Sinks                 []SinkRowView
 	Logs, Settings        string // "" when the reader may not read the logs, or is not the admin
 	LogsOn, SettingsOn    bool
-	CanCreate             bool
+	NewChat, NewGallery   string // the "+" of Chats and Galleries, when the reader may make channels
 }
 
 // SinkRowView is a sink in the left bar: a dot per stream it holds, and
@@ -111,7 +114,7 @@ func (s *Site) visibleProjects(ctx context.Context, p auth.Principal) ([]dto.Pro
 	acc := s.d.Projects.Access(ctx, p)
 	var out []dto.Project
 	for _, pr := range all {
-		if !acc.Sees(pr.Name) {
+		if !acc.Sees(pr.Name) || projects.Personal(pr.Name) {
 			continue
 		}
 		d := dto.Project{Name: pr.Name, Title: pr.Title, CreatedAt: dto.TimeOf(pr.CreatedAt)}
@@ -127,6 +130,28 @@ func (s *Site) visibleProjects(ctx context.Context, p auth.Principal) ([]dto.Pro
 		out = append(out, d)
 	}
 	return out, nil
+}
+
+// placeIn is the place of a page of project: a personal space's pages
+// are under the direct messages.
+func placeIn(project, item string) Place {
+	if owner := projects.OwnerOf(project); owner != "" {
+		return Place{Nav: "direct", Item: item, Kicker: "Private, by " + owner}
+	}
+	return Place{Project: project, Item: item}
+}
+
+// directUnread is the direct messages' badge: unread direct messages and
+// the private channels' unread; src/components/SideNav.ts directTotal
+// matches it.
+func directUnread(c dto.Counts) int {
+	n := c.UnreadDirect
+	for _, ch := range c.Chats {
+		if strings.HasPrefix(ch.ID, "chan:"+projects.PersonalPrefix) {
+			n += ch.Unread
+		}
+	}
+	return n
 }
 
 // projectUnread sums the unread messages and open questions of each
@@ -178,10 +203,13 @@ func (s *Site) side(ctx context.Context, p auth.Principal, at Place, c dto.Count
 	}
 	unread, questions := projectUnread(c)
 	v := SideView{Home: at.Nav == "home", AdminOn: at.Nav == "admin", Questions: c.OpenQuestions,
-		DirectOpen: at.Nav == "direct", DirectList: at.Nav == "direct" && at.Item == "", DirectUnread: c.UnreadDirect, SourcesDown: c.SourcesDown > 0,
+		DirectOpen: at.Nav == "direct", DirectList: at.Nav == "direct" && at.Item == "", DirectUnread: directUnread(c), SourcesDown: c.SourcesDown > 0,
 		NoProjects: "You have no grant in any project yet; ask the admin for one."}
 	if p.Has(auth.ScopeAdmin) {
 		v.NoProjects = "No project yet: make one from Home."
+	}
+	if s.chats != nil && p.Has(auth.ScopeMessage) {
+		v.NewPrivate = NewChannelHref("", "")
 	}
 	var chats []dto.Chat
 	if s.chats != nil {
@@ -210,8 +238,10 @@ func (s *Site) side(ctx context.Context, p auth.Principal, at Place, c dto.Count
 		}
 		sp := SideProject{Name: pr.Name, Label: label, Initials: initials(label), Unread: count(unread[pr.Name]),
 			Questions: count(questions[pr.Name]), Current: here, GalleriesHref: view.GalleriesHref(pr.Name),
-			GalleriesOn: item == sideGalleries,
-			CanCreate:   s.chats != nil && p.Has(auth.ScopeMessage) && acc.ProjectScopes(pr.Name).Has(auth.ScopeMessage)}
+			GalleriesOn: item == sideGalleries}
+		if s.chats != nil && p.Has(auth.ScopeMessage) && acc.ProjectScopes(pr.Name).Has(auth.ScopeMessage) {
+			sp.NewChat, sp.NewGallery = NewChannelHref(pr.Name, dto.ChannelChat), NewChannelHref(pr.Name, dto.ChannelGallery)
+		}
 		if p.Has(auth.ScopeAdmin) {
 			sp.Settings, sp.SettingsOn = view.SettingsHref(pr.Name), item == sideSettings
 		}
@@ -219,7 +249,6 @@ func (s *Site) side(ctx context.Context, p auth.Principal, at Place, c dto.Count
 			sp.Logs, sp.LogsOn = view.LogsHref(pr.Name, ""), item == sideLogs
 			sp.Sinks = s.sinkRows(ctx, pr, streams, item, now)
 		}
-		v.CanCreate = v.CanCreate || sp.CanCreate
 		byName[pr.Name] = len(v.Projects)
 		v.Projects = append(v.Projects, sp)
 	}
@@ -237,6 +266,18 @@ func (s *Site) side(ctx context.Context, p auth.Principal, at Place, c dto.Count
 				row.Presence = "online"
 			}
 			v.Direct = append(v.Direct, row)
+			continue
+		}
+		if projects.Personal(ch.Project) {
+			if !ch.Archived {
+				if ch.ChannelKind == dto.ChannelGallery {
+					row.Items, err = s.galleryCount(ctx, p, ch)
+					if err != nil {
+						return v, err
+					}
+				}
+				v.Private = append(v.Private, row)
+			}
 			continue
 		}
 		i, ok := byName[ch.Project]

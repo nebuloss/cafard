@@ -62,6 +62,7 @@ func (s *Site) mountHome(mux *http.ServeMux) {
 	if s.chats != nil {
 		s.mountChats(mux)
 		s.mountGalleries(mux)
+		s.mountNewChannel(mux)
 	}
 }
 

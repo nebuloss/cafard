@@ -115,6 +115,8 @@ var pageTwins = map[string][]string{
 	"gallery":   withSide("tpl-gallery-item", "tpl-toast"),
 	"item":      withSide("tpl-toast"),
 	"galleries": withSide("tpl-toast"),
+	// The "+" of the left bar: here the private one, with its members.
+	"newchannel": withSide("tpl-toast"),
 }
 
 func withSide(ids ...string) []string { return append(ids, sideTwins...) }
@@ -123,7 +125,7 @@ var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
 	"projects": "/projects", "project": "/projects/lab/settings", "admin": "/admin", "direct": "/dm", "logs": "/projects/lab/logs/dut1",
 	"home": "/", "chat": "/projects/lab/c/dut1", "drop": "/drop",
-	"gallery": "/projects/lab/g/shots", "galleries": "/projects/lab/g", "item": "", // the item's seq is known once seeded
+	"gallery": "/projects/lab/g/shots", "galleries": "/projects/lab/g", "item": "", "newchannel": "/channels/new", // the item's seq is known once seeded
 }
 
 var templateRE = regexp.MustCompile(`(?s)<template id="(tpl-[a-z-]+)">(.*?)</template>`)

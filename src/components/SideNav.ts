@@ -26,6 +26,11 @@ export function projectTotals(c: Counts): Map<string, { unread: number; question
   return out;
 }
 
+/** The direct messages' badge: unread direct messages and private channels, like pages.directUnread. */
+export function directTotal(c: Counts): number {
+  return c.unread_direct + c.chats.filter((x) => x.id.startsWith('chan:~')).reduce((n, x) => n + x.unread, 0);
+}
+
 const isFolds = (raw: unknown): Record<string, boolean> | null => {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
   const out: Record<string, boolean> = {};
@@ -142,7 +147,7 @@ export class SideNav extends Component {
       Dom.setText(Dom.find('[data-slot="unread"]', head), badgeCount(t?.unread ?? 0));
       Dom.setText(Dom.find('[data-slot="questions"]', head), badgeCount(t?.questions ?? 0));
     }
-    for (const [name, n] of [['questions', c.open_questions], ['direct', c.unread_direct]] as const) {
+    for (const [name, n] of [['questions', c.open_questions], ['direct', directTotal(c)]] as const) {
       const badge = Dom.find(`[data-badge="${name}"]`, this.root);
       if (badge !== null) {
         badge.hidden = n === 0;

@@ -120,6 +120,9 @@ func (s *Site) ShellAt(r *http.Request, p *auth.Principal, title, page string, a
 	if at.Project != "" {
 		l.Kicker = side.Label(at.Project)
 	}
+	if at.Kicker != "" {
+		l.Kicker = at.Kicker
+	}
 	return l
 }
 

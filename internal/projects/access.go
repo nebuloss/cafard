@@ -14,7 +14,8 @@ import (
 
 // Access is what one principal may reach: its grants, each capped by the
 // scopes of the credential it came with. The admin session reaches
-// everything; a sink token, and a principal with no grant, nothing.
+// everything but the personal spaces it has no grant in; a sink token, and
+// a principal with no grant, nothing.
 type Access struct {
 	all      bool
 	name     string
@@ -24,15 +25,24 @@ type Access struct {
 	bindings map[string][]string      // the patterns of each granted channel
 }
 
-// All reports whether this is the admin, who reaches everything.
+// All reports whether this is the admin, who reaches every project but
+// the personal spaces (Personal) it has no grant in.
 func (a *Access) All() bool { return a.all }
 
+// open reports whether the admin reaches project without a grant.
+func (a *Access) open(project string) bool { return a.all && !Personal(project) }
+
 // Projects are the projects with any grant, by name; nil for the admin,
-// who has them all.
+// who has them all (but the personal spaces: check with Sees).
 func (a *Access) Projects() []string {
 	if a.all {
 		return nil
 	}
+	return a.granted()
+}
+
+// granted are the projects with a grant, the admin's included.
+func (a *Access) granted() []string {
 	seen := map[string]bool{}
 	for p := range a.projects {
 		seen[p] = true
@@ -51,12 +61,12 @@ func (a *Access) Projects() []string {
 
 // Sees reports whether a has any grant in project.
 func (a *Access) Sees(project string) bool {
-	return a.all || slices.Contains(a.Projects(), project)
+	return a.open(project) || slices.Contains(a.granted(), project)
 }
 
 // ProjectScopes are the scopes of the grant on the whole project.
 func (a *Access) ProjectScopes(project string) auth.ScopeSet {
-	if a.all {
+	if a.open(project) {
 		return a.cap
 	}
 	return a.projects[project]
@@ -65,7 +75,7 @@ func (a *Access) ProjectScopes(project string) auth.ScopeSet {
 // Scopes are what a may do on a stream: a channel, a log stream or a
 // direct conversation.
 func (a *Access) Scopes(stream string) auth.ScopeSet {
-	if a.all {
+	if a.all && !Personal(store.ProjectOf(stream)) {
 		return a.cap
 	}
 	if rest, ok := strings.CutPrefix(stream, "dm:"); ok {
@@ -120,7 +130,8 @@ func (a *Access) LogPatterns() []string {
 }
 
 // ChannelPatterns are the chan: globs of the channels a may read; nil
-// means every one (the admin), empty none.
+// means every one (the admin; callers check each entry, which leaves out
+// the personal spaces), empty none.
 func (a *Access) ChannelPatterns() []string {
 	if a.all {
 		return nil
@@ -178,10 +189,7 @@ func (s *Service) Invalidate() {
 // Access is what p may reach. A database error denies everything for this
 // call and is logged.
 func (s *Service) Access(ctx context.Context, p auth.Principal) *Access {
-	if p.Has(auth.ScopeAdmin) {
-		return &Access{all: true, name: p.Name, cap: p.Scopes}
-	}
-	empty := &Access{name: p.Name, cap: p.Scopes}
+	empty := &Access{name: p.Name, cap: p.Scopes, all: p.Has(auth.ScopeAdmin)}
 	if p.Name == "" || p.Sink != "" {
 		return empty
 	}
@@ -201,6 +209,9 @@ func (s *Service) Access(ctx context.Context, p auth.Principal) *Access {
 		}
 		return empty
 	}
+	// The admin reaches every project, and the personal spaces it has a
+	// grant in (its own, and private channels it was added to).
+	a.all = p.Has(auth.ScopeAdmin)
 	s.cache.mu.Lock()
 	if s.cache.gen == gen {
 		s.cache.entries[key] = cachedAccess{a: a, at: now}

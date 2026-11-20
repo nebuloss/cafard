@@ -357,6 +357,10 @@ export interface ChannelCreate {
   readonly topic?: string;
   readonly patterns?: readonly string[];
   readonly surface?: Surface;
+  readonly kind?: ChannelKind;
+  /** In the creator's own space, read by the creator and members only. */
+  readonly private?: boolean;
+  readonly members?: readonly string[];
 }
 
 export interface ChannelUpdate {

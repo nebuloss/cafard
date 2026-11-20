@@ -370,6 +370,10 @@ type ChannelCreate struct {
 	Patterns []string    `json:"patterns,omitempty"`
 	Surface  Surface     `json:"surface,omitempty"`
 	Kind     ChannelKind `json:"kind,omitempty"` // default chat
+	// Private makes the channel in the creator's personal space, readable
+	// by the creator and Members only (no Project, no Patterns).
+	Private bool     `json:"private,omitempty"`
+	Members []string `json:"members,omitempty"` // principals the creator may reach
 }
 
 // ChannelUpdate is the body that changes a channel. Title, Topic and

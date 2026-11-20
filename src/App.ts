@@ -78,6 +78,7 @@ export class App {
     // Plain pages of links: the shell only.
     this.pages.register('galleries', (doc) => new PairPage(doc, this.services));
     this.pages.register('item', (doc) => new PairPage(doc, this.services));
+    this.pages.register('newchannel', (doc) => new PairPage(doc, this.services));
     this.pages.register('direct', (doc) => new PairPage(doc, this.services));
     this.pages.register('admin', (doc) => new PairPage(doc, this.services));
   }

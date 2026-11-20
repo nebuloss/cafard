@@ -26,7 +26,9 @@ func (s *Service) Projects(ctx context.Context, p auth.Principal) ([]dto.Project
 	a := s.access(ctx, p)
 	out := []dto.Project{}
 	for _, pr := range all {
-		if !a.Sees(pr.Name) {
+		// A personal space is not a project to its readers: its channels
+		// are listed with the rest (list_channels).
+		if !a.Sees(pr.Name) || projects.Personal(pr.Name) {
 			continue
 		}
 		d := dto.Project{Name: pr.Name, Title: pr.Title, CreatedAt: dto.TimeOf(pr.CreatedAt), Retention: RetentionDTO(pr)}

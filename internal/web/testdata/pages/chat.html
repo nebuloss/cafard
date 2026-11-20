@@ -46,6 +46,13 @@
       <summary class="tree-head"><span class="tree-icon tree-dm" aria-hidden="true">@</span><span class="tree-name">Direct messages</span><span class="chat-unread" data-badge="direct" title="Unread direct messages">1</span></summary>
       <div class="tree-body">
         <a class="side-item" href="/dm"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="side-name">All conversations</span></a>
+        
+        <div class="tree-section">
+          <h3 class="tree-heading"><span>Private channels</span><a class="icon-btn small" href="/channels/new" aria-label="New private channel"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></a></h3>
+          <div class="chat-rows" data-section="private"></div>
+        </div>
+        
+        <h3 class="tree-heading"><span>Conversations</span></h3>
         <div class="chat-rows" data-section="direct"><a class="chat-row" href="/dm/codex-build" data-chat="dm:codex-build"><span class="chat-avatar" aria-hidden="true"><span class="chat-initial">C</span><span class="presence" data-presence="offline"></span></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">codex-build</span><span class="visually-hidden">offline</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">codex-build: Build 812 is green.</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">1</span></span></span></a>
 </div>
         
@@ -57,7 +64,7 @@
       <summary class="tree-head" aria-current="true"><span class="tree-icon" aria-hidden="true">L</span><span class="tree-name">Lab</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">6</span></summary>
       <div class="tree-body">
         <div class="tree-section">
-          <h3 class="tree-heading"><span>Chats</span><button class="icon-btn small only-scripted" type="button" data-action="new-channel" data-project="lab" data-label="Lab" aria-label="New channel in Lab" aria-haspopup="dialog"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></button></h3>
+          <h3 class="tree-heading"><span>Chats</span><a class="icon-btn small" href="/channels/new?kind=chat&amp;project=lab" aria-label="New chat in Lab"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></a></h3>
           <div class="chat-rows" data-section="channels" data-project="lab"><a class="chat-row" href="/projects/lab/c/dut1" data-chat="chan:lab/dut1" aria-current="page"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">dut1</span><span class="chat-dots" data-slot="dots">
 <span class="stream-dot" data-status="connected" title="serial:lab/dut1: connected"></span>
 </span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: before and after the fix:</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">3</span></span></span></a>
@@ -68,7 +75,7 @@
         </div>
         
         <div class="tree-section">
-          <h3 class="tree-heading"><a href="/projects/lab/g">Galleries</a></h3>
+          <h3 class="tree-heading"><a href="/projects/lab/g">Galleries</a><a class="icon-btn small" href="/channels/new?kind=gallery&amp;project=lab" aria-label="New gallery in Lab"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></a></h3>
           <div class="chat-rows" data-section="galleries" data-project="lab"><a class="chat-row" href="/projects/lab/g/shots" data-chat="chan:lab/shots"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">shots</span><span class="chat-dots" data-slot="dots"></span><span class="chat-items">3 images</span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: after submit ...</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">3</span></span></span></a>
 </div>
         </div>
@@ -116,19 +123,6 @@
     </details>
     <a class="icon-btn side-close" href="#main" data-action="close-side" aria-label="Close the list"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></a>
   </div>
-  
-  <dialog class="modal new-channel" data-component="NewChannel" aria-labelledby="new-channel-title">
-    <form class="panel stack" method="dialog">
-      <h2 id="new-channel-title">New channel in <span data-slot="project-label"></span></h2>
-      <div class="banner error" data-slot="error" role="alert" hidden></div>
-      <input type="hidden" name="project" value="">
-      <label class="ofield"><span>Name</span><input name="name" required pattern="[a-z0-9\-]{1,40}" placeholder="dut1" autocomplete="off" spellcheck="false"></label>
-      <label class="ofield"><span>Title</span><input name="title" maxlength="200" placeholder="DUT 1 (x86 board)"></label>
-      <label class="ofield"><span>Bound streams (comma separated, globs allowed)</span><input name="patterns" placeholder="serial:lab/dut1, syslog:lab/dut1" autocomplete="off" spellcheck="false"></label>
-      <div class="dialog-actions"><button class="btn text" type="button" data-action="close">Cancel</button><button class="btn filled" type="button" data-action="create">Create</button></div>
-    </form>
-  </dialog>
-  
 </aside>
 <a class="side-scrim" href="#main" data-action="close-side" tabindex="-1" aria-hidden="true"></a>
 

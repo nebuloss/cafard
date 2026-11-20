@@ -133,6 +133,12 @@ func (s *Service) channelFor(ctx context.Context, p auth.Principal, name string,
 		}
 	}
 	if len(found) > 1 {
+		// A bare name means a project's channel before a private one.
+		if shared := slices.DeleteFunc(slices.Clone(found), func(ch Channel) bool { return projects.Personal(ch.Project()) }); len(shared) == 1 {
+			found = shared
+		}
+	}
+	if len(found) > 1 {
 		usable := slices.DeleteFunc(slices.Clone(found), func(ch Channel) bool { return !a.CanChannel(ch.Name, scope) })
 		if len(usable) == 1 {
 			return usable[0], nil
@@ -280,6 +286,9 @@ func (s *Service) BoundStreams(ctx context.Context, ch Channel) ([]string, error
 // ensureGeneral makes the #general of a project, which every project
 // has. It is a config channel: it cannot be renamed or deleted.
 func (s *Service) ensureGeneral(ctx context.Context, project string) error {
+	if projects.Personal(project) {
+		return nil // a personal space holds its private channels only
+	}
 	now := s.clock.Now().UnixNano()
 	_, err := s.db.ExecContext(ctx, `INSERT INTO channels(name, surface, created_by, created_at, last_activity, source)
 		VALUES (?, 'markers', ?, ?, ?, 'config') ON CONFLICT(name) DO NOTHING`, project+"/"+General, systemName, now, now)
@@ -459,7 +468,10 @@ func (s *Service) newChannelProject(ctx context.Context, p auth.Principal, a *pr
 			candidates = append(candidates, pr.Name)
 		}
 	}
-	candidates = slices.DeleteFunc(candidates, func(pr string) bool { return !a.ProjectScopes(pr).Has(auth.ScopeMessage) })
+	// A private channel is made in a personal space by name (CreatePrivate).
+	candidates = slices.DeleteFunc(candidates, func(pr string) bool {
+		return projects.Personal(pr) || !a.ProjectScopes(pr).Has(auth.ScopeMessage)
+	})
 	switch len(candidates) {
 	case 0:
 		return "", "", dto.Errorf(dto.CodeForbidden, "You may make channels in no project: that needs message on a whole project; ask the admin for a grant.")
@@ -473,6 +485,12 @@ func (s *Service) newChannelProject(ctx context.Context, p auth.Principal, a *pr
 func (s *Service) CreateChannel(ctx context.Context, p auth.Principal, req dto.ChannelCreate) (Channel, error) {
 	if err := needMessage(p); err != nil {
 		return Channel{}, err
+	}
+	if req.Private {
+		return s.createPrivate(ctx, p, req)
+	}
+	if len(req.Members) > 0 {
+		return Channel{}, dto.Errorf(dto.CodeBadRequest, "Members are for a private channel (private: true); a project's channel is read by the project's grants.")
 	}
 	a := s.access(ctx, p)
 	project, local, err := s.newChannelProject(ctx, p, a, req.Project, normalizeChannel(req.Name))

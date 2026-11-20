@@ -325,7 +325,8 @@ type Grant struct {
 }
 
 // Access is what one principal may reach, from its grants capped by its
-// credential's scopes. The admin session reaches everything.
+// credential's scopes. The admin session reaches everything but the
+// personal spaces ("~<owner>", Personal) it has no grant in.
 type Access struct{ /* ... */ }
 func (s *Service) Access(ctx context.Context, p auth.Principal) *Access
 func (a *Access) All() bool                          // the admin
@@ -334,6 +335,12 @@ func (a *Access) Can(stream string, sc auth.Scope) bool // chan:, dm: and log st
 func (a *Access) LogPatterns() []string              // globs of readable log streams; nil = all
 func (a *Access) ChannelPatterns() []string          // chan: globs of readable channels; nil = all
 func (a *Access) ProjectScopes(project string) auth.ScopeSet // project grants only
+
+// Personal spaces: a hidden project per principal for its private
+// channels; its owner has read+message on it, each member on its channel.
+func Personal(project string) bool
+func PersonalOf(owner string) string                 // "~" + owner
+func (s *Service) EnsurePersonal(ctx context.Context, owner string) (Project, error)
 
 // Routing: what ingest asks.
 func (s *Service) SinkForAddr(ip netip.Addr) (Sink, bool)           // syslog, netconsole
@@ -390,6 +397,8 @@ mux serves every other route too, by handing it to the public mux.
 | GET | `/projects/{project}/logs/{sink}` | session | read (grant) | - | the same for one sink (`*:<project>/<sink>`) |
 | GET | `/c/{project}/{name}`, `/g/{project}`, `/g/{project}/{gallery}`, `/g/{project}/{gallery}/{seq}` | public | - | - | 308 to the `/projects/{project}/...` address, query kept (links in messages and refs carry them) |
 | GET | `/dm` | session | read | - | the direct conversations, as a page |
+| GET | `/channels/new` | session | message | - | the "+" form: `?project=&kind=chat\|gallery`; without `project` a private channel with its members |
+| POST | `/channels/new` | session | message | SO | form `project`, `kind`, `name`, `title`, `patterns` (a project) or `members` (repeated, private); 303 to the new chat or gallery, the form again with the error |
 | GET | `/dm/{peer}` | session | read | - | direct conversation with `peer`, the left bar's Direct messages open |
 | GET | `/drop` | session | message | - | quick-drop form; `?share=<id>` preloads shared files |
 | GET | `/live` | session | read | - | query `streams, channel, from_seq, to_seq, sev, re, kinds`; in the Admin menu, a link target for everyone (log attachments) |
@@ -456,7 +465,7 @@ The DTOs are in section 3.
 | PUT | `/api/chats/{chat}/prefs` | message | `{pinned?, muted?, followed?}` | `Chat` |
 | POST | `/api/chats/{chat}/read` | message | `{up_to_seq}` | `{acked: n}` |
 | POST | `/api/acks` | message | `{seqs: []}` | `{acked: n}` |
-| POST | `/api/channels` | message (project grant) | `ChannelCreate` | `Chat` (201) |
+| POST | `/api/channels` | message (project grant; a private one: none) | `ChannelCreate` | `Chat` (201) |
 | PATCH | `/api/channels/{name}` | message (project grant; rename, archive: creator or admin) | `ChannelUpdate` | `Chat` |
 | DELETE | `/api/channels/{name}` | message (project grant; creator or admin) | `?confirm={name}` | 204 |
 | GET | `/api/channels/{name}/members` | read (project grant) | | `MemberList`: who can read the channel, among those the caller may know about (`list_principals`' rule); `unknown_channel` when the caller cannot read it |
@@ -667,7 +676,9 @@ type Counts = {
   chats: { id: string; unread: number; open_questions: number }[];  // only chats with a change or non-zero
 };
 
-type ChannelCreate = { name: string; project?: string; title?: string; topic?: string; patterns?: string[]; surface?: Chat["surface"]; kind?: "chat" | "gallery" };
+type ChannelCreate = { name: string; project?: string; title?: string; topic?: string; patterns?: string[]; surface?: Chat["surface"]; kind?: "chat" | "gallery";
+  private?: boolean;     // in the creator's personal space "~<creator>": no project, no patterns
+  members?: string[] };  // with private: principals the creator may reach (a shared project), else not_found
 type ChannelUpdate = {
   rename?: string; title?: string; topic?: string;
   add_patterns?: string[]; remove_patterns?: string[];
@@ -780,7 +791,8 @@ Every connection also receives `counts` and `stream_status`.
   of section 3.2.
 - **Galleries** (PLAN 6.3). `send` takes `section` (gallery channels
   only) and refuses a message to a gallery without an image
-  (`bad_request`). `create_channel` and `update_channel` take `kind`
+  (`bad_request`). `create_channel` takes `private` and `members` (a
+  private channel in the caller's personal space). `create_channel` and `update_channel` take `kind`
   (`chat` or `gallery`). `list_channels` gives `channel_kind` and, for a
   gallery, `sections`; `list_projects` gives `galleries`. `send` takes
   `gallery_refs` (item seqs, chat channels only, PLAN 6.4): one
@@ -812,6 +824,7 @@ Every connection also receives `counts` and `stream_status`.
 | `direct` | `pages/direct.html` (`/dm`) | `PairPage` (the shell and the left bar) | projects first |
 | `drop` | `pages/drop.html` | `DropPage` | D |
 | `gallery` | `pages/gallery.html` (`/projects/{project}/g/{gallery}`) | `GalleryPage` | galleries |
+| `newchannel` | `pages/new_channel.html` (`/channels/new`) | `PairPage` (the shell and the left bar) | private channels |
 | `item` | `pages/item.html` (`/projects/{project}/g/{gallery}/{seq}`) | `PairPage` (the shell and the left bar) | galleries |
 | `galleries` | `pages/galleries.html` (`/projects/{project}/g`) | `PairPage` (the shell and the left bar) | galleries |
 | `logs` | `pages/logs.html` (`/projects/{project}/logs[/{sink}]`) | `LivePage` (with the sources' cards) | projects first |
@@ -838,11 +851,15 @@ bar's twins (`tpl-chat-row`, `tpl-stream-dot`) to any page that has it.
 **The left bar.** `nav.side-list[data-component=ChatList]` holds, in
 order: `a.side-home` (Home, `data-badge="questions"`),
 `details.tree[data-node="dm"]` (its summary carries
-`data-badge="direct"`; the body "All conversations" `/dm` and the rows
-in `data-section="direct"`), then one
+`data-badge="direct"`, the unread direct messages and private channels;
+the body "All conversations" `/dm`, the private channels in
+`data-section="private"` with the "+" to `/channels/new`, and the
+conversations in `data-section="direct"`), then one
 `details.tree.tree-project[data-node="p:<name>"][data-project]` per
 project, `open data-current` on the project's own pages, its summary
-with `data-slot="questions"` and `data-slot="unread"`. The reader's
+with `data-slot="questions"` and `data-slot="unread"`; the Chats and
+Galleries headings carry a "+" to `/channels/new?project=&kind=`. A
+personal space is never a tree: its pages open the direct messages. The reader's
 corner `div.side-foot` has Admin (`data-badge="sources-down"`, admin
 only) and the theme and sign out menu. SideNav
 (`src/components/SideNav.ts`) is the drawer, the folds (localStorage

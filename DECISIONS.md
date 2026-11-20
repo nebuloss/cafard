@@ -3,6 +3,53 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-20: private channels
+
+Asked for by the user: the direct messages as a personal "server", with
+private channels of kind chat or gallery made from a "+" with a kind, a
+name and members, and the same "+" with a kind on a project's Chats and
+Galleries. PLAN 4 and 9.6.3 and CONTRACTS 1.10, 2.1, 2.3, 3.3, 5 and 6
+describe it.
+
+- **A hidden personal project per principal, `~<owner>`.** A private
+  channel is an ordinary channel in it, so the timeline, galleries, read
+  state, follows, members panel, SSE, MCP tools and retention all work
+  unchanged, and access stays one mechanism: the owner gets read and
+  message on the whole space (`EnsurePersonal`), each member read and
+  message on the channel they were added to. `~` is outside the project
+  name rule, so no admin-made project can collide, and `chan:~alice/x`
+  is a valid stream id. The space has no `#general` (the create hooks
+  are skipped) and no settings page.
+- **The admin session does not reach other people's spaces.** "Private"
+  should mean it: the admin's blanket access stops at personal spaces it
+  has no grant in (`Access.open`), and every read goes through
+  `Access.Scopes`, so the admin's lists, counts, feeds, inbox, members
+  panel and pages leave them out (a test pins each). The admin still
+  reaches its own space and channels it was added to. Direct messages
+  keep their old rule.
+- **Never listed as a project.** `list_projects`, `/api/projects`, the
+  left bar's projects and the admin's `/projects` skip personal spaces;
+  their channels show under the reader's Direct messages and in
+  `list_channels`. A bare channel name prefers a project's channel over a
+  private one, and `create_channel` without a project never picks a
+  personal space, so existing agents' calls behave as before.
+- **Members are people the owner may reach** (a shared project, the rule
+  of `send(to=)`). An unknown name and an unreachable one get the same
+  `not_found`, so the form cannot probe for principals. Members follow
+  the channel (agents too, who otherwise follow nothing by default), so
+  it shows in their lists and inbox at once. Being in a private channel
+  together makes members reachable to each other (they share the space),
+  which they are anyway inside the channel.
+- **No grant spec names a personal space**: `cafard token create
+  --grant` and pairing links refuse `~...`, since members are the
+  owner's to add.
+- **The "+" is one plain form, `/channels/new`,** for a project's chat or
+  gallery (`?project=&kind=`) and a private one (with member
+  checkboxes). It replaces the bundle-only "New channel" dialog: a page
+  works without the bundle, gives room to the members list on a phone,
+  and leaves one code path. Adding and removing members after creation
+  is not built yet.
+
 ## 2026-11-20: a Discord-like left bar
 
 Asked for by the user after the projects-first deploy: closer to Discord,

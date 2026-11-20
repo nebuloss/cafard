@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faebe0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#261e18" media="(prefers-color-scheme: dark)">
+
+<title>New private channel - cafard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/app.css">
+
+</head>
+<body data-page="newchannel" class="shell with-side">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="bar">
+    
+    <a class="icon-btn side-open" href="#side" data-action="open-side" aria-controls="side" aria-label="Projects and conversations"><svg aria-hidden="true"><use href="/static/icons.svg#menu"></use></svg></a>
+    
+    <a class="icon-btn" href="/dm" aria-label="Back"><svg aria-hidden="true"><use href="/static/icons.svg#arrow_back"></use></svg></a>
+    
+    <div class="title-block"><span class="kicker">Direct messages</span><h1>New private channel</h1></div>
+    <span class="spacer"></span>
+    
+    <span class="connection only-scripted" data-component="ConnectionBadge" data-state="connecting" role="status" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span><span class="connection-label" data-slot="label">connecting</span>
+    </span>
+    
+    
+  </div>
+</header>
+
+<div class="app">
+
+<aside class="side" id="side" data-component="SideNav" aria-label="Projects and conversations">
+  <nav class="side-list" data-component="ChatList" aria-label="Projects and conversations">
+    <a class="side-item side-home" href="/"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#cafard"></use></svg><span class="side-name">Home</span><span class="chat-questions" data-badge="questions" title="Questions for you">1</span></a>
+    <details class="tree" data-node="dm" open data-current>
+      <summary class="tree-head"><span class="tree-icon tree-dm" aria-hidden="true">@</span><span class="tree-name">Direct messages</span><span class="chat-unread" data-badge="direct" title="Unread direct messages">1</span></summary>
+      <div class="tree-body">
+        <a class="side-item" href="/dm"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg><span class="side-name">All conversations</span></a>
+        
+        <div class="tree-section">
+          <h3 class="tree-heading"><span>Private channels</span><a class="icon-btn small" href="/channels/new" aria-label="New private channel"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></a></h3>
+          <div class="chat-rows" data-section="private"></div>
+        </div>
+        
+        <h3 class="tree-heading"><span>Conversations</span></h3>
+        <div class="chat-rows" data-section="direct"><a class="chat-row" href="/dm/codex-build" data-chat="dm:codex-build"><span class="chat-avatar" aria-hidden="true"><span class="chat-initial">C</span><span class="presence" data-presence="offline"></span></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">codex-build</span><span class="visually-hidden">offline</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">codex-build: Build 812 is green.</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">1</span></span></span></a>
+</div>
+        
+      </div>
+    </details>
+    <h2 class="side-heading"><span>Projects</span><a class="icon-btn small" href="/projects#new-project" aria-label="New project"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></a></h2>
+    
+    <details class="tree tree-project" data-node="p:lab" data-project="lab">
+      <summary class="tree-head"><span class="tree-icon" aria-hidden="true">L</span><span class="tree-name">Lab</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">6</span></summary>
+      <div class="tree-body">
+        <div class="tree-section">
+          <h3 class="tree-heading"><span>Chats</span><a class="icon-btn small" href="/channels/new?kind=chat&amp;project=lab" aria-label="New chat in Lab"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></a></h3>
+          <div class="chat-rows" data-section="channels" data-project="lab"><a class="chat-row" href="/projects/lab/c/dut1" data-chat="chan:lab/dut1"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">dut1</span><span class="chat-dots" data-slot="dots">
+<span class="stream-dot" data-status="connected" title="serial:lab/dut1: connected"></span>
+</span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: before and after the fix:</span><span class="chat-questions" data-slot="questions" title="Open questions">1</span><span class="chat-unread" data-slot="unread" title="Unread messages">3</span></span></span></a>
+<a class="chat-row" href="/projects/lab/c/general" data-chat="chan:lab/general"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">general</span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+</div>
+          
+          
+        </div>
+        
+        <div class="tree-section">
+          <h3 class="tree-heading"><a href="/projects/lab/g">Galleries</a><a class="icon-btn small" href="/channels/new?kind=gallery&amp;project=lab" aria-label="New gallery in Lab"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg></a></h3>
+          <div class="chat-rows" data-section="galleries" data-project="lab"><a class="chat-row" href="/projects/lab/g/shots" data-chat="chan:lab/shots"><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name">shots</span><span class="chat-dots" data-slot="dots"></span><span class="chat-items">3 images</span><time class="chat-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></span><span class="chat-line"><span class="chat-preview" data-slot="preview">claude-laptop: after submit ...</span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages">3</span></span></span></a>
+</div>
+        </div>
+        
+        
+        <div class="tree-section">
+          <h3 class="tree-heading"><span>Logs</span></h3>
+          <div class="side-rows" data-section="sinks">
+            <a class="side-item" href="/projects/lab/logs"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg><span class="side-name">All logs</span></a>
+            <a class="side-item sink-row" href="/projects/lab/logs/bench-pi" data-sink="lab/bench-pi" data-status="connected"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="side-name">bench-pi</span><span class="sink-dots">
+<span class="stream-dot" data-status="connected" title="syslog:lab/bench-pi: connected"></span>
+</span><time class="side-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></a><a class="side-item sink-row" href="/projects/lab/logs/dut1" data-sink="lab/dut1" data-status="connected" title="DUT 1"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="side-name">dut1</span><span class="sink-dots">
+<span class="stream-dot" data-status="connected" title="serial:lab/dut1: connected"></span>
+</span><time class="side-time" data-slot="time" datetime="2026-11-16T09:40:00Z">09:40</time></a>
+          </div>
+        </div>
+        
+        
+        <a class="side-item" href="/projects/lab/settings"><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#settings"></use></svg><span class="side-name">Settings</span></a>
+        
+      </div>
+    </details>
+    
+  </nav>
+  <div class="side-foot">
+    <span class="avatar" aria-hidden="true">A</span>
+    <span class="side-user"><span class="side-user-name">admin</span><span class="side-user-kind">human</span></span>
+    <a class="icon-btn side-admin" href="/admin" aria-label="Admin"><svg aria-hidden="true"><use href="/static/icons.svg#key"></use></svg><span class="side-dot" data-badge="sources-down" title="A source is down" hidden></span></a>
+    <details class="side-menu">
+      <summary class="icon-btn" aria-label="More"><svg aria-hidden="true"><use href="/static/icons.svg#more_horiz"></use></svg></summary>
+      <div class="menu" role="menu">
+        <form class="theme-switch" method="post" action="/theme" aria-label="Theme">
+          <input type="hidden" name="next" value="/channels/new">
+          <span class="menu-caption">Theme</span>
+          <span class="segmented">
+            <button type="submit" name="theme" value="system" aria-pressed="true">System</button>
+            <button type="submit" name="theme" value="light" aria-pressed="false">Light</button>
+            <button type="submit" name="theme" value="dark" aria-pressed="false">Dark</button>
+          </span>
+        </form>
+        <form method="post" action="/signout">
+          <button class="menu-item" type="submit" role="menuitem"><svg aria-hidden="true"><use href="/static/icons.svg#logout"></use></svg>Sign out admin</button>
+        </form>
+      </div>
+    </details>
+    <a class="icon-btn side-close" href="#main" data-action="close-side" aria-label="Close the list"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></a>
+  </div>
+</aside>
+<a class="side-scrim" href="#main" data-action="close-side" tabindex="-1" aria-hidden="true"></a>
+
+
+<main id="main">
+
+
+<section class="narrow new-channel-page">
+  
+  <p class="muted">A private channel is yours: only you and the members you add read it, agents included through MCP. You may add those who share a project with you.</p>
+  
+  <form class="stack" method="post" action="/channels/new">
+    <input type="hidden" name="project" value="">
+    <fieldset class="kind-choice">
+      <legend>Kind</legend>
+      <label class="kind-option"><input type="radio" name="kind" value="chat" checked><span class="kind-glyph" aria-hidden="true">#</span><span class="kind-text"><span class="kind-name">Chat</span><span class="muted body-small">Messages, questions, images and logs</span></span></label>
+      <label class="kind-option"><input type="radio" name="kind" value="gallery"><svg class="kind-glyph" aria-hidden="true"><use href="/static/icons.svg#image"></use></svg><span class="kind-text"><span class="kind-name">Gallery</span><span class="muted body-small">Screenshots, one image and a title each, by section</span></span></label>
+    </fieldset>
+    <label class="ofield"><span>Name</span><input name="name" required pattern="[a-z0-9\-]{1,40}" value="" placeholder="notes" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label class="ofield"><span>Title (optional)</span><input name="title" maxlength="200" value=""></label>
+    
+    <fieldset class="member-choice">
+      <legend>Members</legend>
+      <label class="member-option"><input type="checkbox" name="members" value="claude-laptop"><span class="member-option-name">claude-laptop</span><span class="muted body-small">agent</span></label>
+      <label class="member-option"><input type="checkbox" name="members" value="codex-build"><span class="member-option-name">codex-build</span><span class="muted body-small">agent</span></label>
+      
+    </fieldset>
+    
+    <div class="dialog-actions"><a class="btn text" href="/dm">Cancel</a><button class="btn filled" type="submit">Create</button></div>
+  </form>
+</section>
+
+</main>
+</div>
+<div class="toast-region" data-component="Toast" aria-live="polite">
+
+</div>
+<div class="dialog-root" data-dialog-root></div>
+<template id="tpl-toast">
+<div class="toast" data-tone="" role="status"><span class="toast-text" data-slot="text"></span><span class="toast-action" data-slot="action"></span></div>
+</template>
+<template id="tpl-chat-row"><a class="chat-row" href="" data-chat=""><span class="chat-avatar" aria-hidden="true"></span><span class="chat-main"><span class="chat-line"><span class="chat-name" data-slot="name"></span><span class="chat-dots" data-slot="dots"></span><time class="chat-time" data-slot="time" datetime=""></time></span><span class="chat-line"><span class="chat-preview" data-slot="preview"></span><span class="chat-questions" data-slot="questions" title="Open questions"></span><span class="chat-unread" data-slot="unread" title="Unread messages"></span></span></span></a>
+</template>
+<template id="tpl-stream-dot">
+<span class="stream-dot" data-status="" title=""></span>
+</template>
+
+</body>
+</html>
