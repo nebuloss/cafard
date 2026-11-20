@@ -26,7 +26,8 @@ export class ChatRowRenderer {
       const el = row.querySelector(`[data-slot="${slot}"]`);
       if (el !== null && el.textContent !== text) el.textContent = text;
     };
-    set('name', `${chat.kind === 'direct' ? '@' : '#'}${chat.name}`);
+    // Bare, like pages.ChatRow: the avatar carries the "#" or "@".
+    set('name', chat.name);
     set('preview', chat.preview === undefined ? '' : previewText(chat.preview));
     set('time', chat.last_activity === undefined ? '' : messageTime(chat.last_activity, this.now()));
     row.querySelector('[data-slot="time"]')?.setAttribute('datetime', chat.last_activity ?? '');

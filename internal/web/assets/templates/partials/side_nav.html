@@ -44,7 +44,7 @@
           <h3 class="tree-heading"><span>Logs</span></h3>
           <div class="side-rows" data-section="sinks">
             <a class="side-item" href="{{.Logs}}"{{if .LogsOn}} aria-current="page"{{end}}><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#terminal"></use></svg><span class="side-name">All logs</span></a>
-            {{range .Sinks}}<a class="side-item sink-row" href="{{.Href}}" data-sink="{{.Ref}}" data-status="{{.Status}}"{{if .Active}} aria-current="page"{{end}}><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="side-name">{{.Name}}{{if .Title}} <span class="muted">{{.Title}}</span>{{end}}</span><span class="sink-dots">{{range .Dots}}{{template "partials/stream_dot.html" .}}{{end}}</span><time class="side-time" data-slot="time" datetime="{{.ISO}}">{{if .Time}}{{.Time}}{{else}}no line yet{{end}}</time></a>{{end}}
+            {{range .Sinks}}<a class="side-item sink-row" href="{{.Href}}" data-sink="{{.Ref}}" data-status="{{.Status}}"{{if .Title}} title="{{.Title}}"{{end}}{{if .Active}} aria-current="page"{{end}}><svg class="side-icon" aria-hidden="true"><use href="/static/icons.svg#sensors"></use></svg><span class="side-name">{{.Name}}</span><span class="sink-dots">{{range .Dots}}{{template "partials/stream_dot.html" .}}{{end}}</span><time class="side-time" data-slot="time" datetime="{{.ISO}}">{{if .Time}}{{.Time}}{{else}}no line yet{{end}}</time></a>{{end}}
           </div>
         </div>
         {{end}}

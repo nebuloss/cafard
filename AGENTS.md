@@ -83,6 +83,7 @@ scripts/check-sinks.sh   # the CI grep for HTML sinks in src/
 scripts/remote.sh        # sync to dev-build: gofmt -l, build, vet, test -race
 scripts/remote.sh <cmd>  # run anything in the remote tree
 scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appliance
+scripts/shots/           # a seeded server and Chromium screenshots on dev-build (its README)
 ```
 
 `remote.sh` rsyncs the working tree, including the built `main.js`, so run

@@ -788,7 +788,7 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
   .sc-preview { grid-column: auto; display: block; padding-top: 7px; }
   .sc-rate::after, .sc-dropped::before { content: none; }
   .sc-claim:empty, .sc-lines:empty { display: flex; }
-  .sc-open { padding: 6px 0; min-height: 0; }
+  .sc-open { padding: 6px 0; min-height: 0; white-space: nowrap; }
 }
 
 .empty { max-width: var(--pane-reading); }
@@ -1001,6 +1001,7 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 .chat-row[data-muted] { opacity: .6; }
 .chat-row[hidden] { display: none; }
 .chat-avatar {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1015,6 +1016,7 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 .chat-row[data-chat^="chan:"] .chat-avatar::before { content: "#"; }
 .chat-row[data-chat^="dm:"] .chat-avatar { background: var(--tertiary-container); color: var(--on-tertiary-container); }
 .chat-row[data-chat^="dm:"] .chat-avatar::before { content: "@"; }
+.chat-row .chat-avatar:has(.chat-initial)::before { content: none; }
 .chat-row[data-pinned] .chat-avatar { box-shadow: 0 0 0 2px var(--primary); }
 .chat-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
 .chat-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -1441,7 +1443,7 @@ dialog.image-viewer {
 .gallery-group .list-heading { display: block; margin: 16px 0 8px; }
 .gallery-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 .gallery-item { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; border-radius: var(--shape-m); overflow: hidden; background: var(--surface-container); }
-.gallery-item img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--surface-container-highest); }
+.gallery-item img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; background: var(--surface-container-highest); }
 .gallery-title { padding: 0 8px 8px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gallery-title:empty { display: none; }
 .gallery-figure { margin: 12px 0; }
@@ -1509,7 +1511,9 @@ body.shell { --chat-height: calc(100dvh - var(--topbar-height) - env(safe-area-i
 .title-block { display: flex; flex-direction: column; min-width: 0; }
 .kicker { font-size: 12px; line-height: 16px; letter-spacing: .5px; color: var(--on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title-block .kicker + h1 { font-size: 18px; line-height: 24px; }
-.members-toggle[aria-pressed="true"] { background: var(--secondary-container); color: var(--on-secondary-container); }
+@media (min-width: 840px) {
+  .members-toggle[aria-pressed="true"] { background: var(--secondary-container); color: var(--on-secondary-container); }
+}
 
 /* The left bar. */
 .side {
@@ -1584,6 +1588,7 @@ body.shell { --chat-height: calc(100dvh - var(--topbar-height) - env(safe-area-i
   transition: border-radius var(--motion-short) var(--easing);
 }
 .tree-dm { background: var(--tertiary-container); color: var(--on-tertiary-container); font-size: 16px; }
+.tree-head { font-size: 15px; }
 .tree-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-head:has(> .chat-unread:not(:empty, [hidden])) .tree-name { font-weight: 700; }
 .tree[data-current] > .tree-head { background: var(--secondary-container); color: var(--on-secondary-container); }
@@ -1615,8 +1620,9 @@ body.shell { --chat-height: calc(100dvh - var(--topbar-height) - env(safe-area-i
 }
 .side .chat-row:hover, .side-item:hover, .side-item:focus-visible { background: color-mix(in srgb, var(--on-surface) var(--state-hover), transparent); text-decoration: none; }
 .side .chat-row[aria-current="page"], .side-item[aria-current="page"] { background: var(--secondary-container); color: var(--on-secondary-container); }
-.side .chat-avatar { position: relative; width: 20px; height: 20px; background: none; color: inherit; font-size: 18px; }
+.side .chat-avatar { width: 20px; height: 20px; background: none; color: inherit; font-size: 18px; }
 .side .chat-row[data-chat^="dm:"] .chat-avatar { width: 28px; height: 28px; background: var(--tertiary-container); font-size: 14px; }
+.side .chat-row[data-chat^="chan:"] .chat-avatar { color: var(--on-surface-variant); font-weight: 400; }
 .side .chat-row .chat-main { flex-direction: row; align-items: center; gap: 6px; }
 .side .chat-row .chat-line { display: contents; }
 .side .chat-row .chat-preview, .side .chat-row .chat-time { display: none; }
@@ -1730,6 +1736,7 @@ a.member[href]:hover, a.member[href]:focus-visible { background: color-mix(in sr
 .member-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-meta { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member[data-following] .member-follows { color: var(--primary); }
+.member-follows::before { content: "\00b7  "; color: var(--on-surface-variant); }
 
 /* /dm: the direct conversations as a page. */
 .dm-list .chat-rows { gap: 2px; }
@@ -1763,6 +1770,8 @@ a.member[href]:hover, a.member[href]:focus-visible { background: color-mix(in sr
     background: color-mix(in srgb, var(--scrim) 32%, transparent);
   }
   .side-close { display: inline-flex; }
+  /* The menu button stands for the mark, as Discord's phone app does. */
+  .topbar .side-open ~ .mark { display: none; }
 }
 
 /* From 840 px: three columns, the left bar, the page, the members. */

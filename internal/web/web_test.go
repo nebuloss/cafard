@@ -223,7 +223,7 @@ var noBundle = map[string][]string{
 	},
 	"/projects/lab/logs/dut1": {
 		"U-Boot 2024.04", `data-stream="serial:lab/dut1"`, `<form class="filter-bar" method="get" action="/projects/lab/logs/dut1"`,
-		`href="/live?streams=%2A%3Alab%2Fdut1"`, `data-sink="lab/dut1" data-status="connected" aria-current="page">`,
+		`href="/live?streams=%2A%3Alab%2Fdut1"`, `data-sink="lab/dut1" data-status="connected" title="DUT 1" aria-current="page">`,
 	},
 }
 

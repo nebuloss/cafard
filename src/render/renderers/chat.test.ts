@@ -83,7 +83,7 @@ describe('chat renderers on the pages the Go template test wrote', () => {
     const row = r.rows?.render(fixture('chat_channel') as Chat);
     expect(row?.getAttribute('href')).toBe('/projects/lab/c/dut1');
     expect(row?.hasAttribute('data-pinned')).toBe(true);
-    expect(row?.querySelector('[data-slot="name"]')?.textContent).toBe('#dut1');
+    expect(row?.querySelector('[data-slot="name"]')?.textContent).toBe('dut1');
     expect(row?.querySelector('[data-slot="unread"]')?.textContent).toBe('3');
     expect(row?.querySelector('[data-slot="preview"]')?.textContent).toBe('claude-laptop: Should I flash the board with the patched kernel?');
     expect(row?.querySelectorAll('.stream-dot')).toHaveLength(2);

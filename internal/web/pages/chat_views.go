@@ -29,6 +29,7 @@ type ChatRowView struct {
 	Unfollowed            bool
 	Items                 string // a gallery's "N images", in the left bar
 	Presence              string // a direct conversation's peer: "online" or "offline"
+	Initial               string // a direct conversation's peer, in its avatar
 }
 
 // MessageView is partials/message.html (tpl-message).
@@ -142,9 +143,14 @@ func count(n int) string {
 
 // ChatRow is the list row of a chat.
 func ChatRow(c dto.Chat, now time.Time, active string) ChatRowView {
-	v := ChatRowView{ID: c.ID, Href: view.ChatHref(c.ID), Name: ChatName(c), Title: c.Title,
+	// The avatar says "#" or holds the peer's initial, so the name goes
+	// bare, as Discord's lists do.
+	v := ChatRowView{ID: c.ID, Href: view.ChatHref(c.ID), Name: c.Name, Title: c.Title,
 		Unread: count(c.Unread), Questions: count(c.OpenQuestions),
 		Pinned: c.Pinned, Muted: c.Muted, Archived: c.Archived, Active: c.ID == active, Unfollowed: !c.Followed}
+	if c.Kind == dto.ChatDirect {
+		v.Initial = initial(c.Name)
+	}
 	if c.ChannelKind == dto.ChannelGallery {
 		v.Href = messaging.GalleryHref(strings.TrimPrefix(c.ID, "chan:"), nil)
 	}

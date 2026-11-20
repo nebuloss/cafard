@@ -127,7 +127,7 @@ func TestListsAreGroupedByProject(t *testing.T) {
 	side := e.Do("GET", "/projects/lab/c/dut1", admin, nil).Body.String()
 	lab := regexp.MustCompile(`(?s)<details class="tree tree-project" data-node="p:lab" data-project="lab" open data-current>.*?</details>\s*<details class="tree tree-project" data-node="p:rack" data-project="rack">`)
 	tree := lab.FindString(side)
-	if !regexp.MustCompile(`(?s)data-section="channels" data-project="lab">.*#dut1`).MatchString(tree) || strings.Contains(tree, "chan:rack/general") {
+	if !regexp.MustCompile(`(?s)data-section="channels" data-project="lab">.*>dut1<`).MatchString(tree) || strings.Contains(tree, "chan:rack/general") {
 		t.Error("lab's tree does not hold its channels alone, or rack's is open")
 	}
 	if !strings.Contains(tree, `href="/projects/lab/logs/bench-pi" data-sink="lab/bench-pi"`) || !strings.Contains(side, `href="/projects/rack/c/general"`) {
