@@ -634,10 +634,11 @@ storage of their own (a NAS, S3) without the key; it is done there, then.
 
 | Table | Holds |
 |---|---|
-| `people` | username, display name, password hash, admin |
+| `identities` | people, agents and devices in one table, because they share one namespace (`@name` means one member): name, kind, display name, description, admin (people only), enabled, deleted |
+| `people` | a person's login: password hash |
 | `passkeys` | person, credential id, public key, name, last used |
 | `signins` | person, cookie hash, where, last used, expiry |
-| `identities` | agents and devices: kind, name, description, token hash, created, last used, enabled |
+| `tokens` | an agent's or device's token: hash, created, last used, from where |
 | `projects` | name, retention, quota, archived |
 | `members` | (project, person or identity) |
 | `sessions` | agent, MCP session id, task, selected project, last active |

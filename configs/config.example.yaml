@@ -1,0 +1,25 @@
+# cafard's configuration: where it listens and where its state lives.
+# People, agents, projects and every setting the admin UI changes are in the
+# database, not here.
+
+# The public listener, published in the DMZ: the chat app, the HTTP API,
+# the MCP server at /mcp, and join links.
+listen: "0.0.0.0:8330"
+
+# The admin UI and API. Required, and never the same address as `listen`:
+# nothing reachable from the DMZ can create a person, an agent or a project.
+# Keep it on the internal network.
+admin-listen: "127.0.0.1:8331"
+
+# The database and the files people and agents send. Back it up with
+# `cafard backup`; it is as sensitive as everything sent to cafard.
+state-dir: "/var/lib/cafard"
+
+# The address people and agents reach `listen` at, as it appears in join
+# links and in the MCP config the join script writes. Leave it empty to use
+# http://<listen>.
+public-url: "https://cafard.example"
+
+log:
+  level: info    # debug, info, warn, error
+  format: json   # json or text

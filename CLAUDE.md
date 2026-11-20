@@ -10,11 +10,13 @@ CGO; the UI is built into the binary with `go:embed`. It follows
 claudication's way of working (`~/misc/claudication`); when in doubt about a
 convention, do what claudication does.
 
-**Status: design only, no code yet.** [`docs/design.md`](docs/design.md) is the
-design: the model, the access rules, the surfaces, the MCP tools, the order to
-build in, and what is left for later. Read it before writing the first package.
-As code lands, each section moves into the package comment it describes, and
-the design doc keeps only what no single package owns.
+**Status: step 1 of the build order is in** — the store, the files, the access
+rules and `cafard serve` with both listeners. [`docs/design.md`](docs/design.md)
+is the design: the model, the access rules, the surfaces, the MCP tools, the
+order to build in, and what is left for later. As code lands, each section
+moves into the package comment it describes, and the design doc keeps only
+what no single package owns. The previous implementation is on the `legacy`
+branch; nothing here comes from it.
 
 The UI references are two clickable mockups: the chat app,
 <https://claude.ai/artifact/GzqmfVgDd9RioxZDzBx6S8>, and the admin UI,
@@ -61,16 +63,19 @@ The UI references are two clickable mockups: the chat app,
 
 ## Where code goes
 
-`go doc ./internal/arch` will be the map, as in claudication: every package on
-a layer, importing only from layers below, and a test that fails the build
-when an import crosses a layer or a new package is missing from the map. The
-first draft of the layers is in the design doc.
+`go doc ./internal/arch` is the map, as in claudication: every package on a
+layer, importing only from layers below, and a test that fails the build when
+an import crosses a layer or a new package is missing from the map. Its test
+also fails when a package other than `service/access` reads memberships to
+decide something.
 
-Copy these from claudication rather than rewriting them: `internal/mcp`,
-`internal/live`, `internal/handover`, `internal/testenv`, `internal/arch`,
-`internal/secret`, `internal/logging`, `scripts/install.sh`, and the image
-fitting. Adapt their comments to cafard; keep the measurements that still
-apply.
+Writes that change access take a `store.AuditEntry` and record it in the same
+transaction; add a new one the same way.
+
+Still to copy from claudication rather than rewrite, as the steps need them:
+`internal/mcp`, `internal/live`, `internal/handover`, `internal/secret`,
+`scripts/install.sh`, and the image fitting. Adapt their comments to cafard;
+keep the measurements that still apply.
 
 What a screen shows reaches it through `internal/live`: every write marks a
 topic, and a tab's one event stream tells its panels to read again. MCP's
@@ -78,16 +83,19 @@ topic, and a tab's one event stream tells its panels to read again. MCP's
 
 ## Commands
 
-Planned, mirroring claudication's Makefile:
+    make check        # fmt-check, vet, tidy-check, test with -race: what CI runs
+    make build        # static binary at dist/cafard
+    make test         # Go tests with -race (needs cgo)
+    make test-norace  # the same without cgo
 
-    make check        # fmt-check, vet, test, typecheck, test-web, web build — what CI runs
-    make build        # binary at dist/cafard, UI embedded
-    make test         # Go tests, with -race
-    make test-web     # the UI's pure modules
-    make dev-api      # the server with debug logging
-    make dev          # Vite on :5173 proxying the API
+One test: `go test ./internal/service/access -run TestName -race -count=1`.
 
-Subcommands: `serve`, `passwd`, `backup`, `restore`, `vacuum`.
+The Makefile pins `GOTOOLCHAIN` to the `go` directive in `go.mod` (1.26.0),
+so a plain `go` command may resolve a different compiler than `make` does.
+The web UI's targets (`test-web`, `typecheck`, `dev`) come with step 4.
+
+Subcommands today: `serve [-config FILE]` and `version`. `passwd`, `backup`,
+`restore` and `vacuum` come with the steps that need them.
 
 The tests need no credentials and no network. A package whose tests build an
 HTTP client calls `testenv.Offline` from its `TestMain`. Anything that talks to
