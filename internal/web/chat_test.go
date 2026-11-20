@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/messaging"
+	"github.com/nebuloss/cafard/internal/projects"
 	"github.com/nebuloss/cafard/internal/store"
 	"github.com/nebuloss/cafard/internal/web/assets"
 	"github.com/nebuloss/cafard/internal/web/webtest"
@@ -80,22 +82,32 @@ func noBundleChats() map[string][]string {
 	return map[string][]string{
 		"/": {
 			"Needs you", "Power-cycle dut1?", `action="/api/messages"`, `name="choice" value="done"`, `name="reply_to" value="` + q + `"`,
-			`name="next" value="/"`, `<a class="project-card" href="/projects/lab" data-project="lab">`, "2 chats, 0 galleries, 2 sinks",
-			`<a class="project-card direct-card" href="/dm" data-direct>`, `href="/drop"`, "Build 812 is green.",
+			`name="next" value="/"`, `href="/drop"`, "Build 812 is green.", "You are in 1 project and 1 direct conversation.",
+			// The left bar: Home current, the direct messages and every project folded but none open.
+			`<a class="side-item side-home" href="/" aria-current="page">`, `<details class="tree" data-node="dm">`,
+			`<details class="tree tree-project" data-node="p:lab" data-project="lab">`, `href="/projects/lab/c/dut1" data-chat="chan:lab/dut1"`,
 			// The admin makes projects from home.
 			`action="/projects"`, `href="/admin"`,
 		},
-		"/dm": {`href="/dm/codex-build" data-chat="dm:codex-build"`, "Pick a conversation"},
+		"/dm": {`href="/dm/codex-build" data-chat="dm:codex-build"`, `<details class="tree" data-node="dm" open data-current>`,
+			`<a class="side-item" href="/dm" aria-current="page">`},
 		"/projects/lab/c/dut1": {
 			"image v42 ready", "<code>dwc3</code>", `<a href="https://git.example.com/k/4a1f" rel="noopener noreferrer" target="_blank">`,
 			`<form class="composer"`, `enctype="multipart/form-data"`, `name="files[]"`, `capture="environment"`, `name="chat" value="chan:lab/dut1"`,
 			`class="event-row"`, "codex-build: flashed linux-6.18-rc3", `href="/projects/lab/c/dut1?view=logs"`, `href="/projects/lab/c/dut1?f=questions"`,
 			`href="/blob/` + seeded.sha + `"`, `href="/live?from_seq=1&amp;streams=serial%3Alab%2Fdut1&amp;to_seq=2"`, "Power-cycle dut1?",
 			`href="/projects/lab/logs/dut1"`, "1 question waiting for you",
-			// The side list: the project's chats, sinks and settings, as links.
-			`<aside class="side" id="side" data-component="SideNav" data-project="lab"`, `href="#side"`,
+			// The left bar: the project unfolded on its chats, sinks and
+			// settings, as links; the drawer and the members sheet are
+			// :target links.
+			`<aside class="side" id="side" data-component="SideNav"`, `href="#side"`,
+			`<details class="tree tree-project" data-node="p:lab" data-project="lab" open data-current>`,
 			`<a class="chat-row" href="/projects/lab/c/dut1" data-chat="chan:lab/dut1" aria-current="page">`,
 			`href="/projects/lab/c/general"`, `href="/projects/lab/logs"`, `href="/projects/lab/settings"`, `href="#main"`,
+			// The members panel: who reads #dut1, by kind, each a link to a direct conversation.
+			`<aside class="members" id="members" data-component="MembersPanel" data-channel="lab/dut1"`, `href="#members"`,
+			`<section class="member-group" data-group="human"`, `<section class="member-group" data-group="agent"`,
+			`<a class="member" href="/dm/codex-build" data-kind="agent"`,
 		},
 		"/projects/lab/c/dut1?view=logs": {`data-view="logs"`, "U-Boot 2024.04", `class="marker"`, `action="/projects/lab/c/dut1"`},
 		"/dm/codex-build":                {"Build 812 is green.", `name="chat" value="dm:codex-build"`, `data-section="direct"`, `aria-current="page"`},
@@ -435,5 +447,51 @@ func TestTheServiceWorkerAndShareTargetAreServed(t *testing.T) {
 	st := m.ShareTarget
 	if st.Action != "/share" || st.Method != "POST" || st.Enctype != "multipart/form-data" || len(st.Params.Files) != 1 || st.Params.Files[0].Name != "files[]" {
 		t.Errorf("share target = %+v", st)
+	}
+}
+
+// The members panel and its API list who reads the channel, and no one
+// from a project the reader has no grant in.
+func TestChannelMembersShowOnlySharedProjects(t *testing.T) {
+	e := newEnv(t, webtest.Options{})
+	seed(e)
+	ctx := context.Background()
+	if _, err := e.Stack.Projects.Create(ctx, "rack", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Tokens.EnsurePrincipal(ctx, "rack-agent", auth.KindAgent); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Stack.Projects.SetGrant(ctx, projects.Grant{Principal: "rack-agent", Project: "rack", Scopes: auth.NewScopeSet(auth.ScopeRead, auth.ScopeMessage)}); err != nil {
+		t.Fatal(err)
+	}
+	reader := e.Principal("reader", auth.KindHuman, auth.ScopeRead)
+	rec := e.Do("GET", "/api/channels/lab%2Fdut1/members", nil, nil, "Authorization", "Bearer "+reader)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("members: %d %s", rec.Code, rec.Body)
+	}
+	var list dto.MemberList
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, m := range list.Members {
+		names = append(names, m.Name)
+	}
+	// reader is online (its request just now), so it comes first.
+	if want := []string{"reader", "admin", agentClaude.Name, agentCodex.Name}; !slices.Equal(names, want) {
+		t.Errorf("members = %v, want %v", names, want)
+	}
+	page := e.Do("GET", "/projects/lab/c/dut1", e.Admin(), nil).Body.String()
+	_, panel, _ := strings.Cut(page, `data-component="MembersPanel"`)
+	panel, _, _ = strings.Cut(panel, "</aside>")
+	if !strings.Contains(panel, `href="/dm/codex-build"`) || strings.Contains(panel, "rack-agent") {
+		t.Error("the panel lacks codex-build, or names rack-agent")
+	}
+	// rack's agent cannot read #dut1: unknown, and nobody named.
+	rack := e.Token("rack-agent", auth.ScopeRead)
+	rec = e.Do("GET", "/api/channels/lab%2Fdut1/members", nil, nil, "Authorization", "Bearer "+rack)
+	if rec.Code == http.StatusOK || strings.Contains(rec.Body.String(), "codex-build") {
+		t.Errorf("an outsider got the members: %d %s", rec.Code, rec.Body)
 	}
 }

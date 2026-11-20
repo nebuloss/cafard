@@ -27,7 +27,8 @@ type ChatRowView struct {
 	Pinned, Muted         bool
 	Archived, Active      bool
 	Unfollowed            bool
-	Items                 string // a gallery's "N images", in the side list
+	Items                 string // a gallery's "N images", in the left bar
+	Presence              string // a direct conversation's peer: "online" or "offline"
 }
 
 // MessageView is partials/message.html (tpl-message).

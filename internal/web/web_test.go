@@ -90,29 +90,34 @@ var twinSlots = map[string][]string{
 	"tpl-needs-you-question": {"sender", "time", "body", "choices", "reply-form", "answer", "chat"},
 	"tpl-gallery-item":       {"img", "title"},
 	"tpl-gallery-ref":        {"thumbs", "title", "meta"},
+	"tpl-member":             {"initial", "name", "seen", "follows"},
 }
+
+// sideTwins are the left bar's, on every signed-in page.
+var sideTwins = []string{"tpl-chat-row", "tpl-stream-dot"}
 
 var pageTwins = map[string][]string{
 	"signin":   {"tpl-toast"},
-	"streams":  {"tpl-stream-dot", "tpl-stream-card", "tpl-toast"},
-	"agents":   {"tpl-toast"},
-	"pair":     {"tpl-toast"},
-	"projects": {"tpl-toast"},
-	"project":  {"tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
-	"admin":    {"tpl-toast"},
-	"direct":   {"tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
-	"live":     {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
-	"logs": {"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-stream-card", "tpl-stream-dot",
-		"tpl-chat-row", "tpl-toast"},
-	"home": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
-		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-gallery-ref", "tpl-toast"},
-	"chat": {"tpl-chat-row", "tpl-stream-dot", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
-		"tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-gallery-ref", "tpl-toast"},
-	"drop":      {"tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"},
-	"gallery":   {"tpl-gallery-item", "tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
-	"item":      {"tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
-	"galleries": {"tpl-chat-row", "tpl-stream-dot", "tpl-toast"},
+	"streams":  {"tpl-stream-dot", "tpl-stream-card", "tpl-toast", "tpl-chat-row"},
+	"agents":   withSide("tpl-toast"),
+	"pair":     withSide("tpl-toast"),
+	"projects": withSide("tpl-toast"),
+	"project":  withSide("tpl-toast"),
+	"admin":    withSide("tpl-toast"),
+	"direct":   withSide("tpl-toast"),
+	"live":     withSide("tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"),
+	"logs":     withSide("tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-stream-card", "tpl-toast"),
+	"home": withSide("tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
+		"tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-needs-you-question", "tpl-gallery-ref", "tpl-toast"),
+	"chat": withSide("tpl-member", "tpl-message", "tpl-question", "tpl-choice", "tpl-event-row", "tpl-line",
+		"tpl-marker", "tpl-image", "tpl-log-attachment", "tpl-attachment-chip", "tpl-upload-status", "tpl-gallery-ref", "tpl-toast"),
+	"drop":      withSide("tpl-image", "tpl-attachment-chip", "tpl-upload-status", "tpl-toast"),
+	"gallery":   withSide("tpl-gallery-item", "tpl-toast"),
+	"item":      withSide("tpl-toast"),
+	"galleries": withSide("tpl-toast"),
 }
+
+func withSide(ids ...string) []string { return append(ids, sideTwins...) }
 
 var pagePaths = map[string]string{
 	"signin": "/signin", "streams": "/streams", "agents": "/agents", "pair": "/pair", "live": "/live",
@@ -218,7 +223,7 @@ var noBundle = map[string][]string{
 	},
 	"/projects/lab/logs/dut1": {
 		"U-Boot 2024.04", `data-stream="serial:lab/dut1"`, `<form class="filter-bar" method="get" action="/projects/lab/logs/dut1"`,
-		`href="/live?streams=%2A%3Alab%2Fdut1"`, `aria-current="page"><svg class="side-icon"`,
+		`href="/live?streams=%2A%3Alab%2Fdut1"`, `data-sink="lab/dut1" data-status="connected" aria-current="page">`,
 	},
 }
 

@@ -38,15 +38,15 @@ describe('screenshots from an agent', () => {
     expect(imagesLabel(2)).toBe('[2 images]');
   });
 
-  it("show as [2 images] on their project's card", () => {
+  it("show as [2 images] on their chat's row in the left bar", () => {
     loadPage('home');
     const { services, sources } = fakeServices(() => message);
     running = new HomePage(document, services).start();
     sources[0]?.emit('entry', shots);
-    const card = document.querySelector('a.project-card[data-project="lab"]');
-    expect(card?.querySelector('[data-slot="preview"]')?.textContent).toBe('#dut1 claude-laptop: [2 images]');
+    const row = document.querySelector('.side a.chat-row[data-chat="chan:lab/dut1"]');
+    expect(row?.querySelector('[data-slot="preview"]')?.textContent).toBe('claude-laptop: [2 images]');
     sources[0]?.emit('entry', { ...shots, seq: 951, text: 'login page after fix\nmore' });
-    expect(card?.querySelector('[data-slot="preview"]')?.textContent).toBe('#dut1 claude-laptop: login page after fix');
+    expect(row?.querySelector('[data-slot="preview"]')?.textContent).toBe('claude-laptop: login page after fix');
   });
 
   it('show thumbnails that open in the viewer', () => {

@@ -39,16 +39,15 @@ type Layout struct {
 	Page     string // <body data-page>, picks the TypeScript Page
 	Scripted bool   // emit the bundle's script tag
 
-	Theme  string // "system" | "light" | "dark", from the theme cookie
-	Nav    string // the active navigation item: home, direct, admin
-	User   *User  // nil when signed out
-	Badges Badges
-	// Side is set on pages with a side list (a project's channels, or the
-	// direct conversations): on narrow screens the top bar opens it as a
-	// drawer.
-	Side bool
+	Theme string // "system" | "light" | "dark", from the theme cookie
+	User  *User  // nil when signed out
+	// Side is the left bar (pages.SideView), on every signed-in page; nil
+	// leaves it out. On narrow screens the top bar opens it as a drawer.
+	Side any
 	// Kicker is the small line above the title: the project of the page.
 	Kicker string
+	// Members puts the members panel's toggle in the top bar (a channel).
+	Members bool
 	// Twins is the rendered <template id="tpl-..."> elements the page lists
 	// (CONTRACTS.md 6.2), placed at the end of <body>.
 	Twins template.HTML
@@ -75,13 +74,6 @@ type User struct {
 	Kind    string
 	Admin   bool
 	Initial string
-}
-
-// Badges are the counts on the navigation items.
-type Badges struct {
-	Questions   int  // open questions for you, on Projects
-	Direct      int  // unread direct messages, on Direct
-	SourcesDown bool // error dot on Admin
 }
 
 // NewLayout fills in what does not depend on the page.

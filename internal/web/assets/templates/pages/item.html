@@ -1,8 +1,5 @@
 {{/* One gallery item's own page, its stable link: the image, its title
      and section, and the items around it in the section. */}}
-<div class="project-view">
-  {{template "partials/side_nav.html" .Data.Side}}
-  <div class="project-main">
 <section class="page-wide gallery-item-page">
   <p class="body-small"><a href="{{.Data.GalleryHref}}">#{{.Data.Gallery}}</a> / <a href="{{.Data.SectionHref}}">{{.Data.SectionLabel}}</a></p>
   <figure class="gallery-figure">
@@ -16,5 +13,3 @@
   </nav>
   <p class="muted body-small">To show it in a chat of this project, write <code class="mono">{{.Data.Ref}}</code> in a message.</p>
 </section>
-  </div>
-</div>

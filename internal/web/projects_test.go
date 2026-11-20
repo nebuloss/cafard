@@ -122,14 +122,16 @@ func TestListsAreGroupedByProject(t *testing.T) {
 	admin := e.Admin()
 	home := e.Do("GET", "/", admin, nil).Body.String()
 	if !regexp.MustCompile(`(?s)data-project="lab">.*Lab.*data-project="rack">.*Rack 2`).MatchString(home) {
-		t.Error("home has no card for each project")
+		t.Error("the left bar has no tree for each project")
 	}
 	side := e.Do("GET", "/projects/lab/c/dut1", admin, nil).Body.String()
-	if !regexp.MustCompile(`(?s)data-section="channels" data-project="lab">.*#dut1`).MatchString(side) || strings.Contains(side, "chan:rack/general") {
-		t.Error("the side list of lab does not hold its channels alone")
+	lab := regexp.MustCompile(`(?s)<details class="tree tree-project" data-node="p:lab" data-project="lab" open data-current>.*?</details>\s*<details class="tree tree-project" data-node="p:rack" data-project="rack">`)
+	tree := lab.FindString(side)
+	if !regexp.MustCompile(`(?s)data-section="channels" data-project="lab">.*#dut1`).MatchString(tree) || strings.Contains(tree, "chan:rack/general") {
+		t.Error("lab's tree does not hold its channels alone, or rack's is open")
 	}
-	if !strings.Contains(side, `href="/projects/lab/logs/bench-pi" data-sink="lab/bench-pi"`) || !strings.Contains(side, `data-switch="rack"`) {
-		t.Error("the side list lacks lab's sinks or the switch to rack")
+	if !strings.Contains(tree, `href="/projects/lab/logs/bench-pi" data-sink="lab/bench-pi"`) || !strings.Contains(side, `href="/projects/rack/c/general"`) {
+		t.Error("the left bar lacks lab's sinks or rack's chats")
 	}
 	streams := e.Do("GET", "/streams", admin, nil).Body.String()
 	if !regexp.MustCompile(`(?s)<div class="stream-group" role="rowgroup" data-project="lab">.*data-stream="serial:lab/dut1"`).MatchString(streams) {

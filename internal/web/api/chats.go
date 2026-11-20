@@ -35,6 +35,7 @@ func (a *API) MountChats(mux *http.ServeMux, svc *messaging.Service, shares *vie
 	mux.Handle("POST /api/channels", a.Write(auth.ScopeMessage, c.createChannel))
 	mux.Handle("PATCH /api/channels/{name}", a.Write(auth.ScopeMessage, c.updateChannel))
 	mux.Handle("DELETE /api/channels/{name}", a.Write(auth.ScopeMessage, c.deleteChannel))
+	mux.Handle("GET /api/channels/{name}/members", a.Read(auth.ScopeRead, c.members))
 	mux.Handle("GET /api/shares/{id}", a.Read(auth.ScopeMessage, c.share))
 	mux.Handle("GET /api/galleries/{name}", a.Read(auth.ScopeRead, c.gallery))
 }
@@ -263,6 +264,17 @@ func (c *chatsAPI) deleteChannel(w http.ResponseWriter, r *http.Request, p auth.
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// members is the members panel of a channel: who can read it, among the
+// principals the caller may know about.
+func (c *chatsAPI) members(w http.ResponseWriter, r *http.Request, p auth.Principal) {
+	list, err := c.svc.ChannelMembers(r.Context(), p, strings.TrimPrefix(r.PathValue("name"), "chan:"), c.Presence.Online)
+	if err != nil {
+		c.Fail(w, r, err)
+		return
+	}
+	dto.WriteJSON(w, http.StatusOK, dto.MemberList{Members: list})
 }
 
 func (c *chatsAPI) share(w http.ResponseWriter, r *http.Request, p auth.Principal) {

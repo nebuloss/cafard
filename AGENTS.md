@@ -39,12 +39,18 @@ What exists:
   session. The admin runs projects at `/projects` and each one's
   `/projects/<p>/settings` (admin interface); `cafard token create
   --grant|--sink` and `cafard pair --grant` do it from a shell.
-- **Projects first** (PLAN 9.6.3; DECISIONS 2026-11-19, "projects
-  first"): home is the projects; every page of a project lives under
-  `/projects/<p>` (`/c/<chat>`, `/g/...`, `/logs[/<sink>]`, `/settings`)
-  and shares the side list `partials/side_nav.html` (`pages/side.go`,
-  `src/components/SideNav.ts`); `/dm` lists the direct conversations and
-  `/admin` is the admin's menu. The old `/c/...` and `/g/...` redirect.
+- **Projects first, Discord-like** (PLAN 9.6.2 and 9.6.3; DECISIONS
+  2026-11-19 "projects first" and 2026-11-20 "a Discord-like left bar"):
+  every signed-in page has one left bar, `partials/side_nav.html`
+  (`pages/side.go`, `src/components/SideNav.ts`): Home, Direct messages,
+  then each project as a `<details>` tree of its chats, galleries, logs
+  and settings. Every page of a project lives under `/projects/<p>`
+  (`/c/<chat>`, `/g/...`, `/logs[/<sink>]`, `/settings`); a channel has
+  a members panel (`pages/members.go`, `messaging/members.go`,
+  `GET /api/channels/{name}/members`, `src/components/MembersPanel.ts`).
+  Home is "Needs you", a welcome and the recent activity; `/dm` lists the
+  direct conversations and `/admin` is the admin's menu. The old `/c/...`
+  and `/g/...` redirect.
 - **Galleries** (PLAN section 6.3; DECISIONS 2026-11-19, "gallery
   channels"): a channel's `kind` is `chat` or `gallery`;
   `internal/messaging/gallery.go` reads items and sections, and
@@ -310,13 +316,20 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   `refDTOs`; a ref the reader cannot see is `{state: "unavailable"}` and
   must stay that bare.
 
-- **Project view: a page of a project puts the side list first.** Build
-  it with `Site.projectSide` (or `directSide`), wrap the page in
-  `<div class="project-view">` after `partials/side_nav.html`, set
-  `Layout.Side` and `Layout.Kicker`, and list `tpl-chat-row` and
-  `tpl-stream-dot` among its twins, or the bundle's side list cannot add
-  rows. `mountShell` mounts SideNav and its ChatList on any page that has
-  them: a page class must not mount a second ChatList on it.
+- **The left bar comes from the layout.** Build a signed-in page's
+  layout with `Site.ShellAt(r, p, title, page, Place{...})` (or `Shell`
+  with a nav key): `Place.Project` opens and marks that project's tree
+  and sets `Layout.Kicker`, `Place.Item` the row (a chat id, or
+  `sideLogs`, `sideLogsOf(sink)`, `sideGalleries`, `sideSettings`). Do
+  not render `side_nav.html` from a page; `Render` adds its twins
+  (`tpl-chat-row`, `tpl-stream-dot`) to every page with a left bar, and
+  the page's data reads what it needs back with `sideOf(l)`. `mountShell`
+  mounts SideNav, its ChatList and MembersPanel on any page that has
+  them: a page class must not mount a second ChatList on the bar.
+- **The left bar is built for every signed-in page,** with the reader's
+  projects, chats and sinks: a query added to `Site.side` runs on every
+  page view. A failure there logs and leaves the bar out rather than
+  failing the page.
 - **Project view: links go through the builders.** `view.ChatHref`,
   `view.ProjectHref`, `view.LogsHref`, `view.SettingsHref`,
   `messaging.GalleryHref`/`ItemHref` and their twins in
@@ -324,16 +337,20 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   and `GalleryRefRenderer` drops any card `href` that is not
   `/projects/<p>/g/...`. A new address form a person may paste needs
   `galleryLinkRE` too.
-- **Project view: the drawer is `:target` without the bundle.** The menu
-  button links to `#side` and the close links to `#main`; SideNav
-  intercepts them. Do not give the side list another id, and keep
-  `body.shell main:has(> .project-view)` as written: `main:has(...)`
-  alone loses to `body.shell main` and the page keeps its padding.
+- **The drawer and the members sheet are `:target` without the
+  bundle.** The menu button links to `#side`, the members button to
+  `#members`, and the close links to `#main`; SideNav and MembersPanel
+  intercept them. Do not give either another id. The CSS hangs on
+  `div.app > .side` and `.chat-page[data-members]`: keep that nesting.
+- **Members: `Online` is the web layer's.** `messaging.ChannelMembers`
+  takes an `Online` func; the site and the API pass
+  `view.Presence.Online` (an open SSE feed, or `last_seen` within 5
+  minutes). A test that wants someone online passes its own func.
 - **Project view: the web fixtures are written with the bundle built.**
   CI runs the Go tests after `npm run build`; without `main.js` a chat
-  page acks what it renders, and the pages rendered after it (the side
-  lists' and home's badges) differ from the committed ones. `seed` makes
-  the sinks `lab/dut1` and `lab/bench-pi`, which the side lists and the
+  page acks what it renders, and the pages rendered after it (the left
+  bar's and home's badges) differ from the committed ones. `seed` makes
+  the sinks `lab/dut1` and `lab/bench-pi`, which the left bar and the
   logs pages show.
 - **Project view: the admin's `GET /projects/<p>` is gone;** it is the
   public project view. The settings page is `/projects/<p>/settings` on
@@ -348,8 +365,8 @@ scripts/devdeploy.sh     # (M6) build on dev-build, push the binary to the appli
   classes, as in grafit. `PLAN.md` section 9.4 lists the allowed patterns and
   the problem each one solves; don't add others.
 - **The Chats pages, the Sources (`/streams`) page and a project's logs
-  (`/projects/<p>/logs`) must work without the bundle,** the side list
-  and its drawer included. A test pins this.
+  (`/projects/<p>/logs`) must work without the bundle,** the left bar,
+  its drawer and the members sheet included. A test pins this.
 - **Only the writer goroutine writes `entries`** (and `entries_fts`).
   Everything else sends entries to it. Other tables are written directly
   in their own short transactions, and any marker they produce goes

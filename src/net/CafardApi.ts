@@ -1,6 +1,6 @@
 import type { HttpClient } from '@/net/HttpClient.ts';
-import { parseAcked, parseChat, parseEntryPage, parseGalleryPage, parseList, parseMarkCreated, parseStream, parseTokenCreated } from '@/model/parse.ts';
-import type { Acked, ChannelCreate, ChannelUpdate, Chat, ChatPrefs, Entry, GalleryPage, MarkCreated, Page, Stream, TokenCreate, TokenCreated } from '@/model/types.ts';
+import { parseAcked, parseChat, parseEntryPage, parseGalleryPage, parseList, parseMarkCreated, parseMemberList, parseStream, parseTokenCreated } from '@/model/parse.ts';
+import type { Acked, ChannelCreate, ChannelUpdate, Chat, ChatPrefs, Entry, GalleryPage, MarkCreated, MemberList, Page, Stream, TokenCreate, TokenCreated } from '@/model/types.ts';
 
 /** The logs query of /live and /api/entries (PLAN 9.6.4). */
 export interface EntriesQuery {
@@ -104,6 +104,11 @@ export class CafardApi {
 
   updateChannel(name: string, update: ChannelUpdate): Promise<Chat> {
     return this.http.request('PATCH', `/api/channels/${encodeURIComponent(name)}`, { body: update, parse: (raw) => parseChat(raw) });
+  }
+
+  /** Who reads a channel ("lab/dut1"), among the principals the caller may know about. */
+  channelMembers(name: string): Promise<MemberList> {
+    return this.http.request('GET', `/api/channels/${encodeURIComponent(name)}/members`, { parse: parseMemberList });
   }
 
   deleteChannel(name: string): Promise<void> {

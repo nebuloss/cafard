@@ -1,22 +1,19 @@
 {{/* A project's logs (/projects/<p>/logs, and /logs/<sink> for one
      sink): its sources with their status, then the LogView of Live on
-     them, beside the project's side list. Server-rendered; LivePage
-     follows the lines and StreamCards the sources. */}}
-<div class="project-view" data-project="{{.Data.Project}}">
-  {{template "partials/side_nav.html" .Data.Side}}
-  <div class="project-main logs-main">
-    <header class="logs-head">
-      <p class="muted body-small">{{.Data.Caption}}</p>
-      <a class="btn text" href="{{.Data.LiveHref}}"><svg aria-hidden="true"><use href="/static/icons.svg#open_in_new"></use></svg>Open in Live</a>
-    </header>
-    <div class="stream-table dense" role="table" aria-label="Sources" data-component="StreamList" data-project="{{.Data.Project}}"{{if .Data.Sink}} data-sink="{{.Data.Sink}}"{{end}}{{if not .Data.Cards}} hidden{{end}}>
-      {{template "partials/stream_head.html"}}
-      <div class="stream-rows" data-slot="rows">
-        <div class="stream-group" role="rowgroup" data-project="{{.Data.Project}}">{{range .Data.Cards}}{{template "partials/stream_card.html" .}}{{end}}</div>
-      </div>
+     them. Server-rendered; LivePage follows the lines and StreamCards the
+     sources. */}}
+<div class="logs-main" data-project="{{.Data.Project}}">
+  <header class="logs-head">
+    <p class="muted body-small">{{.Data.Caption}}</p>
+    <a class="btn text" href="{{.Data.LiveHref}}"><svg aria-hidden="true"><use href="/static/icons.svg#open_in_new"></use></svg>Open in Live</a>
+  </header>
+  <div class="stream-table dense" role="table" aria-label="Sources" data-component="StreamList" data-project="{{.Data.Project}}"{{if .Data.Sink}} data-sink="{{.Data.Sink}}"{{end}}{{if not .Data.Cards}} hidden{{end}}>
+    {{template "partials/stream_head.html"}}
+    <div class="stream-rows" data-slot="rows">
+      <div class="stream-group" role="rowgroup" data-project="{{.Data.Project}}">{{range .Data.Cards}}{{template "partials/stream_card.html" .}}{{end}}</div>
     </div>
-    {{if not .Data.Cards}}<p class="muted">No line reached {{if .Data.Sink}}this sink{{else}}a sink of this project{{end}} yet. The admin gives a sink its addresses, serial port or tokens in the project's settings.</p>{{end}}
-    {{template "partials/live_pane.html" .Data.Live}}
   </div>
+  {{if not .Data.Cards}}<p class="muted">No line reached {{if .Data.Sink}}this sink{{else}}a sink of this project{{end}} yet. The admin gives a sink its addresses, serial port or tokens in the project's settings.</p>{{end}}
+  {{template "partials/live_pane.html" .Data.Live}}
 </div>
 {{if .Data.Live.Drop}}{{template "partials/quick_drop_sheet.html" .Data.Live.Drop}}{{end}}

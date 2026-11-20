@@ -57,6 +57,32 @@ type Principal struct {
 	LastSeen *Time         `json:"last_seen,omitempty"`
 }
 
+// Member is one principal who can read a channel, as the members panel
+// shows it (GET /api/channels/{name}/members): only those the viewer may
+// know about (list_principals' rule), the viewer included.
+type Member struct {
+	Name      string        `json:"name"`
+	Kind      PrincipalKind `json:"kind"`
+	Online    bool          `json:"online"` // a live feed open, or a request in the last 5 minutes
+	LastSeen  *Time         `json:"last_seen,omitempty"`
+	Following bool          `json:"following"`
+	CanDM     bool          `json:"can_dm"` // the viewer may open a direct conversation with them
+}
+
+// MemberList answers GET /api/channels/{name}/members: people, then
+// agents, then devices, each online first, then by name.
+type MemberList struct {
+	Members []Member `json:"members"`
+}
+
+// MarshalJSON implements json.Marshaler.
+func (m MemberList) MarshalJSON() ([]byte, error) {
+	type plain MemberList
+	p := plain(m)
+	p.Members = nonNil(p.Members)
+	return json.Marshal(p)
+}
+
 // EntryKind is what an entry is.
 type EntryKind string
 

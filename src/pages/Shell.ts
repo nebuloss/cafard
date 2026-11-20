@@ -3,7 +3,7 @@ import type { DisposableBag } from '@/core/Disposable.ts';
 import { ChatList } from '@/components/ChatList.ts';
 import { ConnectionBadge } from '@/components/ConnectionBadge.ts';
 import { closeDialog, openDialog } from '@/components/ImageViewer.ts';
-import { NavBadges } from '@/components/NavBadges.ts';
+import { MEMBER_ATTRIBUTES, MembersPanel } from '@/components/MembersPanel.ts';
 import { SideNav } from '@/components/SideNav.ts';
 import { Toast, type ToastTone } from '@/components/Toast.ts';
 import { Shortcuts } from '@/components/Shortcuts.ts';
@@ -14,7 +14,7 @@ import { CHAT_ROW_ATTRIBUTES, ChatRowRenderer, STREAM_DOT_ATTRIBUTES } from '@/r
 import { SlotTemplate } from '@/render/SlotTemplate.ts';
 import type { Services } from '@/App.ts';
 
-/** What every page of the shell has: the toast region, one live feed, and the side list when the page has one. */
+/** What every page of the shell has: the toast region, one live feed, the left bar, and a channel's members panel. */
 export interface Shell {
   readonly toast: Toast | null;
   /** Shows a toast when the page has the region, else nothing. */
@@ -31,8 +31,6 @@ export function mountShell(doc: Document, services: Services, bag: DisposableBag
   const feed = bag.add(new LiveFeed(services.eventSources, services.clock, services.backoff(), feedPath));
   const badge = Dom.find('[data-component="ConnectionBadge"]', doc);
   if (badge !== null) bag.add(new ConnectionBadge(badge, feed.state).mount());
-  const nav = Dom.find('nav.nav', doc);
-  if (nav !== null) bag.add(new NavBadges(nav, feed.events, doc).mount());
   let toast: Toast | null = null;
   const region = Dom.find('[data-component="Toast"]', doc);
   if (region !== null) {
@@ -41,6 +39,11 @@ export function mountShell(doc: Document, services: Services, bag: DisposableBag
   }
   const notify = (text: string, tone: ToastTone = 'info'): void => void toast?.show(text, tone);
   mountSide(doc, services, bag, feed, notify);
+  const members = Dom.find('[data-component="MembersPanel"]', doc);
+  if (members !== null) {
+    const wide = (): boolean => doc.defaultView?.matchMedia?.('(min-width: 840px)').matches ?? true;
+    bag.add(new MembersPanel(members, doc, services.api, feed.events, services.clock, services.storage, SlotTemplate.find(doc, 'tpl-member', MEMBER_ATTRIBUTES), wide).mount());
+  }
   bindConfirms(doc, bag);
   // The keys of PLAN 9.6.9, on every page (track D); "?" needs the dialog the chat pages carry.
   const keys = Dom.find('[data-component="ShortcutsDialog"]', doc) ?? doc.body;
@@ -52,28 +55,36 @@ export function mountShell(doc: Document, services: Services, bag: DisposableBag
 }
 
 /**
- * The side list of the project view, on every page that has one: the
- * drawer, the sinks and the switcher (SideNav), its chat rows (ChatList),
- * and the "New channel" dialog of its Chats heading.
+ * The left bar, on every signed-in page: the drawer, the trees, the
+ * badges and the sinks (SideNav), its chat rows (ChatList, and one for a
+ * page's own list in main, as /dm has), and the "New channel" dialog of
+ * each project's Chats heading.
  */
 function mountSide(doc: Document, services: Services, bag: DisposableBag, feed: LiveFeed, notify: Shell['notify']): void {
   const side = Dom.find('[data-component="SideNav"]', doc);
   if (side === null) return;
-  bag.add(new SideNav(side, doc, feed.events, services.clock).mount());
-  const list = Dom.find('[data-component="ChatList"]', side);
-  if (list !== null) {
-    const row = SlotTemplate.find(doc, 'tpl-chat-row', CHAT_ROW_ATTRIBUTES);
-    const rows = row === null ? null : new ChatRowRenderer(row, SlotTemplate.find(doc, 'tpl-stream-dot', STREAM_DOT_ATTRIBUTES), () => services.clock.now());
-    bag.add(new ChatList(list, rows, feed.events, services.api, services.clock, (t) => notify(t, 'error'), null).mount());
+  bag.add(new SideNav(side, doc, feed.events, services.clock, services.storage).mount());
+  const row = SlotTemplate.find(doc, 'tpl-chat-row', CHAT_ROW_ATTRIBUTES);
+  const rows = row === null ? null : new ChatRowRenderer(row, SlotTemplate.find(doc, 'tpl-stream-dot', STREAM_DOT_ATTRIBUTES), () => services.clock.now());
+  // The bar's rows, and a page's own list of them (/dm).
+  for (const list of [Dom.find('[data-component="ChatList"]', side), ...Dom.findAll('main [data-component="ChatList"]', doc)]) {
+    if (list !== null) bag.add(new ChatList(list, rows, feed.events, services.api, services.clock, (t) => notify(t, 'error'), null).mount());
   }
   const dialog = Dom.find<HTMLDialogElement>('[data-component="NewChannel"]', side);
-  const button = Dom.find('[data-action="new-channel"]', side);
-  if (dialog !== null && button !== null) bindNewChannel(dialog, button, services, bag, (path) => doc.defaultView?.location.assign(path));
+  const buttons = Dom.findAll('[data-action="new-channel"]', side);
+  if (dialog !== null && buttons.length > 0) bindNewChannel(dialog, buttons, services, bag, (path) => doc.defaultView?.location.assign(path));
 }
 
-/** The "New channel" dialog: creates the channel in the side list's project and opens it. */
-export function bindNewChannel(dialog: HTMLDialogElement, button: HTMLElement, services: Services, bag: DisposableBag, go: (path: string) => void): void {
-  bag.listen(button, 'click', () => openDialog(dialog));
+/** The "New channel" dialog: each project's button opens it on that project; it creates the channel and opens it. */
+export function bindNewChannel(dialog: HTMLDialogElement, buttons: readonly HTMLElement[], services: Services, bag: DisposableBag, go: (path: string) => void): void {
+  for (const button of buttons) {
+    bag.listen(button, 'click', () => {
+      const project = Dom.find<HTMLInputElement>('input[name="project"]', dialog);
+      if (project !== null) project.value = button.dataset['project'] ?? '';
+      Dom.setText(Dom.find('[data-slot="project-label"]', dialog), button.dataset['label'] ?? '');
+      openDialog(dialog);
+    });
+  }
   bag.listen(dialog, 'click', (event) => {
     const action = (event.target as Element | null)?.closest<HTMLElement>('[data-action]')?.dataset['action'];
     if (action === 'close') closeDialog(dialog);

@@ -3,45 +3,60 @@ package pages
 import (
 	"context"
 	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
 	"github.com/nebuloss/cafard/internal/messaging"
+	"github.com/nebuloss/cafard/internal/web/assets"
 	"github.com/nebuloss/cafard/internal/web/view"
 )
 
-// The side list of the project view (partials/side_nav.html): a sidebar
-// from 840 px, a drawer below. A project's chats, galleries, log sinks and
-// settings, or the direct conversations, with the switcher on top.
+// The left bar (partials/side_nav.html), Discord-like: Home, the direct
+// messages, then every project the reader sees as a tree that unfolds in
+// place (its chats, galleries, log sinks and, for the admin, settings),
+// and the reader's own corner at the bottom. A column from 840 px, the
+// drawer below. Every signed-in page has it.
 
-// SideView is partials/side_nav.html.
+// Place is where a page sits in the left bar.
+type Place struct {
+	Nav     string // "home", "direct" or "admin": the bar's entry of the page
+	Project string // the project unfolded and marked as the current one
+	Item    string // a chat id, or a side key (sideLogs, sideLogsOf, sideGalleries, sideSettings)
+}
+
+// SideView is partials/side_nav.html (with the layout around it).
 type SideView struct {
-	Project       string // "" on the direct conversations
-	Label         string
-	Switch        []SwitchLink
-	DirectUnread  string
-	Chats         []ChatRowView // followed chat channels
-	Unfollowed    []ChatRowView
-	Archived      []ChatRowView
-	Galleries     []ChatRowView
-	GalleriesHref string
-	GalleriesOn   bool
+	Home, AdminOn bool
+	Questions     int  // open questions for the reader, on Home
+	DirectOpen    bool // the page is a direct conversation, or /dm
+	DirectList    bool // the page is /dm
+	DirectUnread  int
 	Direct        []ChatRowView
-	Sinks         []SinkRowView
-	Logs          string // the logs overview; "" when the viewer may not read the project's logs
-	LogsOn        bool
-	Settings      string // the admin's
-	SettingsOn    bool
-	CanCreate     bool // "New channel" (bundle)
+	Projects      []SideProject
+	NoProjects    string
+	SourcesDown   bool // the dot on Admin
+	CanCreate     bool // some project offers "New channel"
 }
 
-// SwitchLink is a project in the switcher.
-type SwitchLink struct {
-	Name, Label, Initial, Href, Unread string
-	Current                            bool
+// SideProject is one project of the left bar.
+type SideProject struct {
+	Name, Label, Initials string
+	Unread, Questions     string // "" when zero
+	Current               bool   // the page's project, unfolded
+	Chats, Unfollowed     []ChatRowView
+	Archived, Galleries   []ChatRowView
+	GalleriesHref         string
+	GalleriesOn           bool
+	Sinks                 []SinkRowView
+	Logs, Settings        string // "" when the reader may not read the logs, or is not the admin
+	LogsOn, SettingsOn    bool
+	CanCreate             bool
 }
 
-// SinkRowView is a sink in the side list: a dot per stream it holds, and
+// SinkRowView is a sink in the left bar: a dot per stream it holds, and
 // the time of its last line. Status sums the dots up: down when one is,
 // else connected when one is, else idle; "" before any line.
 type SinkRowView struct {
@@ -51,7 +66,7 @@ type SinkRowView struct {
 	Active                 bool
 }
 
-// The keys of what a page of the project view shows, beside chat ids.
+// The side keys of what a project page shows, beside chat ids.
 const (
 	sideLogs      = "logs"
 	sideSettings  = "settings"
@@ -60,6 +75,28 @@ const (
 
 // sideLogsOf is the side key of one sink's logs.
 func sideLogsOf(sink string) string { return sideLogs + "/" + sink }
+
+// Label is the title of a project of the bar, or its name.
+func (v SideView) Label(project string) string {
+	for _, pr := range v.Projects {
+		if pr.Name == project {
+			return pr.Label
+		}
+	}
+	return project
+}
+
+// Sink is the bar's row of a sink of project, if it lists it.
+func (v SideView) Sink(project, sink string) (SinkRowView, bool) {
+	for _, pr := range v.Projects {
+		for _, k := range pr.Sinks {
+			if pr.Name == project && k.Name == sink {
+				return k, true
+			}
+		}
+	}
+	return SinkRowView{}, false
+}
 
 // visibleProjects are the projects p sees, as the API lists them. Without
 // messaging they carry no channels.
@@ -93,8 +130,8 @@ func (s *Site) visibleProjects(ctx context.Context, p auth.Principal) ([]dto.Pro
 }
 
 // projectUnread sums the unread messages and open questions of each
-// project's chats; src/components/ProjectCards.ts does the same with the
-// counts event.
+// project's chats; src/components/SideNav.ts projectTotals does the same
+// with the counts event.
 func projectUnread(c dto.Counts) (unread, questions map[string]int) {
 	unread, questions = map[string]int{}, map[string]int{}
 	for _, ch := range c.Chats {
@@ -116,74 +153,125 @@ func projectLabel(pr dto.Project) string {
 	return pr.Name
 }
 
-// switchLinks is the project switcher; current is "" on the direct
-// conversations.
-func switchLinks(list []dto.Project, unread map[string]int, current string) []SwitchLink {
-	out := make([]SwitchLink, 0, len(list))
-	for _, pr := range list {
-		label := projectLabel(pr)
-		out = append(out, SwitchLink{Name: pr.Name, Label: label, Initial: initial(label), Href: view.ProjectHref(pr.Name),
-			Unread: count(unread[pr.Name]), Current: pr.Name == current})
+// initials are a project's round icon: the first letter of its first two
+// words, "LB" for "Lab bench".
+func initials(label string) string {
+	var out []rune
+	for _, w := range strings.FieldsFunc(label, func(r rune) bool { return unicode.IsSpace(r) || r == '-' || r == '_' || r == '.' }) {
+		r, _ := utf8.DecodeRuneInString(w)
+		out = append(out, unicode.ToUpper(r))
+		if len(out) == 2 {
+			break
+		}
 	}
-	return out
+	if len(out) == 0 {
+		return "?"
+	}
+	return string(out)
 }
 
-// projectSide is the side list of project, with active marked: a chat id
-// or one of the side keys.
-func (s *Site) projectSide(ctx context.Context, p auth.Principal, project, active string) (SideView, error) {
+// side is the left bar of a page at a place, with the reader's badges c.
+func (s *Site) side(ctx context.Context, p auth.Principal, at Place, c dto.Counts) (SideView, error) {
 	list, err := s.visibleProjects(ctx, p)
 	if err != nil {
 		return SideView{}, err
 	}
-	c := view.Counts(ctx, s.d, p)
-	unread, _ := projectUnread(c)
-	v := SideView{Project: project, Label: project, Switch: switchLinks(list, unread, project), DirectUnread: count(c.UnreadDirect),
-		GalleriesHref: view.GalleriesHref(project), GalleriesOn: active == sideGalleries}
-	var pr *dto.Project
-	for i := range list {
-		if list[i].Name == project {
-			pr = &list[i]
-		}
-	}
-	if pr == nil {
-		return v, nil
-	}
-	v.Label = projectLabel(*pr)
-	acc := s.d.Projects.Access(ctx, p)
-	v.CanCreate = s.chats != nil && p.Has(auth.ScopeMessage) && acc.ProjectScopes(project).Has(auth.ScopeMessage)
+	unread, questions := projectUnread(c)
+	v := SideView{Home: at.Nav == "home", AdminOn: at.Nav == "admin", Questions: c.OpenQuestions,
+		DirectOpen: at.Nav == "direct", DirectList: at.Nav == "direct" && at.Item == "", DirectUnread: c.UnreadDirect, SourcesDown: c.SourcesDown > 0,
+		NoProjects: "You have no grant in any project yet; ask the admin for one."}
 	if p.Has(auth.ScopeAdmin) {
-		v.Settings, v.SettingsOn = view.SettingsHref(project), active == sideSettings
+		v.NoProjects = "No project yet: make one from Home."
 	}
+	var chats []dto.Chat
 	if s.chats != nil {
-		chats, err := s.chats.svc.Chats(ctx, p, messaging.ChatsQuery{Project: project, All: true, Archived: true})
-		if err != nil {
+		if chats, err = s.chats.svc.Chats(ctx, p, messaging.ChatsQuery{All: true, Archived: true}); err != nil {
 			return v, err
 		}
-		now := s.d.Clock.Now()
-		for _, ch := range chats {
-			row := ChatRow(ch, now, active)
-			switch {
-			case ch.Archived:
-				v.Archived = append(v.Archived, row)
-			case ch.ChannelKind == dto.ChannelGallery:
-				if row.Items, err = s.galleryCount(ctx, p, ch); err != nil {
+	}
+	now := s.d.Clock.Now()
+	var streams []dto.Stream
+	for _, pr := range list {
+		if len(pr.Sinks) > 0 {
+			if streams, err = view.VisibleStreams(ctx, s.d, p); err != nil {
+				return v, err
+			}
+			break
+		}
+	}
+	acc := s.d.Projects.Access(ctx, p)
+	byName := map[string]int{}
+	for _, pr := range list {
+		label := projectLabel(pr)
+		here := pr.Name == at.Project
+		item := ""
+		if here {
+			item = at.Item
+		}
+		sp := SideProject{Name: pr.Name, Label: label, Initials: initials(label), Unread: count(unread[pr.Name]),
+			Questions: count(questions[pr.Name]), Current: here, GalleriesHref: view.GalleriesHref(pr.Name),
+			GalleriesOn: item == sideGalleries,
+			CanCreate:   s.chats != nil && p.Has(auth.ScopeMessage) && acc.ProjectScopes(pr.Name).Has(auth.ScopeMessage)}
+		if p.Has(auth.ScopeAdmin) {
+			sp.Settings, sp.SettingsOn = view.SettingsHref(pr.Name), item == sideSettings
+		}
+		if len(pr.Sinks) > 0 {
+			sp.Logs, sp.LogsOn = view.LogsHref(pr.Name, ""), item == sideLogs
+			sp.Sinks = s.sinkRows(ctx, pr, streams, item, now)
+		}
+		v.CanCreate = v.CanCreate || sp.CanCreate
+		byName[pr.Name] = len(v.Projects)
+		v.Projects = append(v.Projects, sp)
+	}
+	var seen map[string]*time.Time
+	for _, ch := range chats {
+		row := ChatRow(ch, now, at.Item)
+		if ch.Kind == dto.ChatDirect {
+			if seen == nil {
+				if seen, err = s.lastSeen(ctx); err != nil {
 					return v, err
 				}
-				v.Galleries = append(v.Galleries, row)
-			case !ch.Followed:
-				v.Unfollowed = append(v.Unfollowed, row)
-			default:
-				v.Chats = append(v.Chats, row)
 			}
+			row.Presence = "offline"
+			if s.presence.Online(ch.Name, seen[ch.Name], now) {
+				row.Presence = "online"
+			}
+			v.Direct = append(v.Direct, row)
+			continue
 		}
-	}
-	if len(pr.Sinks) > 0 {
-		v.Logs, v.LogsOn = view.LogsHref(project, ""), active == sideLogs
-		if v.Sinks, err = s.sinkRows(ctx, p, *pr, active); err != nil {
-			return v, err
+		i, ok := byName[ch.Project]
+		if !ok {
+			continue
+		}
+		sp := &v.Projects[i]
+		switch {
+		case ch.Archived:
+			sp.Archived = append(sp.Archived, row)
+		case ch.ChannelKind == dto.ChannelGallery:
+			if row.Items, err = s.galleryCount(ctx, p, ch); err != nil {
+				return v, err
+			}
+			sp.Galleries = append(sp.Galleries, row)
+		case !ch.Followed:
+			sp.Unfollowed = append(sp.Unfollowed, row)
+		default:
+			sp.Chats = append(sp.Chats, row)
 		}
 	}
 	return v, nil
+}
+
+// lastSeen is every principal's last request.
+func (s *Site) lastSeen(ctx context.Context) (map[string]*time.Time, error) {
+	rows, err := s.d.Tokens.Principals(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]*time.Time, len(rows))
+	for _, r := range rows {
+		out[r.Name] = r.LastSeen
+	}
+	return out, nil
 }
 
 // galleryCount is "N images" for a gallery's row.
@@ -204,22 +292,17 @@ func (s *Site) galleryCount(ctx context.Context, p auth.Principal, c dto.Chat) (
 }
 
 // sinkRows are a project's sinks with the status of their streams.
-func (s *Site) sinkRows(ctx context.Context, p auth.Principal, pr dto.Project, active string) ([]SinkRowView, error) {
-	streams, err := view.VisibleStreams(ctx, s.d, p)
-	if err != nil {
-		return nil, err
-	}
+func (s *Site) sinkRows(ctx context.Context, pr dto.Project, streams []dto.Stream, item string, now time.Time) []SinkRowView {
 	titles := map[string]string{}
 	if sinks, err := s.d.Projects.Sinks(ctx, pr.Name); err == nil {
 		for _, k := range sinks {
 			titles[k.Name] = k.Title
 		}
 	}
-	now := s.d.Clock.Now()
 	out := make([]SinkRowView, 0, len(pr.Sinks))
 	for _, name := range pr.Sinks {
 		row := SinkRowView{Ref: pr.Name + "/" + name, Name: name, Title: titles[name], Href: view.LogsHref(pr.Name, name),
-			Active: active == sideLogsOf(name)}
+			Active: item == sideLogsOf(name)}
 		var last *dto.Time
 		for _, st := range streams {
 			if st.Project != pr.Name || st.Sink != name {
@@ -236,7 +319,7 @@ func (s *Site) sinkRows(ctx context.Context, p auth.Principal, pr dto.Project, a
 		}
 		out = append(out, row)
 	}
-	return out, nil
+	return out
 }
 
 // sinkStatus sums up a sink's streams; src/components/SideNav.ts
@@ -256,27 +339,8 @@ func sinkStatus(dots []StreamDotView) string {
 	return status
 }
 
-// directSide is the side list of the direct conversations.
-func (s *Site) directSide(ctx context.Context, p auth.Principal, active string) (SideView, error) {
-	list, err := s.visibleProjects(ctx, p)
-	if err != nil {
-		return SideView{}, err
-	}
-	c := view.Counts(ctx, s.d, p)
-	unread, _ := projectUnread(c)
-	v := SideView{Label: "Direct messages", Switch: switchLinks(list, unread, ""), DirectUnread: count(c.UnreadDirect)}
-	if s.chats == nil {
-		return v, nil
-	}
-	chats, err := s.chats.svc.Chats(ctx, p, messaging.ChatsQuery{})
-	if err != nil {
-		return v, err
-	}
-	now := s.d.Clock.Now()
-	for _, ch := range chats {
-		if ch.Kind == dto.ChatDirect {
-			v.Direct = append(v.Direct, ChatRow(ch, now, active))
-		}
-	}
-	return v, nil
+// sideOf is the left bar a layout carries, or nil.
+func sideOf(l assets.Layout) *SideView {
+	v, _ := l.Side.(*SideView)
+	return v
 }

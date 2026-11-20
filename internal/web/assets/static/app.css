@@ -15,10 +15,12 @@
    as "against --surface / against --surface-container".
 
    Window size classes (M3), in media queries only:
-     compact   < 600 px     bottom navigation bar, one column
-     medium    600-839 px   navigation rail, one column (max 720 px)
-     expanded  840-1199 px  rail, two panes
-     large     >= 1200 px   rail, three panes (logs pane)
+     compact   < 600 px     one column; the left bar is a drawer, the
+                            members a sheet
+     medium    600-839 px   the same, with wider margins
+     expanded  840-1199 px  left bar, page, members panel
+     large     >= 1200 px   the same; a bound channel's logs pane too
+                            when the members are hidden (1600 px with)
 
    Other tracks add a section at the end, "--- <component> (track X) ---",
    using only the tokens. */
@@ -117,11 +119,10 @@
   /* ---- layout (PLAN 9.6.1) ---- */
   --page-narrow: 560px;   /* forms: pairing, token creation */
   --page-wide: 960px;
-  --pane-list: 280px;     /* channel list */
+  --pane-list: 280px;     /* the left bar */
+  --pane-members: 240px;  /* the members panel of a channel */
   --pane-reading: 720px;  /* conversation, kept readable */
   --pane-logs: 420px;     /* logs pane of a bound channel */
-  --rail-width: 80px;
-  --bar-height: 80px;     /* bottom navigation bar, without the safe area */
   --topbar-height: 64px;
   --target: 48px;         /* touch target on compact screens */
 }
@@ -328,10 +329,10 @@ a:hover, a:focus-visible { text-decoration: underline; }
 
 /* ---------------- shell ---------------- */
 
-/* Compact: top bar, content, bottom bar. The bar is fixed, so main keeps
-   room for it and its safe area. */
+/* The top bar, then the app: the left bar (a drawer below 840 px), the
+   page, and on a channel the members panel. */
 body.shell main {
-  padding: 8px 16px calc(var(--bar-height) + 24px + env(safe-area-inset-bottom));
+  padding: 8px 16px calc(24px + env(safe-area-inset-bottom));
   padding-left: max(16px, env(safe-area-inset-left));
   padding-right: max(16px, env(safe-area-inset-right));
 }
@@ -403,92 +404,6 @@ body.bare main {
 .connection[data-state="retrying"] .connection-dot { background: var(--tertiary); }
 .connection[data-state="closed"] .connection-dot { background: var(--error); }
 
-/* Navigation: one element, a bottom bar on compact screens. */
-.nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  display: flex;
-  justify-content: space-around;
-  align-items: stretch;
-  min-height: calc(var(--bar-height) + env(safe-area-inset-bottom));
-  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  background: var(--surface-container);
-}
-
-.nav-item {
-  position: relative;
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: var(--target);
-  min-height: var(--target);
-  padding: 12px 0 16px;
-  color: var(--on-surface-variant);
-  font-size: 12px;
-  line-height: 16px;
-  letter-spacing: .5px;
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
-  list-style: none;
-}
-.nav-item::-webkit-details-marker { display: none; }
-.nav-item:hover, .nav-item:focus-visible { text-decoration: none; }
-
-/* The active indicator: a pill behind the icon. */
-.nav-icon {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 32px;
-  border-radius: var(--shape-full);
-  transition: background var(--motion-short) var(--easing);
-}
-.nav-icon svg { width: 24px; height: 24px; }
-.nav-item:hover .nav-icon { background: color-mix(in srgb, var(--on-surface) var(--state-hover), transparent); }
-.nav-item[aria-current="page"] { color: var(--on-surface); }
-.nav-item[aria-current="page"] .nav-icon { background: var(--secondary-container); color: var(--on-secondary-container); }
-
-.badge {
-  position: absolute;
-  top: 0;
-  left: 36px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: var(--shape-full);
-  background: var(--error);
-  color: var(--on-error);
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 500;
-  text-align: center;
-}
-.badge.dot { min-width: 6px; width: 6px; height: 6px; padding: 0; top: 4px; left: 40px; }
-.badge[hidden] { display: none; }
-
-.nav-more { position: relative; display: flex; flex: 1 1 0; }
-.nav-more > summary { width: 100%; }
-.nav-more .menu {
-  position: absolute;
-  right: 8px;
-  bottom: calc(100% + 8px);
-  z-index: 30;
-  min-width: 240px;
-  padding: 8px 0;
-  border-radius: var(--shape-xs);
-  background: var(--surface-container);
-  box-shadow: var(--elevation-2);
-}
-
 .menu-item {
   display: flex;
   align-items: center;
@@ -528,24 +443,9 @@ body.bare main {
 .segmented button:last-child { border-radius: 0 var(--shape-full) var(--shape-full) 0; }
 .segmented button[aria-pressed="true"] { background: var(--secondary-container); color: var(--on-secondary-container); }
 
-/* Medium and up: the rail. */
 @media (min-width: 600px) {
-  body.shell { padding-left: calc(var(--rail-width) + env(safe-area-inset-left)); }
   body.shell main { padding: 16px 24px 32px; }
   .topbar { padding-left: 24px; }
-  .nav {
-    top: 0;
-    right: auto;
-    width: calc(var(--rail-width) + env(safe-area-inset-left));
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 12px;
-    padding: calc(env(safe-area-inset-top) + var(--topbar-height) + 12px) 0 16px env(safe-area-inset-left);
-    background: var(--surface);
-  }
-  .nav-item { flex: 0 0 auto; padding: 0; min-height: 56px; }
-  .nav-more { flex: 0 0 auto; margin-top: auto; }
-  .nav-more .menu { left: calc(100% + 8px); right: auto; bottom: 0; }
 }
 
 main > :first-child { margin-top: 0; }
@@ -795,12 +695,12 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
   box-shadow: var(--elevation-3);
 }
 
-/* Snackbars, above the bottom bar on compact screens. */
+/* Snackbars, at the bottom; beside the left bar from 840 px. */
 .toast-region {
   position: fixed;
   left: 16px;
   right: 16px;
-  bottom: calc(var(--bar-height) + 16px + env(safe-area-inset-bottom));
+  bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 35;
   display: flex;
   flex-direction: column;
@@ -830,7 +730,7 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 .toast-action:empty { display: none; }
 .toast-action button { border: none; background: none; color: var(--inverse-primary); font: inherit; font-weight: 500; cursor: pointer; min-height: 40px; }
 @media (min-width: 600px) {
-  .toast-region { left: calc(var(--rail-width) + 24px); bottom: 24px; align-items: flex-start; }
+  .toast-region { left: 24px; bottom: 24px; align-items: flex-start; }
 }
 
 /* ---------------- sign in ---------------- */
@@ -967,7 +867,7 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 
 .new-lines {
   position: sticky;
-  bottom: calc(var(--bar-height) + 16px + env(safe-area-inset-bottom));
+  bottom: calc(16px + env(safe-area-inset-bottom));
   margin: 8px auto 0;
   display: flex;
 }
@@ -1070,11 +970,11 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 /* --- chat (track D) --- */
 
 /* Chats: home, a conversation and the drop form (PLAN 9.6.3). Layout is
-   CSS only: one column below 1200 px, conversation + logs from 1200 px
-   for a bound channel; the project view puts its side list before it
-   from 840 px. Only the tokens above are used. */
+   CSS only: the left bar before the page from 840 px, the members after
+   a channel, and conversation + logs for a bound channel when there is
+   room. Only the tokens above are used. */
 
-/* Chat rows: the side lists and "Needs you". */
+/* Chat rows: the left bar, /dm and "Needs you". */
 .list-heading {
   margin: 16px 0 4px;
   padding: 0 4px;
@@ -1142,15 +1042,20 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 .needs-you[hidden] { display: none; }
 .needs-you-questions { display: flex; flex-direction: column; gap: 8px; }
 
-/* Home: the projects, and the overview pane on wide screens. */
-.home-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; max-width: var(--pane-reading); }
-.pane-overview { display: none; }
+/* Home: Needs you, the welcome and the recent activity, in one column. */
+.home { display: flex; flex-direction: column; gap: 16px; max-width: var(--pane-reading); }
+.welcome h2 { margin: 0 0 4px; }
+.welcome p { margin: 0 0 8px; }
+.welcome-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.new-project > summary { list-style: none; width: fit-content; }
+.new-project > summary::-webkit-details-marker { display: none; }
+.new-project[open] > summary { margin-bottom: 8px; }
 .overview h3 { margin: 16px 0 8px; }
 .overview-questions { display: flex; flex-direction: column; gap: 8px; }
 .quick-drop-fab {
   position: fixed;
   right: max(16px, env(safe-area-inset-right));
-  bottom: calc(var(--bar-height) + 16px + env(safe-area-inset-bottom));
+  bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 15;
   text-decoration: none;
 }
@@ -1158,15 +1063,8 @@ th, td { padding: 8px; border-bottom: 1px solid var(--outline-variant); vertical
 @media (min-width: 600px) {
   .quick-drop-fab { bottom: 24px; }
 }
-@media (min-width: 840px) {
-  .home-layout { grid-template-columns: minmax(320px, 420px) minmax(0, var(--pane-reading)); max-width: none; }
-  .pane-overview { display: block; }
-  .home-layout .pane-list .needs-you-questions { display: none; }
-  .home-empty { display: none; }
-}
 
-/* A conversation. It takes the whole height under the top bar, and on
-   compact screens the bottom bar steps aside for the composer. */
+/* A conversation. It takes the whole height under the top bar. */
 body[data-page="chat"] main { padding: 0; }
 .chat-layout {
   --chat-height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top));
@@ -1184,19 +1082,30 @@ body[data-page="chat"] main { padding: 0; }
 .chat-layout[data-view="logs"] > .pane-conv { display: none; }
 .chat-layout[data-view="logs"] > .logs-pane { display: flex; }
 @media (max-width: 599px) {
-  body[data-page="chat"] .nav { display: none; }
   body[data-page="chat"] .toast-region { bottom: calc(96px + env(safe-area-inset-bottom)); }
 }
 @media (min-width: 600px) {
   .pane-head, .pane-conv, .pane-composer { width: 100%; max-width: var(--pane-reading); justify-self: center; }
 }
+/* The logs of a bound channel beside the conversation: from 1200 px
+   when no members column takes the room, from 1600 px beside it. */
 @media (min-width: 1200px) {
+  :is(.chat-page:not([data-members]), .chat-page[data-members-hidden]) > .chat-layout[data-bound] {
+    grid-template-columns: minmax(0, 1fr) var(--pane-logs);
+    grid-template-areas: "head logs" "conv logs" "composer logs";
+  }
+  :is(.chat-page:not([data-members]), .chat-page[data-members-hidden]) > .chat-layout[data-bound][data-view="logs"] > .pane-conv { display: flex; }
+  :is(.chat-page:not([data-members]), .chat-page[data-members-hidden]) > .chat-layout[data-bound] > .logs-pane { display: flex; border-left: 1px solid var(--outline-variant); }
+  :is(.chat-page:not([data-members]), .chat-page[data-members-hidden]) > .chat-layout[data-bound] .ch-toggle { display: none; }
+}
+@media (min-width: 1600px) {
   .chat-layout[data-bound], .chat-layout[data-bound][data-view="logs"] {
     grid-template-columns: minmax(0, 1fr) var(--pane-logs);
     grid-template-areas: "head logs" "conv logs" "composer logs";
   }
   .chat-layout[data-bound][data-view="logs"] > .pane-conv { display: flex; }
   .chat-layout[data-bound] > .logs-pane { display: flex; border-left: 1px solid var(--outline-variant); }
+  .chat-layout[data-bound] .ch-toggle { display: none; }
 }
 
 /* Header. */
@@ -1228,9 +1137,6 @@ body[data-page="chat"] main { padding: 0; }
 .ch-toggle .seg[aria-current="page"] { background: var(--secondary-container); color: var(--on-secondary-container); }
 .new-error-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error); }
 .new-error-dot[hidden] { display: none; }
-@media (min-width: 1200px) {
-  .chat-layout[data-bound] .ch-toggle { display: none; }
-}
 .q-banner { position: sticky; top: 0; display: block; margin: 8px 0 0; text-decoration: none; }
 .filter-chips { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0; scrollbar-width: none; }
 .filter-chips .chip { flex: 0 0 auto; text-decoration: none; }
@@ -1588,134 +1494,37 @@ dialog.image-viewer {
 .gallery-picker .chip[aria-pressed="true"] { background: var(--secondary-container); color: var(--on-secondary-container); border-color: transparent; }
 .gallery-pick { border: none; padding: 0; cursor: pointer; font: inherit; text-align: left; }
 
-/* --- project view --- */
+/* --- the app: left bar, main pane, members panel --- */
 
-/* Projects first (DECISIONS 2026-11-19, "projects first"): home's
-   project cards, and the side list every page of a project (and the
-   direct conversations) puts before its content. From 840 px the list is
-   a sidebar; below, a drawer that a link to #side opens (:target), or
-   data-open once the bundle runs (SideNav). */
+/* Discord-like (DECISIONS 2026-11-20, "a Discord-like left bar"): every
+   signed-in page is the left bar, then the page; a channel adds its
+   members panel on the right. From 840 px they are columns; below, the
+   left bar is a drawer a link to #side opens and the members a side sheet
+   a link to #members opens (:target), or data-open once the bundle runs
+   (SideNav, MembersPanel). */
 
-/* The top bar of a page with a side list. */
+body.shell { --chat-height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top)); }
+
+/* The top bar: the page's title, its project above it. */
 .title-block { display: flex; flex-direction: column; min-width: 0; }
 .kicker { font-size: 12px; line-height: 16px; letter-spacing: .5px; color: var(--on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title-block .kicker + h1 { font-size: 18px; line-height: 24px; }
+.members-toggle[aria-pressed="true"] { background: var(--secondary-container); color: var(--on-secondary-container); }
 
-/* Home's cards: a project, or the direct conversations. */
-.project-cards { display: flex; flex-direction: column; gap: 4px; }
-.project-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 72px;
-  padding: 10px 12px;
-  border-radius: var(--shape-m);
-  background: var(--surface-container-low);
-  color: var(--on-surface);
-  text-decoration: none;
-}
-.project-card:hover, .project-card:focus-visible { background: color-mix(in srgb, var(--on-surface) var(--state-hover), var(--surface-container-low)); text-decoration: none; }
-.project-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--shape-l);
-  background: var(--primary-container);
-  color: var(--on-primary-container);
-  font-size: 20px;
-  font-weight: 500;
-}
-.project-avatar svg { width: 24px; height: 24px; }
-.direct-card .project-avatar { background: var(--tertiary-container); color: var(--on-tertiary-container); }
-.project-card:has(.chat-unread:not(:empty)) .chat-name { font-weight: 700; }
-.project-holds { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); }
-.home-admin { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin: 16px 0 0; }
-.new-project { flex: 1 1 100%; }
-.new-project > summary { list-style: none; width: fit-content; }
-.new-project > summary::-webkit-details-marker { display: none; }
-.new-project[open] > summary { margin-bottom: 8px; }
-
-/* The project view: the side list, then the page. */
-body.shell main:has(> .project-view) { padding: 0; }
-.project-main { min-width: 0; padding: 8px 16px 24px; }
-@media (max-width: 599px) {
-  .project-main, .side-page > .side { padding-bottom: calc(var(--bar-height) + 24px + env(safe-area-inset-bottom)); }
-}
-
+/* The left bar. */
 .side {
   display: flex;
   flex-direction: column;
   background: var(--surface-container-low);
   overscroll-behavior: contain;
 }
-.side-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 56px;
-  padding: 4px 8px;
-  background: inherit;
-  border-bottom: 1px solid var(--outline-variant);
-}
-.switcher { position: relative; flex: 1 1 auto; min-width: 0; }
-.switcher-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: var(--target);
-  padding: 0 8px;
-  border-radius: var(--shape-s);
-  font-weight: 500;
-  font-size: 16px;
-  cursor: pointer;
-  list-style: none;
-}
-.switcher-btn::-webkit-details-marker { display: none; }
-.switcher-btn:hover { background: color-mix(in srgb, var(--on-surface) var(--state-hover), transparent); }
-.switcher-btn svg { width: 20px; height: 20px; flex: 0 0 auto; transition: transform var(--motion-short) var(--easing); }
-.switcher[open] .switcher-btn svg { transform: rotate(180deg); }
-.switcher-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.switcher-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 30;
-  min-width: 240px;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 8px 0;
-  border-radius: var(--shape-xs);
-  background: var(--surface-container);
-  box-shadow: var(--elevation-2);
-}
-.switcher-menu .menu-item[aria-current="page"] { background: var(--secondary-container); color: var(--on-secondary-container); }
-.switcher-menu .grow { flex: 1 1 auto; min-width: 0; }
-.switch-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--shape-s);
-  background: var(--primary-container);
-  color: var(--on-primary-container);
-  font-size: 12px;
-  font-weight: 500;
-}
-.side-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 16px; }
-.side-section { display: flex; flex-direction: column; }
-.side-heading {
+.side-list { display: flex; flex-direction: column; flex: 1 1 auto; gap: 2px; padding: 8px 8px 16px; }
+.side-heading, .tree-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 36px;
+  gap: 4px;
+  min-height: 32px;
   margin: 8px 0 0;
   padding: 0 4px 0 8px;
   font-size: 12px;
@@ -1725,16 +1534,80 @@ body.shell main:has(> .project-view) { padding: 0; }
   text-transform: uppercase;
   color: var(--on-surface-variant);
 }
-.side-heading a { color: inherit; }
-.side-heading a[aria-current="page"] { color: var(--on-surface); }
+.tree-heading { min-height: 28px; margin-top: 4px; }
+.side-heading a, .tree-heading a { color: inherit; }
+.tree-heading a[aria-current="page"] { color: var(--on-surface); text-decoration: underline; }
 .side-more > summary { padding: 6px 8px; font-size: 13px; color: var(--on-surface-variant); cursor: pointer; }
 
-/* Compact rows: an icon, the name, the dots and the badges; no preview. */
+/* A tree: the direct messages, or a project, folded on its head. The
+   project of the page is open and marked: a pill on the edge and a
+   squared icon, as Discord marks the server you are in. */
+.tree > summary { list-style: none; }
+.tree > summary::-webkit-details-marker { display: none; }
+.tree-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: var(--shape-s);
+  color: var(--on-surface);
+  font-weight: 500;
+  cursor: pointer;
+}
+.tree-head:hover, .tree-head:focus-visible { background: color-mix(in srgb, var(--on-surface) var(--state-hover), transparent); }
+.tree-head::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin: 0 4px 0 2px;
+  border-right: 2px solid var(--on-surface-variant);
+  border-bottom: 2px solid var(--on-surface-variant);
+  transform: rotate(-45deg);
+  transition: transform var(--motion-short) var(--easing);
+}
+.tree[open] > .tree-head::after { transform: rotate(45deg); }
+.tree-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--shape-full);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font-size: 13px;
+  font-weight: 500;
+  transition: border-radius var(--motion-short) var(--easing);
+}
+.tree-dm { background: var(--tertiary-container); color: var(--on-tertiary-container); font-size: 16px; }
+.tree-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-head:has(> .chat-unread:not(:empty, [hidden])) .tree-name { font-weight: 700; }
+.tree[data-current] > .tree-head { background: var(--secondary-container); color: var(--on-secondary-container); }
+.tree[data-current] > .tree-head .tree-icon { border-radius: var(--shape-m); background: var(--primary); color: var(--on-primary); }
+.tree[data-current] > .tree-head::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 4px;
+  height: 24px;
+  margin-top: -12px;
+  border-radius: 0 4px 4px 0;
+  background: var(--on-surface);
+}
+.tree-body { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px 23px; padding-left: 8px; border-left: 1px solid var(--outline-variant); }
+.tree-section { display: flex; flex-direction: column; }
+
+/* Rows: an icon, the name, the dots and the badges; no preview. */
 .side .chat-row, .side-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 36px;
   padding: 4px 8px;
   border-radius: var(--shape-s);
   color: var(--on-surface-variant);
@@ -1742,7 +1615,7 @@ body.shell main:has(> .project-view) { padding: 0; }
 }
 .side .chat-row:hover, .side-item:hover, .side-item:focus-visible { background: color-mix(in srgb, var(--on-surface) var(--state-hover), transparent); text-decoration: none; }
 .side .chat-row[aria-current="page"], .side-item[aria-current="page"] { background: var(--secondary-container); color: var(--on-secondary-container); }
-.side .chat-avatar { width: 20px; height: 20px; background: none; color: inherit; font-size: 18px; }
+.side .chat-avatar { position: relative; width: 20px; height: 20px; background: none; color: inherit; font-size: 18px; }
 .side .chat-row[data-chat^="dm:"] .chat-avatar { width: 28px; height: 28px; background: var(--tertiary-container); font-size: 14px; }
 .side .chat-row .chat-main { flex-direction: row; align-items: center; gap: 6px; }
 .side .chat-row .chat-line { display: contents; }
@@ -1755,56 +1628,159 @@ body.shell main:has(> .project-view) { padding: 0; }
 .side-icon { width: 20px; height: 20px; flex: 0 0 auto; }
 .side-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-time { font-size: 12px; color: var(--on-surface-variant); white-space: nowrap; }
+.side-home { min-height: 44px; color: var(--on-surface); font-weight: 500; }
+.side-home .side-icon { width: 32px; height: 32px; padding: 6px; border-radius: var(--shape-full); background: var(--surface-container-high); color: var(--primary); }
 .sink-dots { display: inline-flex; gap: 3px; }
 .sink-row[data-status="down"] .side-icon { color: var(--error); }
 .sink-row[data-status="connected"] .side-icon { color: var(--success); }
-.side-scrim { display: none; }
-.side-close { display: none; }
 
-/* Below 840 px: a drawer over the page, the bottom bar stays under it. */
+/* Presence: a dot on a direct conversation's or a member's avatar. */
+.presence {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--surface-container-low);
+  border-radius: 50%;
+  background: var(--outline);
+}
+.presence[data-presence="online"], .member[data-presence="online"] .presence { background: var(--success); }
+
+/* The reader's corner: who is signed in, Admin, and the theme and sign
+   out menu, which opens upwards. */
+.side-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  background: var(--surface-container);
+  border-top: 1px solid var(--outline-variant);
+}
+.side-foot .avatar { width: 32px; height: 32px; font-size: 14px; }
+.side-user { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; padding-left: 4px; }
+.side-user-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-user-kind { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); }
+.side-admin { position: relative; }
+.side-admin[aria-current="page"] { background: var(--secondary-container); color: var(--on-secondary-container); }
+.side-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--error); }
+.side-dot[hidden] { display: none; }
+.side-menu { position: relative; }
+.side-menu > summary { list-style: none; }
+.side-menu > summary::-webkit-details-marker { display: none; }
+.side-menu .menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  min-width: 240px;
+  padding: 8px 0;
+  border-radius: var(--shape-xs);
+  background: var(--surface-container);
+  box-shadow: var(--elevation-2);
+}
+.side-scrim, .side-close, .members-scrim { display: none; }
+
+/* The members panel of a channel: who reads it, by kind. */
+.members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 16px;
+  background: var(--surface-container-low);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.members-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 4px; min-height: 48px; padding: 0 0 0 8px; background: inherit; }
+.members-head h2 { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 14px; line-height: 20px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-group[hidden] { display: none; }
+.member-rows { display: flex; flex-direction: column; gap: 2px; }
+.member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: var(--shape-s);
+  color: var(--on-surface);
+  text-decoration: none;
+}
+a.member[href]:hover, a.member[href]:focus-visible { background: color-mix(in srgb, var(--on-surface) var(--state-hover), transparent); text-decoration: none; }
+.member[data-presence="offline"] { color: var(--on-surface-variant); }
+.member[data-presence="offline"] .member-avatar { opacity: .6; }
+.member-avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--shape-full);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font-size: 14px;
+  font-weight: 500;
+}
+.member[data-kind="agent"] .member-avatar { background: var(--secondary-container); color: var(--on-secondary-container); }
+.member[data-kind="device"] .member-avatar { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+.member-main { display: flex; flex-direction: column; min-width: 0; }
+.member-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-meta { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member[data-following] .member-follows { color: var(--primary); }
+
+/* /dm: the direct conversations as a page. */
+.dm-list .chat-rows { gap: 2px; }
+
+/* Below 840 px: the left bar is a drawer from the left, the members a
+   sheet from the right, each over a scrim. */
 @media (max-width: 839px) {
-  .project-view:not(.side-page) > .side {
+  .app > .side, .members {
     position: fixed;
     top: 0;
     bottom: 0;
-    left: 0;
     z-index: 40;
     width: min(320px, 86vw);
-    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
     overflow-y: auto;
     box-shadow: var(--elevation-2);
-    transform: translateX(-105%);
     visibility: hidden;
     transition: transform var(--motion-medium) var(--easing), visibility 0s linear var(--motion-medium);
   }
-  .project-view:not(.side-page) > .side:target, .project-view > .side[data-open] {
+  .app > .side { left: 0; padding: env(safe-area-inset-top) 0 0 env(safe-area-inset-left); transform: translateX(-105%); }
+  .members { right: 0; padding-top: env(safe-area-inset-top); padding-right: max(8px, env(safe-area-inset-right)); transform: translateX(105%); }
+  .app > .side:target, .app > .side[data-open], .members:target, .members[data-open] {
     transform: none;
     visibility: visible;
     transition: transform var(--motion-medium) var(--easing);
   }
-  .side:target + .side-scrim, .side[data-open] + .side-scrim {
+  .side:target + .side-scrim, .side[data-open] + .side-scrim, .members:target + .members-scrim, .members[data-open] + .members-scrim {
     display: block;
     position: fixed;
     inset: 0;
     z-index: 39;
     background: color-mix(in srgb, var(--scrim) 32%, transparent);
   }
-  .project-view:not(.side-page) .side-close { display: inline-flex; }
-  .side-back { display: none; }
-  .side-page > .project-main { display: none; }
+  .side-close { display: inline-flex; }
 }
+
+/* From 840 px: three columns, the left bar, the page, the members. */
 @media (min-width: 840px) {
   .side-open { display: none; }
-  .project-view { display: grid; grid-template-columns: var(--pane-list) minmax(0, 1fr); align-items: start; }
-  .project-view > .side {
+  .app { display: grid; grid-template-columns: var(--pane-list) minmax(0, 1fr); align-items: start; }
+  .app > .side {
     position: sticky;
     top: calc(var(--topbar-height) + env(safe-area-inset-top));
-    height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top));
+    height: var(--chat-height);
     overflow-y: auto;
     border-right: 1px solid var(--outline-variant);
   }
-  .project-main { padding: 16px 24px 32px; }
-  .side-placeholder { display: flex; align-items: center; justify-content: center; min-height: 50vh; }
+  .chat-page[data-members] { display: grid; grid-template-columns: minmax(0, 1fr) var(--pane-members); }
+  .chat-page[data-members-hidden] { grid-template-columns: minmax(0, 1fr); }
+  .chat-page[data-members-hidden] > .members { display: none; }
+  .members { height: var(--chat-height); border-left: 1px solid var(--outline-variant); }
+  .members-close { display: none; }
 }
 
 /* A project's logs. */

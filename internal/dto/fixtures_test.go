@@ -322,6 +322,12 @@ func fixtures() []fixture {
 		{"chat_channel", channelChat()},
 		{"chat_direct", directChat()},
 		{"chat_gallery", galleryChat()},
+		{"channel_members", MemberList{Members: []Member{
+			{Name: "guillaume", Kind: KindHuman, Online: true, LastSeen: tsp("2026-11-16T09:44:10Z"), Following: true, CanDM: true},
+			{Name: "claude-laptop", Kind: KindAgent, Online: true, LastSeen: tsp("2026-11-16T09:42:30Z"), Following: true, CanDM: true},
+			{Name: "codex-build", Kind: KindAgent, LastSeen: tsp("2026-11-15T18:02:00Z"), CanDM: true},
+			{Name: "bench-pi", Kind: KindDevice, CanDM: true},
+		}}},
 		{"entry_gallery_item", galleryEntry()},
 		{"entry_gallery_refs", refsEntry()},
 		{"gallery_page", GalleryPage{

@@ -3,6 +3,66 @@
 Deviations from `PLAN.md` and answers to its open questions, newest first.
 Each entry gives the date, the decision and the reason.
 
+## 2026-11-20: a Discord-like left bar
+
+Asked for by the user after the projects-first deploy: closer to Discord,
+three columns on a desktop. PLAN 9.6.1 to 9.6.3 and CONTRACTS 2.1, 2.3,
+3.3 and 6 describe it. This replaces the side list, the project switcher,
+the bottom bar and rail (`partials/nav.html`) and home's project cards.
+
+- **One left bar for everything**, on every signed-in page: Home, Direct
+  messages, then each project as a `<details>` tree that unfolds in place
+  on its chats, galleries, logs and (admin) settings, and the reader's
+  corner (Admin, theme, sign out) at the bottom. One place to go anywhere
+  is what Discord gets right; the switcher hid the other projects behind a
+  click, and the bottom bar duplicated three entries of it. On a phone the
+  same bar is the drawer, so there is one navigation to learn.
+- **Trees, not server icons.** The user preferred the expanded tree to a
+  column of round icons: the icon (the project's initials) and the title
+  sit on one row, so a project with few chats needs no second column.
+  The page's project is open and marked (squared icon, a pill on the
+  edge, `aria-current`); several may be open. With the bundle the folds
+  are remembered in `localStorage` (`cafard.sideFolds`, the
+  `KeyValueStore` pattern of the logs pane's width), but the page's own
+  project always opens: folding the place you are in and then landing on
+  a page with no visible row is confusing. Only the reader's clicks are
+  recorded, not the page opening its tree, or every project visited
+  would stay open.
+- **Home is "Needs you", a welcome and the recent activity.** The cards
+  only led to the projects, which the bar now lists with the same badges.
+  With no project the welcome says what to do (the admin: make one;
+  others: ask for a grant).
+- **`/dm` stays** as a page, and the Direct messages tree has an "All
+  conversations" link to it: it is the no-bundle way to reach every
+  conversation on a phone and an address people had.
+- **The members panel** lists who can read a channel: a read grant on
+  its project or on the channel, plus the admin, filtered by
+  `list_principals`' rule (`projects.Reachable`, a shared project), with
+  the viewer added. In practice everyone who reads a channel shares its
+  project with the viewer, so the filter is a second lock, pinned by a
+  test with principals of another project. People, agents, devices, each
+  online first. "Online" is cheap: a principal holding an SSE feed open
+  (`view.Presence`, counted in the events handler) or with a request in
+  the last 5 minutes (`last_seen`); MCP sessions are not counted, an
+  agent's calls already move its `last_seen`. The viewer is always
+  online. A click opens the direct conversation when the viewer may have
+  one (`can_dm`, the same shared-project rule as `send(to=)`).
+- **Members on channels only.** Gallery and logs pages have no panel: a
+  gallery is read, not talked in, and the logs need the width. The panel
+  is a column from 840 px that the top bar's button hides and shows,
+  remembered (`cafard.membersHidden`); below 840 px a side sheet from the
+  right (`#members` `:target` without the bundle).
+- **Live members by polling, not events.** The bundle asks
+  `GET /api/channels/{name}/members` again every minute while the panel
+  shows, and soon after someone shown offline writes in the channel. A
+  presence event in SSE would mean fanning out every feed open and close
+  to every page; a minute is good enough for "who is around".
+- **The bound logs pane yields to the members.** Left bar (280 px) plus
+  members (240 px) plus logs (420 px) leaves too little for the
+  conversation at 1200 px, so the pane opens beside the conversation from
+  1200 px only when the members are hidden, and from 1600 px always;
+  otherwise the "Logs" toggle swaps it in, as on smaller screens.
+
 ## 2026-11-19: projects first
 
 Asked for by the user: the UI "is not intuitive at all"; projects should

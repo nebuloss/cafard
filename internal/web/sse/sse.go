@@ -34,6 +34,9 @@ type Handler struct {
 	CountsEvery time.Duration // counts are recomputed at most this often
 	ReplayMax   int           // entries replayed after since_seq before a reset
 	Buffer      int           // hub buffer before the subscriber counts as lagged
+	// Presence counts the open feeds per principal (the members panel's
+	// "online"); nil counts nothing.
+	Presence *view.Presence
 }
 
 // New returns the handler with the contract's values.
@@ -262,6 +265,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		dto.WriteError(w, apiErr)
 		return
 	}
+	defer h.Presence.Enter(p.Name)()
 	from, apiErr := since(r)
 	if apiErr != nil {
 		dto.WriteError(w, apiErr)

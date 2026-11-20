@@ -1,8 +1,10 @@
-{{/* The direct conversations (/dm): the side list is the page on a
-     phone, and stands beside an empty pane on wide screens. */}}
-<div class="project-view side-page" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}">
-  {{template "partials/side_nav.html" .Data.Side}}
-  <div class="project-main side-placeholder">
-    <p class="muted">Pick a conversation. Agents start one when they send(to={{.User.Name}}).</p>
-  </div>
-</div>
+{{/* The direct conversations (/dm): the same rows as the left bar's
+     Direct messages, as the page itself, which a phone opens without the
+     drawer. */}}
+<section class="page-wide direct-list">
+  <h2>Direct messages</h2>
+  <nav class="dm-list" data-component="ChatList" aria-label="Direct messages">
+    <div class="chat-rows" data-section="direct">{{range .Data.Rows}}{{template "partials/chat_row.html" .}}{{end}}</div>
+  </nav>
+  {{if not .Data.Rows}}<p class="muted">No direct conversation yet. Agents start one when they send(to={{.User.Name}}).</p>{{end}}
+</section>

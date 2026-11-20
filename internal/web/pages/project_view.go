@@ -124,7 +124,6 @@ func streamLogsHref(id string) string {
 }
 
 type logsData struct {
-	Side             SideView
 	Project, Sink    string
 	Heading, Caption string
 	LiveHref         string // the same streams on Live, with every filter
@@ -132,10 +131,9 @@ type logsData struct {
 	Live             liveData
 }
 
-// logsTwins are the twins of a project's logs: Live's, the stream cards
-// and the side list's rows.
-var logsTwins = []string{"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-stream-card", "tpl-stream-dot",
-	"tpl-chat-row", "tpl-toast"}
+// logsTwins are the twins of a project's logs: Live's and the stream
+// cards.
+var logsTwins = []string{"tpl-line", "tpl-marker", "tpl-attachment-chip", "tpl-upload-status", "tpl-stream-card", "tpl-toast"}
 
 // logsPage is the live logs of a project's sinks, or of one sink: its
 // sources with their status, then the LogView of Live on them. It
@@ -161,17 +159,17 @@ func (s *Site) logsPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 		s.Oops(w, r, &p, err)
 		return
 	}
-	side, err := s.projectSide(ctx, p, project, key)
-	if err != nil {
-		s.Oops(w, r, &p, err)
-		return
-	}
-	data := logsData{Side: side, Project: project, Sink: sink, Live: live, Heading: "Logs",
-		Caption: "Every sink of " + side.Label + ", live.", LiveHref: "/live?" + url.Values{"streams": {glob}}.Encode()}
+	heading := "Logs"
 	if sink != "" {
-		data.Heading, data.Caption = sink, "The logs of sink "+project+"/"+sink+", live."
-		for _, k := range side.Sinks {
-			if k.Name == sink && k.Title != "" {
+		heading = sink
+	}
+	l := s.ShellAt(r, &p, heading, "logs", Place{Project: project, Item: key})
+	data := logsData{Project: project, Sink: sink, Live: live, Heading: heading,
+		Caption: "Every sink of " + l.Kicker + ", live.", LiveHref: "/live?" + url.Values{"streams": {glob}}.Encode()}
+	if sink != "" {
+		data.Caption = "The logs of sink " + project + "/" + sink + ", live."
+		if side := sideOf(l); side != nil {
+			if k, ok := side.Sink(project, sink); ok && k.Title != "" {
 				data.Caption = k.Title + ": the logs of sink " + project + "/" + sink + ", live."
 			}
 		}
@@ -187,7 +185,5 @@ func (s *Site) logsPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 			data.Cards = append(data.Cards, StreamCard(st, now))
 		}
 	}
-	l := s.Shell(r, &p, data.Heading, "logs", "home")
-	l.Side, l.Kicker, l.Back = true, side.Label, "/"
 	s.Render(w, status, "logs", l, logsTwins, data)
 }

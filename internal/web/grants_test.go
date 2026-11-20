@@ -88,7 +88,7 @@ func TestPagesAndAPIFollowGrants(t *testing.T) {
 		t.Error("Sources shows other streams than the bound one")
 	}
 	// The project view: its logs pages show the bound stream alone, and the
-	// side list neither the sinks nor the channels no grant covers.
+	// left bar neither the sinks nor the channels no grant covers.
 	for _, path := range []string{"/projects/lab/logs", "/projects/lab/logs/dut1"} {
 		code, b := get(narrow, path)
 		if code != http.StatusOK || !strings.Contains(string(b), "U-Boot") || strings.Contains(string(b), "Started cafard push") {
@@ -97,7 +97,7 @@ func TestPagesAndAPIFollowGrants(t *testing.T) {
 	}
 	if _, b := get(narrow, "/projects/lab/c/dut1"); strings.Contains(string(b), `data-sink=`) || strings.Contains(string(b), "chan:lab/general") ||
 		strings.Contains(string(b), "chan:lab/bench") || strings.Contains(string(b), "/settings") {
-		t.Error("the side list shows what the channel grant does not cover")
+		t.Error("the left bar shows what the channel grant does not cover")
 	}
 	if _, b := get(narrow, "/api/entries?streams=syslog:lab/bench-pi"); listLen(t, b, "items") != 0 {
 		t.Errorf("entries of an unbound stream: %s", b)

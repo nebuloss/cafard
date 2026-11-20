@@ -22,6 +22,8 @@ import type {
   LineState,
   MarkCreated,
   Me,
+  Member,
+  MemberList,
   Page,
   Pairing,
   Principal,
@@ -521,4 +523,20 @@ export function parseProject(raw: unknown, path = 'project'): Project {
       blobs_max_bytes: num(r, 'blobs_max_bytes', rp),
     },
   });
+}
+
+export function parseMember(raw: unknown, path = 'member'): Member {
+  const o = obj(raw, path);
+  return compact({
+    name: str(o, 'name', path),
+    kind: oneOf(o, 'kind', path, KINDS),
+    online: bool(o, 'online', path),
+    last_seen: optStr(o, 'last_seen', path),
+    following: bool(o, 'following', path),
+    can_dm: bool(o, 'can_dm', path),
+  });
+}
+
+export function parseMemberList(raw: unknown): MemberList {
+  return { members: arr(obj(raw, 'members'), 'members', 'members', parseMember) };
 }

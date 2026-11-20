@@ -1,6 +1,3 @@
-<div class="project-view">
-  {{template "partials/side_nav.html" .Data.Side}}
-  <div class="project-main">
 <section class="page-wide project" data-project="{{.Data.Name}}">
   <h2><span class="mono">{{.Data.Name}}</span>{{if .Data.Title}} {{.Data.Title}}{{end}}</h2>
   <p class="muted body-small">Since {{.Data.Created}}. Its chats are chan:{{.Data.Name}}/..., its logs *:{{.Data.Name}}/...</p>
@@ -133,5 +130,3 @@
     <button class="btn filled" type="submit">Save retention</button>
   </form>
 </section>
-  </div>
-</div>

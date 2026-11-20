@@ -36,6 +36,9 @@ func Register(public, admin *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (f
 		return nil, err
 	}
 	a := api.New(d, sessions, pairings, kinds)
+	presence := view.NewPresence()
+	a.Presence = presence
+	site.SetPresence(presence)
 	// The chat pages and API need the messaging service itself.
 	if svc, ok := d.Messaging.(*messaging.Service); ok {
 		shares := view.NewShares(d.Clock)
@@ -46,7 +49,9 @@ func Register(public, admin *http.ServeMux, _ *mcpserver.Server, d deps.Deps) (f
 	}
 	site.Mount(public, admin)
 	a.Mount(public, admin)
-	sse.Register(public, sse.New(d, kinds))
+	events := sse.New(d, kinds)
+	events.Presence = presence
+	sse.Register(public, events)
 	if d.Janitor != nil {
 		d.Janitor.Add(store.Task{Name: "sessions", Run: sessions.Expire})
 	}

@@ -398,3 +398,20 @@ export interface Project {
   readonly sinks: readonly string[];
   readonly retention: ProjectRetention;
 }
+
+/** One reader of a channel, as the members panel shows it (dto.Member). */
+export interface Member {
+  readonly name: string;
+  readonly kind: PrincipalKind;
+  /** A live feed open, or a request in the last 5 minutes. */
+  readonly online: boolean;
+  readonly last_seen?: string;
+  readonly following: boolean;
+  /** The viewer may open a direct conversation with them. */
+  readonly can_dm: boolean;
+}
+
+/** GET /api/channels/{name}/members: people, then agents, then devices. */
+export interface MemberList {
+  readonly members: readonly Member[];
+}

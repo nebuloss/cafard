@@ -115,11 +115,10 @@ describe('HomePage', () => {
     expect(document.title.startsWith('(4) ')).toBe(true);
     expect(document.querySelector('[data-badge="questions"]')?.textContent).toBe('3');
     expect(document.querySelector('[data-badge="direct"]')?.textContent).toBe('1');
-    // The project's card sums its chats; the direct card has the rest.
-    const card = document.querySelector('a.project-card[data-project="lab"]');
-    expect(card?.querySelector('[data-slot="unread"]')?.textContent).toBe('5');
-    expect(card?.querySelector('[data-slot="questions"]')?.textContent).toBe('2');
-    expect(document.querySelector('a.direct-card [data-slot="unread"]')?.textContent).toBe('1');
+    // The project's head in the left bar sums its chats, folded or not.
+    const head = document.querySelector('.side details[data-project="lab"] > summary');
+    expect(head?.querySelector('[data-slot="unread"]')?.textContent).toBe('5');
+    expect(head?.querySelector('[data-slot="questions"]')?.textContent).toBe('2');
     feed?.emit('answered', { seq: 777, answer: { by: 'admin', seq: 778 } });
     expect(needs?.querySelector('[data-seq="777"]')).toBeNull();
     // A direct conversation's row in Needs you follows its chat.

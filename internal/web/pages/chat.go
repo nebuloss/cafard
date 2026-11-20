@@ -110,7 +110,7 @@ type BannerView struct {
 
 type chatData struct {
 	Header    HeaderView
-	Side      SideView
+	Members   *MembersView // a channel's members panel; nil for a direct conversation
 	Items     []TimelineItem
 	Older     string
 	Newer     string // back to the latest page from an older one
@@ -180,20 +180,18 @@ func (s *Site) directPage(w http.ResponseWriter, r *http.Request, p auth.Princip
 }
 
 type directData struct {
-	Side SideView
+	Rows []ChatRowView
 }
 
-// directList is the direct conversations: the side list, as the page
-// itself on a phone and beside an empty pane on wide screens.
+// directList is the direct conversations as a page: the rows of the left
+// bar's Direct messages, for a phone without the drawer and for /dm links.
 func (s *Site) directList(w http.ResponseWriter, r *http.Request, p auth.Principal) {
-	side, err := s.directSide(r.Context(), p, "")
-	if err != nil {
-		s.Oops(w, r, &p, err)
-		return
+	l := s.shellFor(r, p, "Direct messages", "direct", Place{Nav: "direct"})
+	var data directData
+	if side := sideOf(l); side != nil {
+		data.Rows = side.Direct
 	}
-	l := s.shellFor(r, p, "Direct messages", "direct")
-	l.Nav = "direct"
-	s.Render(w, http.StatusOK, "direct", l, directTwins, directData{Side: side})
+	s.Render(w, http.StatusOK, "direct", l, directTwins, data)
 }
 
 func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal, stream string, chat dto.Chat, ch *messaging.Channel) {
@@ -269,13 +267,10 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 		return
 	}
 	if ch != nil {
-		data.Side, err = s.projectSide(ctx, p, ch.Project(), chat.ID)
-	} else {
-		data.Side, err = s.directSide(ctx, p, chat.ID)
-	}
-	if err != nil {
-		s.Oops(w, r, &p, err)
-		return
+		if data.Members, err = s.membersView(ctx, p, *ch); err != nil {
+			s.Oops(w, r, &p, err)
+			return
+		}
 	}
 	needs, err := s.needsYou(ctx, p, nil)
 	if err != nil {
@@ -291,10 +286,14 @@ func (s *Site) chatPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	}
 	s.ackShown(ctx, p, &data, entries.Items)
 
-	l := s.shellFor(r, p, ChatName(chat), "chat")
-	l.Side, l.Kicker, l.Back = true, data.Side.Label, "/"
+	at := Place{Nav: "direct", Item: chat.ID}
+	if ch != nil {
+		at = Place{Project: ch.Project(), Item: chat.ID}
+	}
+	l := s.shellFor(r, p, ChatName(chat), "chat", at)
+	l.Members = data.Members != nil
 	if ch == nil {
-		l.Nav, l.Back = "direct", "/dm"
+		l.Kicker = "Direct messages"
 	}
 	s.Render(w, http.StatusOK, "chat", l, chatTwins, data)
 }
@@ -524,7 +523,7 @@ func (s *Site) drop(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	shareID := r.URL.Query().Get("share")
 	data := dropData{Drop: s.dropView(chats, shareID, p, "/drop")}
 	data.Missing = shareID != "" && data.Drop.ShareID == ""
-	l := s.shellFor(r, p, "Quick drop", "drop")
+	l := s.shellFor(r, p, "Quick drop", "drop", Place{Nav: "home"})
 	l.Back = "/"
 	s.Render(w, http.StatusOK, "drop", l, dropTwins, data)
 }

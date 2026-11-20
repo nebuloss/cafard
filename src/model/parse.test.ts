@@ -8,6 +8,7 @@ import {
   parseSeen,
   parseShare,
   parseMarkCreated,
+  parseMemberList,
   parseCounts,
   parseEntry,
   parseEntryPage,
@@ -56,6 +57,7 @@ const parsers: Record<string, (raw: unknown) => unknown> = {
   answered: parseAnswered,
   acked: parseAcked,
   project: (raw) => parseProject(raw),
+  channel_members: parseMemberList,
 };
 
 // Fixtures the bundle never reads: request bodies, and what only programs

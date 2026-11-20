@@ -23,7 +23,9 @@ func TestLiveShowsMessagesOnlyToTheirViewers(t *testing.T) {
 		if rec.Code != 200 {
 			t.Fatalf("%s: %d", path, rec.Code)
 		}
-		return rec.Body.String()
+		// The page's own content, without the left bar's previews.
+		_, main, _ := strings.Cut(rec.Body.String(), `<main id="main">`)
+		return main
 	}
 	body := get("/live?kinds=line&kinds=marker&kinds=message", nil)
 	for _, want := range []string{"U-Boot 2024.04", `data-kind="message"`, "codex-build: image v42 ready", "codex-build: Build 812 is green.", ">@codex-build<", ">#dut1<"} {

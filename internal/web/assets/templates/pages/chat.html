@@ -1,11 +1,10 @@
 {{/* A conversation: /projects/{project}/c/{name} and /dm/{peer} (PLAN
-     9.6.3), beside the side list of its project or of the direct
-     conversations. The latest 50 messages and event rows, filter chips, an
-     "Older" link, the composer, and the logs of a bound channel; ?view=logs
-     shows the logs instead of the conversation. The panes are laid out by
-     CSS only. */}}
-<div class="project-view">
-{{template "partials/side_nav.html" .Data.Side}}
+     9.6.3), the main pane beside the left bar, and for a channel the
+     members panel on its right (a sheet on narrow screens). The latest
+     50 messages and event rows, filter chips, an "Older" link, the
+     composer, and the logs of a bound channel; ?view=logs shows the logs
+     instead of the conversation. The panes are laid out by CSS only. */}}
+<div class="chat-page"{{if .Data.Members}} data-members{{end}}{{if .Data.Logs}} data-bound{{end}}>
 <div class="chat-layout" data-view="{{.Data.View}}"{{if .Data.Logs}} data-bound{{end}} data-chat="{{.Data.Chat}}" data-surface="{{.Data.Surface}}" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}">
   <div class="pane-head">
     {{template "partials/channel_header.html" .Data.Header}}
@@ -25,6 +24,16 @@
   {{with .Data.Logs}}{{template "partials/logs_pane.html" .}}{{end}}
   <div class="pane-composer">{{template "partials/composer.html" .Data.Composer}}</div>
 </div>
+{{with .Data.Members}}
+<aside class="members" id="members" data-component="MembersPanel" data-channel="{{.Channel}}" aria-labelledby="members-title">
+  <header class="members-head"><h2 id="members-title">Members of {{.Label}}</h2><a class="icon-btn members-close" href="#main" data-action="close-members" aria-label="Close the members"><svg aria-hidden="true"><use href="/static/icons.svg#close"></use></svg></a></header>
+  {{range .Groups}}<section class="member-group" data-group="{{.Kind}}"{{if not .Members}} hidden{{end}}>
+    <h3 class="tree-heading"><span>{{.Label}}</span><span data-slot="count">{{len .Members}}</span></h3>
+    <div class="member-rows" data-slot="rows">{{range .Members}}{{template "partials/member.html" .}}{{end}}</div>
+  </section>{{end}}
+</aside>
+<a class="members-scrim" href="#main" data-action="close-members" tabindex="-1" aria-hidden="true"></a>
+{{end}}
 </div>
 {{with .Data.Dialog}}{{template "partials/channel_dialog.html" .}}{{end}}
 {{template "partials/image_viewer.html"}}

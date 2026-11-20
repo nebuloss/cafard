@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/nebuloss/cafard/internal/auth"
 	"github.com/nebuloss/cafard/internal/dto"
@@ -59,7 +58,6 @@ type sectionLink struct {
 }
 
 type galleryData struct {
-	Side                                 SideView
 	Name, Title, Chat, ChatHref, AllHref string
 	Section                              string // the filter, "" with Filtered false for all
 	Filtered                             bool
@@ -145,23 +143,14 @@ func (s *Site) galleryPage(w http.ResponseWriter, r *http.Request, p auth.Princi
 	if before > 0 {
 		data.Newer = base
 	}
-	if data.Side, err = s.projectSide(r.Context(), p, ch.Project(), ch.Stream()); err != nil {
-		s.Oops(w, r, &p, err)
-		return
-	}
-	l := s.Shell(r, &p, "#"+strings.TrimPrefix(ch.Name, ch.Project()+"/"), "gallery", "home")
-	l.Side, l.Kicker, l.Back = true, data.Side.Label, "/"
+	l := s.ShellAt(r, &p, "#"+ch.Local(), "gallery", Place{Project: ch.Project(), Item: ch.Stream()})
 	s.Render(w, http.StatusOK, "gallery", l, galleryTwins, data)
 }
 
-// The twins of the gallery pages: the tiles, and the side list's rows.
-var (
-	galleryTwins   = []string{"tpl-gallery-item", "tpl-chat-row", "tpl-stream-dot", "tpl-toast"}
-	galleriesTwins = []string{"tpl-chat-row", "tpl-stream-dot", "tpl-toast"}
-)
+// galleryTwins are the tiles of a gallery and its toasts.
+var galleryTwins = []string{"tpl-gallery-item", "tpl-toast"}
 
 type itemData struct {
-	Side                                            SideView
 	Gallery, GalleryHref, SectionHref, SectionLabel string
 	Item                                            GalleryItemView
 	Image                                           string // the agent-size image, for the page
@@ -207,13 +196,9 @@ func (s *Site) itemPage(w http.ResponseWriter, r *http.Request, p auth.Principal
 	if title == "" {
 		title = data.Item.Alt
 	}
-	if data.Side, err = s.projectSide(r.Context(), p, ch.Project(), ch.Stream()); err != nil {
-		s.Oops(w, r, &p, err)
-		return
-	}
-	l := s.Shell(r, &p, title, "item", "home")
-	l.Side, l.Kicker, l.Back = true, data.Side.Label, data.SectionHref
-	s.Render(w, http.StatusOK, "item", l, galleriesTwins, data)
+	l := s.ShellAt(r, &p, title, "item", Place{Project: ch.Project(), Item: ch.Stream()})
+	l.Back = data.SectionHref
+	s.Render(w, http.StatusOK, "item", l, []string{"tpl-toast"}, data)
 }
 
 type galleryCard struct {
@@ -223,13 +208,12 @@ type galleryCard struct {
 }
 
 type galleriesData struct {
-	Side           SideView
 	Project, Label string
 	Galleries      []galleryCard
 }
 
 // galleriesPage lists a project's galleries, the "Galleries" heading of
-// its side list.
+// its tree in the left bar.
 func (s *Site) galleriesPage(w http.ResponseWriter, r *http.Request, p auth.Principal) {
 	ctx := r.Context()
 	project := r.PathValue("project")
@@ -259,11 +243,6 @@ func (s *Site) galleriesPage(w http.ResponseWriter, r *http.Request, p auth.Prin
 		}
 		data.Galleries = append(data.Galleries, c)
 	}
-	if data.Side, err = s.projectSide(ctx, p, project, sideGalleries); err != nil {
-		s.Oops(w, r, &p, err)
-		return
-	}
-	l := s.Shell(r, &p, "Galleries", "galleries", "home")
-	l.Side, l.Kicker, l.Back = true, data.Side.Label, "/"
-	s.Render(w, http.StatusOK, "galleries", l, galleriesTwins, data)
+	l := s.ShellAt(r, &p, "Galleries", "galleries", Place{Project: project, Item: sideGalleries})
+	s.Render(w, http.StatusOK, "galleries", l, []string{"tpl-toast"}, data)
 }

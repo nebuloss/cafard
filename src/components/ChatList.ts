@@ -11,7 +11,7 @@ import { ChatRowRenderer } from '@/render/renderers/ChatRowRenderer.ts';
 import { Component } from '@/components/Component.ts';
 import { popupMenu, type MenuItem } from '@/components/PopupMenu.ts';
 
-/** The section of a side list a chat goes in. */
+/** The section of the left bar a chat goes in. */
 export function sectionOf(chat: Chat): string {
   if (chat.kind === 'direct') return 'direct';
   if (chat.archived) return 'archived';
@@ -28,7 +28,7 @@ export function entryPreview(e: Entry): string {
 }
 
 /**
- * The rows of a side list (a project's chats and galleries, or the direct
+ * The rows of the left bar (each project's chats and galleries, the direct
  * conversations) and of "Needs you" (PLAN 9.6.3): badges
  * from counts, rows from chat events, previews from new messages, status
  * dots from stream_status, a filter field, and a menu on long press or

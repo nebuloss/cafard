@@ -1,9 +1,6 @@
 {{/* A gallery (PLAN 9.6.3, "Galleries"): its images with their titles,
      one group per section, the section with the newest image first.
      GalleryPage opens the viewer on a tile and adds new items live. */}}
-<div class="project-view">
-  {{template "partials/side_nav.html" .Data.Side}}
-  <div class="project-main">
 <section class="page-wide gallery" data-component="GalleryView" data-chat="{{.Data.Chat}}" data-gallery="{{.Data.Name}}"{{if .Data.Filtered}} data-filtered data-section="{{.Data.Section}}"{{end}}{{if .Data.Live}} data-live data-next-seq="{{.Data.NextSeq}}"{{end}}>
   <header class="gallery-head">
     <h2>#{{.Data.Name}}{{if .Data.Title}} <span class="muted">{{.Data.Title}}</span>{{end}}</h2>
@@ -28,6 +25,4 @@
   {{if .Data.Older}}<a class="btn text older" href="{{.Data.Older}}">Older images</a>{{end}}
   <p class="banner notice no-script body-small">New images appear when you reload; the bundle shows them live.</p>
 </section>
-  </div>
-</div>
 {{template "partials/image_viewer.html"}}

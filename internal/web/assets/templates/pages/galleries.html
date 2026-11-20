@@ -1,7 +1,4 @@
-{{/* A project's galleries, from the "Galleries" heading of its side list. */}}
-<div class="project-view">
-  {{template "partials/side_nav.html" .Data.Side}}
-  <div class="project-main">
+{{/* A project's galleries, from the "Galleries" heading of its tree in the left bar. */}}
 <section class="page-wide galleries">
   <h2>Galleries of {{.Data.Label}}</h2>
   {{if .Data.Galleries}}
@@ -20,5 +17,3 @@
   <p class="muted">This project has no gallery yet. The admin makes one on the project page (a channel of kind gallery).</p>
   {{end}}
 </section>
-  </div>
-</div>

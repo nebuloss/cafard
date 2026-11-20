@@ -148,11 +148,7 @@ type retentionView struct {
 	LinesMaxAge, LinesMaxBytes, MessagesMaxAge, BlobsMaxBytes string
 }
 
-// projectTwins are the side list's rows and the toasts.
-var projectTwins = []string{"tpl-chat-row", "tpl-stream-dot", "tpl-toast"}
-
 type projectData struct {
-	Side SideView
 	// Base is where the forms post (/projects/<name>/...), Settings the
 	// page they come back to.
 	Name, Title, Created, Base, Settings string
@@ -215,14 +211,10 @@ func (s *Site) renderProject(w http.ResponseWriter, r *http.Request, p auth.Prin
 		return
 	}
 	data.Token = pg.created
-	if data.Side, err = s.projectSide(ctx, p, pr.Name, sideSettings); err != nil {
-		s.Oops(w, r, &p, err)
-		return
-	}
-	l := s.Shell(r, &p, "Settings", "project", "home")
-	l.Side, l.Kicker, l.Back = true, pr.Label(), "/projects"
+	l := s.ShellAt(r, &p, "Settings", "project", Place{Project: pr.Name, Item: sideSettings})
+	l.Back = "/projects"
 	l.Error, l.Notice = pg.errText, pg.notice
-	s.Render(w, pg.status, "project", l, projectTwins, data)
+	s.Render(w, pg.status, "project", l, []string{"tpl-toast"}, data)
 }
 
 func (s *Site) projectData(ctx context.Context, p auth.Principal, pr projects.Project) (projectData, error) {

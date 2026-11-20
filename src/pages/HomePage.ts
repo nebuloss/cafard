@@ -6,7 +6,6 @@ import { ChatList } from '@/components/ChatList.ts';
 import { ImageViewer } from '@/components/ImageViewer.ts';
 import { NeedsYou } from '@/components/NeedsYou.ts';
 import { Overview } from '@/components/Overview.ts';
-import { ProjectCards } from '@/components/ProjectCards.ts';
 import { QuestionCard } from '@/components/QuestionCard.ts';
 import { QuickDropSheet } from '@/components/QuickDropSheet.ts';
 import type { Services } from '@/App.ts';
@@ -15,9 +14,10 @@ import { mountShell, type Shell } from '@/pages/Shell.ts';
 import { chatRenderers, mountDropForm, viewerOf } from '@/pages/chatParts.ts';
 
 /**
- * Home (PLAN 9.6.3, DECISIONS "projects first"): the project cards with
- * "Needs you" on top, the overview on wide screens, and the quick drop
- * sheet behind the FAB (opened by the share target's /?share= too).
+ * Home (PLAN 9.6.3, DECISIONS "a Discord-like left bar"): "Needs you",
+ * the welcome and the recent activity beside the left bar, which holds
+ * the projects; and the quick drop sheet behind the FAB (opened by the
+ * share target's /?share= too).
  */
 export class HomePage implements Page {
   constructor(
@@ -30,14 +30,12 @@ export class HomePage implements Page {
     const { doc, services } = this;
     const win = doc.defaultView;
     const shell = mountShell(doc, services, bag, '/api/events?scope=home');
-    const layout = Dom.find('.home-layout', doc);
+    const layout = Dom.find('.home', doc);
     const viewer = viewerOf(layout);
     const r = chatRenderers(doc, viewer, services.clock, { back: '/', next: '/' });
     const toast = shell.notify;
     const queue = services.uploads;
 
-    const cards = Dom.find('[data-component="ProjectCards"]', doc);
-    if (cards !== null) bag.add(new ProjectCards(cards, shell.feed.events, services.clock).mount());
     const mutedChats = new Set((layout?.dataset['muted'] ?? '').split(' ').filter((c) => c !== ''));
     const needs = Dom.find('[data-component="NeedsYou"]', doc);
     if (needs !== null) {

@@ -24,6 +24,8 @@ type API struct {
 	pairings *auth.Pairings
 	kinds    *view.Kinds
 	log      *slog.Logger
+	// Presence is the open live feeds, for the members' "online".
+	Presence *view.Presence
 }
 
 // New builds the API.

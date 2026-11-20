@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -32,8 +33,12 @@ type Site struct {
 	pages map[string]*template.Template // by file, "pages/streams.html"
 	twins map[string]twin               // by id, "tpl-line"
 
-	chats *chatSite // the chat pages; nil without messaging
+	chats    *chatSite      // the chat pages; nil without messaging
+	presence *view.Presence // the open live feeds, for "online"
 }
+
+// SetPresence gives the site the open live feeds. Call it before Mount.
+func (s *Site) SetPresence(p *view.Presence) { s.presence = p }
 
 // twin is a partial rendered with zero values inside <template id=...>.
 type twin struct {
@@ -86,16 +91,34 @@ type Page struct {
 	Data any
 }
 
-// Shell builds the layout for a page. p is nil when signed out.
+// Shell builds the layout for a page outside projects; nav is its entry
+// in the left bar ("home", "direct", "admin" or ""). p is nil when signed
+// out.
 func (s *Site) Shell(r *http.Request, p *auth.Principal, title, page, nav string) assets.Layout {
+	return s.ShellAt(r, p, title, page, Place{Nav: nav})
+}
+
+// ShellAt builds the layout for a page at a place of the left bar: a
+// project's page unfolds and marks its project, and names it above the
+// title.
+func (s *Site) ShellAt(r *http.Request, p *auth.Principal, title, page string, at Place) assets.Layout {
 	l := assets.NewLayout(title, page)
 	l.Theme = string(view.ThemeOf(r))
-	l.Nav = nav
 	l.Path = r.URL.RequestURI()
-	if p != nil {
-		l.User = &assets.User{Name: p.Name, Kind: p.Kind, Admin: p.Has(auth.ScopeAdmin), Initial: initial(p.Name)}
-		c := view.Counts(r.Context(), s.d, *p)
-		l.Badges = assets.Badges{Questions: c.OpenQuestions, Direct: c.UnreadDirect, SourcesDown: c.SourcesDown > 0}
+	if p == nil {
+		return l
+	}
+	l.User = &assets.User{Name: p.Name, Kind: p.Kind, Admin: p.Has(auth.ScopeAdmin), Initial: initial(p.Name)}
+	side, err := s.side(r.Context(), *p, at, view.Counts(r.Context(), s.d, *p))
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			s.log.Error("building the left bar failed", "path", r.URL.Path, "err", err)
+		}
+		return l
+	}
+	l.Side = &side
+	if at.Project != "" {
+		l.Kicker = side.Label(at.Project)
 	}
 	return l
 }
@@ -108,6 +131,9 @@ func initial(name string) string {
 	return string(unicode.ToUpper(r))
 }
 
+// sideTwins are the twins of the left bar.
+var sideTwins = []string{"tpl-chat-row", "tpl-stream-dot"}
+
 // Render writes page (its file under pages/, without extension) with the
 // twins it lists.
 func (s *Site) Render(w http.ResponseWriter, status int, page string, l assets.Layout, twins []string, data any) {
@@ -115,6 +141,14 @@ func (s *Site) Render(w http.ResponseWriter, status int, page string, l assets.L
 	if !ok {
 		http.Error(w, "no such page template", http.StatusInternalServerError)
 		return
+	}
+	if l.Side != nil {
+		// The left bar's ChatList adds rows from these on every page.
+		for _, id := range sideTwins {
+			if !slices.Contains(twins, id) {
+				twins = append(slices.Clip(twins), id)
+			}
+		}
 	}
 	var tw bytes.Buffer
 	for _, id := range twins {

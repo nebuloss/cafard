@@ -1,11 +1,11 @@
 import type { Clock } from '@/core/Clock.ts';
 import { Dom, h } from '@/core/Dom.ts';
 import type { EventBus } from '@/core/EventBus.ts';
+import { StorageKey, type KeyValueStore } from '@/core/KeyValueStore.ts';
 import type { Counts, Stream } from '@/model/types.ts';
 import type { FeedEvents } from '@/net/LiveFeed.ts';
 import { badgeCount, messageTime } from '@/render/format.ts';
 import { Component } from '@/components/Component.ts';
-import { projectTotals } from '@/components/ProjectCards.ts';
 
 /** A sink's status from its streams', like pages.sinkStatus: down wins, then connected. */
 export function sinkStatus(statuses: readonly string[]): string {
@@ -14,22 +14,52 @@ export function sinkStatus(statuses: readonly string[]): string {
   return statuses[0] ?? '';
 }
 
+/** Each project's unread messages and open questions, summed over its chats, like pages.projectUnread. */
+export function projectTotals(c: Counts): Map<string, { unread: number; questions: number }> {
+  const out = new Map<string, { unread: number; questions: number }>();
+  for (const chat of c.chats) {
+    if (!chat.id.startsWith('chan:')) continue;
+    const project = chat.id.slice(5).split('/', 1)[0] ?? '';
+    const t = out.get(project) ?? { unread: 0, questions: 0 };
+    out.set(project, { unread: t.unread + chat.unread, questions: t.questions + chat.open_questions });
+  }
+  return out;
+}
+
+const isFolds = (raw: unknown): Record<string, boolean> | null => {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(raw)) if (typeof v === 'boolean') out[k] = v;
+  return out;
+};
+
+/** The trees the reader unfolded or folded, by data-node ("dm", "p:lab"). */
+export const SIDE_FOLDS = new StorageKey<Record<string, boolean>>('cafard.sideFolds', isFolds);
+
 /**
- * The side list of the project view: a drawer on narrow screens, which
- * the top bar's link to #side opens (CSS :target without the bundle; here
- * a toggle that keeps the address alone), closed by its close link, the
- * scrim or Esc. It keeps the switcher's badges from counts and each
- * sink's dots and last line time from stream_status; the chat rows are a
+ * The left bar (DECISIONS "a Discord-like left bar"): the direct messages
+ * and each project as a <details> tree. It remembers which trees the
+ * reader unfolded or folded (the page's own tree always opens, the way
+ * the server renders it); keeps the badges of Home, the direct messages,
+ * each project and Admin, the document title and the app badge from
+ * counts; and each sink's dots and last line time from stream_status.
+ * Below 840 px it is a drawer the top bar's link to #side opens (CSS
+ * :target without the bundle; here a toggle that keeps the address
+ * alone), closed by its close link, the scrim or Esc. The chat rows are a
  * ChatList of their own.
  */
 export class SideNav extends Component {
+  private readonly baseTitle: string;
+
   constructor(
     root: HTMLElement,
     private readonly doc: Document,
     private readonly events: EventBus<FeedEvents>,
     private readonly clock: Clock,
+    private readonly storage: KeyValueStore,
   ) {
     super(root);
+    this.baseTitle = doc.title.replace(/^\(\d+\) /, '');
   }
 
   protected bind(): void {
@@ -48,6 +78,7 @@ export class SideNav extends Component {
     this.bag.listen(this.doc, 'keydown', (event) => {
       if ((event as KeyboardEvent).key === 'Escape' && this.isOpen()) this.close();
     });
+    this.restoreFolds();
     this.bag.add(this.events.on('counts', (c) => this.counts(c)));
     this.bag.add(this.events.on('stream_status', (s) => this.status(s)));
     // A page opened at #side (a link, or the no-script toggle) starts open.
@@ -56,6 +87,31 @@ export class SideNav extends Component {
       win.history.replaceState(win.history.state, '', `${win.location.pathname}${win.location.search}`);
       this.open();
     }
+  }
+
+  private trees(): HTMLDetailsElement[] {
+    return Dom.findAll<HTMLDetailsElement>('details.tree[data-node]', this.root);
+  }
+
+  /** Unfolds and folds the trees as the reader left them, then records each toggle. */
+  private restoreFolds(): void {
+    const folds = this.storage.get(SIDE_FOLDS) ?? {};
+    for (const tree of this.trees()) {
+      const node = tree.dataset['node'] ?? '';
+      const stored = folds[node];
+      if (stored !== undefined && !tree.hasAttribute('data-current')) tree.open = stored;
+      // The reader's own toggles only (a click, or Enter and Space, on the
+      // head), not the toggle events of the page opening its tree: the
+      // click comes before the details flips.
+      const head = tree.querySelector<HTMLElement>(':scope > summary');
+      if (head !== null) this.bag.listen(head, 'click', () => this.remember(node, !tree.open));
+    }
+  }
+
+  private remember(node: string, open: boolean): void {
+    const folds = this.storage.get(SIDE_FOLDS) ?? {};
+    if (folds[node] === open) return;
+    this.storage.set(SIDE_FOLDS, { ...folds, [node]: open });
   }
 
   isOpen(): boolean {
@@ -77,13 +133,29 @@ export class SideNav extends Component {
     toggles[0]?.focus({ preventScroll: true });
   }
 
-  /** The switcher's badges: each project's unread, and the direct conversations'. */
+  /** The badges of the bar, the title and the app badge. */
   counts(c: Counts): void {
     const totals = projectTotals(c);
-    for (const link of Dom.findAll<HTMLElement>('[data-switch]', this.root)) {
-      Dom.setText(Dom.find('[data-slot="unread"]', link), badgeCount(totals.get(link.dataset['switch'] ?? '')?.unread ?? 0));
+    for (const tree of Dom.findAll<HTMLElement>('details.tree-project[data-project]', this.root)) {
+      const head = tree.querySelector<HTMLElement>(':scope > summary') ?? tree;
+      const t = totals.get(tree.dataset['project'] ?? '');
+      Dom.setText(Dom.find('[data-slot="unread"]', head), badgeCount(t?.unread ?? 0));
+      Dom.setText(Dom.find('[data-slot="questions"]', head), badgeCount(t?.questions ?? 0));
     }
-    Dom.setText(Dom.find('[data-slot="direct"]', this.root), badgeCount(c.unread_direct));
+    for (const [name, n] of [['questions', c.open_questions], ['direct', c.unread_direct]] as const) {
+      const badge = Dom.find(`[data-badge="${name}"]`, this.root);
+      if (badge !== null) {
+        badge.hidden = n === 0;
+        Dom.setText(badge, badgeCount(n));
+      }
+    }
+    const down = Dom.find('[data-badge="sources-down"]', this.root);
+    if (down !== null) down.hidden = c.sources_down === 0;
+    const chats = c.open_questions + c.unread_direct;
+    this.doc.title = chats > 0 ? `(${chats}) ${this.baseTitle}` : this.baseTitle;
+    const nav = this.doc.defaultView?.navigator as (Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> }) | undefined;
+    if (chats > 0) void nav?.setAppBadge?.(chats).catch(() => {});
+    else void nav?.clearAppBadge?.().catch(() => {});
   }
 
   /** A stream of a listed sink changed: its dot, the sink's status and last line time. */

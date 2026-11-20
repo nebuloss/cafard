@@ -120,6 +120,18 @@ export function chatLabel(id: string): string {
   return id;
 }
 
+/** A member's presence line, like pages.MemberSeen. */
+export function memberSeen(m: { readonly online: boolean; readonly last_seen?: string }, nowMs: number): string {
+  if (m.online) return 'online';
+  if (m.last_seen === undefined) return 'never seen';
+  return `last seen ${messageTime(m.last_seen, nowMs)}`;
+}
+
+/** Whether a member follows the channel, like pages.FollowsText. */
+export function followsText(following: boolean): string {
+  return following ? 'follows' : 'does not follow';
+}
+
 /** The receipt line, like pages.SeenText. */
 export function seenText(by: readonly string[] | undefined): string {
   return by === undefined || by.length === 0 ? '' : `seen by ${by.join(', ')}`;

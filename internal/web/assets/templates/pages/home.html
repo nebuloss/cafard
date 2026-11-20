@@ -1,47 +1,24 @@
-{{/* Home: the projects the viewer sees, Discord-like, with "Needs you" on
-     top and the direct conversations after them; on wide screens the
-     overview pane beside (PLAN 9.6.3). Every card is a link and every
-     form a plain form; HomePage keeps the badges and previews live. */}}
-<div class="home-layout" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}" data-muted="{{.Data.Muted}}">
-  <div class="pane-list">
-    {{template "partials/needs_you.html" .Data.NeedsYou}}
-    <section class="home-projects" aria-labelledby="projects-title">
-      <h2 class="list-heading" id="projects-title">Projects</h2>
-      <div class="project-cards" data-component="ProjectCards">
-        {{range .Data.Projects}}
-        <a class="project-card" href="{{.Href}}" data-project="{{.Name}}">
-          <span class="project-avatar" aria-hidden="true">{{.Initial}}</span>
-          <span class="chat-main">
-            <span class="chat-line"><span class="chat-name">{{.Label}}</span><time class="chat-time" data-slot="time" datetime="{{.ISO}}">{{.Time}}</time></span>
-            <span class="chat-line"><span class="chat-preview" data-slot="preview">{{.Preview}}</span><span class="chat-questions" data-slot="questions" title="Open questions">{{.Questions}}</span><span class="chat-unread" data-slot="unread" title="Unread messages">{{.Unread}}</span></span>
-            <span class="project-holds">{{.Holds}}</span>
-          </span>
-        </a>
-        {{else}}
-        <p class="muted body-small list-empty">{{.Data.NoProjects}}</p>
-        {{end}}
-        <a class="project-card direct-card" href="/dm" data-direct>
-          <span class="project-avatar" aria-hidden="true"><svg aria-hidden="true"><use href="/static/icons.svg#chat"></use></svg></span>
-          <span class="chat-main">
-            <span class="chat-line"><span class="chat-name">Direct messages</span><time class="chat-time" data-slot="time" datetime="{{.Data.Direct.ISO}}">{{.Data.Direct.Time}}</time></span>
-            <span class="chat-line"><span class="chat-preview" data-slot="preview">{{.Data.Direct.Preview}}</span><span class="chat-unread" data-slot="unread" title="Unread messages">{{.Data.Direct.Unread}}</span></span>
-            <span class="project-holds">{{.Data.Direct.Holds}}</span>
-          </span>
-        </a>
-      </div>
-    </section>
+{{/* Home (PLAN 9.6.3): "Needs you", a short welcome and the recent
+     activity across followed chats, in the main pane beside the left
+     bar, which is where the projects are. Every form is a plain form;
+     HomePage keeps Needs you and the activity live. */}}
+<div class="home" data-viewer="{{.User.Name}}" data-viewer-kind="{{.User.Kind}}" data-muted="{{.Data.Muted}}">
+  {{template "partials/needs_you.html" .Data.NeedsYou}}
+  <section class="welcome" aria-labelledby="welcome-title">
+    <h2 id="welcome-title">Hello, {{.User.Name}}</h2>
+    <p class="muted">{{.Data.Welcome}}</p>
+    <p class="welcome-actions">
+      <a class="btn tonal side-open" href="#side" data-action="open-side"><svg aria-hidden="true"><use href="/static/icons.svg#menu"></use></svg>Projects and conversations</a>
+      {{if .Data.Admin}}<a class="btn text" href="/admin"><svg aria-hidden="true"><use href="/static/icons.svg#key"></use></svg>Admin</a>{{end}}
+    </p>
     {{if .Data.Admin}}
-    <div class="home-admin">
-      <details class="new-project">
-        <summary class="btn tonal"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg>New project</summary>
-        {{template "partials/project_form.html"}}
-      </details>
-      <a class="btn text" href="/admin"><svg aria-hidden="true"><use href="/static/icons.svg#key"></use></svg>Admin</a>
-    </div>
+    <details class="new-project">
+      <summary class="btn tonal"><svg aria-hidden="true"><use href="/static/icons.svg#add"></use></svg>New project</summary>
+      {{template "partials/project_form.html"}}
+    </details>
     {{end}}
-    {{if .Data.Empty}}<div class="home-empty">{{template "partials/empty_chats.html" .Data}}</div>{{end}}
-  </div>
-  <div class="pane-overview">{{template "partials/overview.html" .Data.Overview}}</div>
+  </section>
+  {{template "partials/overview.html" .Data.Overview}}
 </div>
 {{if .Data.CanSend}}
 <a class="fab extended quick-drop-fab" href="/drop" data-action="quick-drop"><svg aria-hidden="true"><use href="/static/icons.svg#photo_camera"></use></svg>Quick drop</a>
