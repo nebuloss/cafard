@@ -1,7 +1,0 @@
-{{/* Quick drop without the bundle (PLAN 9.2): a plain form with a chat
-     picker; ?share= preloads what the share target staged. */}}
-<section class="narrow drop-page" data-viewer="{{.User.Name}}">
-  {{if .Data.Missing}}<div class="banner warn" role="alert">The shared files are gone: they wait 1 hour, and a restart loses them. Share them again.</div>{{end}}
-  {{template "partials/drop_form" .Data.Drop}}
-</section>
-{{template "partials/shortcuts_dialog.html"}}

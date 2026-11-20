@@ -1,6 +1,0 @@
-{
-  "error": {
-    "code": "bad_request",
-    "message": "from_seq must be a positive integer."
-  }
-}

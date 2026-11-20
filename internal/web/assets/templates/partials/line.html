@@ -1,4 +1,0 @@
-{{/* One log line (tpl-line). Text spans carry only classes from the fixed
-     ANSI list; colour values never come from the input. In Live, a
-     message is a line too, with data-kind="message". */}}
-<div class="line" role="listitem"{{if .Kind}} data-kind="{{.Kind}}"{{end}} data-seq="{{.Seq}}" data-sev="{{.Sev}}" data-tone="{{.Tone}}"><time class="line-time" data-slot="time" datetime="{{.ISO}}">{{.Time}}</time><span class="line-stream" data-slot="stream">{{.Stream}}</span><abbr class="line-sev" data-slot="sev" title="{{.SevName}}">{{.SevLetter}}</abbr><span class="line-text" data-slot="text">{{range .Segments}}{{if .Class}}<span class="{{.Class}}">{{.Text}}</span>{{else}}{{.Text}}{{end}}{{end}}</span></div>

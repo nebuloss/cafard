@@ -1,21 +1,10 @@
-# The database holds messages and the photos people dropped. It never belongs
-# in the repository, and never leaves the machine it runs on.
+/dist/
+/internal/httpapi/webdist/*
+!/internal/httpapi/webdist/.gitkeep
+/web/node_modules/
+/state/
 *.db
 *.db-wal
 *.db-shm
-/data/
-
-# The local configuration may hold addresses and secrets.
-/cafard.yaml
-
-# Binaries.
-/cafard
-/cafard.exe
-/cafard-*
-
-# The compiled frontend. Built by `npm run build` and embedded by Go. The
-# README.txt is committed because embed needs the directory to be non-empty.
-internal/web/assets/static/app/*
-!internal/web/assets/static/app/README.txt
-
-node_modules/
+.claude/worktrees/
+.claude/settings.local.json

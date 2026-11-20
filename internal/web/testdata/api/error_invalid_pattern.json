@@ -1,6 +1,0 @@
-{
-  "error": {
-    "code": "invalid_pattern",
-    "message": "The pattern \"serial:[dut\" is not a valid glob: missing ']'."
-  }
-}

@@ -1,9 +1,0 @@
-{
-  "principal": "claude-laptop",
-  "kind": "agent",
-  "label": "laptop MCP",
-  "scopes": [
-    "read",
-    "message"
-  ]
-}

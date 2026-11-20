@@ -1,9 +1,0 @@
-{{- /* A log attachment card (tpl-log-attachment): streams, title, line
-     count, time span, the first lines, and "Open" in the logs view. A clock
-     marks an open-ended slice, a pin a snapshot. Data: LogAttachmentView. */ -}}
-<section class="log-card"{{if .Snapshot}} data-snapshot{{end}}{{if .Expired}} data-expired{{end}}{{if .OpenEnded}} data-open-ended{{end}}>
-<header class="log-card-head"><svg class="log-icon" aria-hidden="true"><use href="/static/icons.svg#description"></use></svg><span class="log-streams mono" data-slot="streams">{{.Streams}}</span><span class="log-title" data-slot="title">{{.Title}}</span></header>
-<p class="log-meta"><span data-slot="lines">{{.Lines}}</span><span class="log-span" data-slot="span">{{.Span}}</span><span class="log-state" data-slot="state">{{.State}}</span></p>
-<div class="log-preview log-list mono dense" role="list" aria-label="First lines" data-slot="preview">{{range .Preview}}{{template "partials/line.html" .}}{{end}}</div>
-<a class="btn text log-open" data-slot="open" href="{{.Open}}">Open</a>
-</section>

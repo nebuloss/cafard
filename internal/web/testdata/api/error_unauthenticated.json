@@ -1,6 +1,0 @@
-{
-  "error": {
-    "code": "unauthenticated",
-    "message": "Sign in or send a valid token."
-  }
-}

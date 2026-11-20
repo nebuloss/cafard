@@ -1,7 +1,0 @@
-{
-  "error": {
-    "code": "busy",
-    "message": "The server is busy writing; retry in 2 s.",
-    "retry_after_s": 2
-  }
-}

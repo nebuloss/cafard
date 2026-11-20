@@ -1,9 +1,0 @@
-{{/* "Needs you" (NeedsYou): open questions for the viewer, answerable here
-     with the plain form, then direct conversations with unread messages.
-     Data: NeedsYouView. The question block is tpl-needs-you-question. */}}
-
-<section class="needs-you" data-component="NeedsYou" aria-labelledby="needs-you-title"{{if not .Any}} hidden{{end}}>
-  <h2 class="list-heading" id="needs-you-title">Needs you</h2>
-  <div class="needs-you-questions" data-slot="questions">{{range .Questions}}{{template "partials/question.html" .}}{{end}}</div>
-  <div class="chat-rows" data-slot="direct">{{range .Direct}}{{template "partials/chat_row.html" .}}{{end}}</div>
-</section>

@@ -1,5 +1,0 @@
-{{- /* One member of a channel (tpl-member): its initial with a presence
-     dot, its name, when it was last seen and whether it follows the
-     channel; a link to the direct conversation when the reader may open
-     one. Data: MemberView. */ -}}
-<a class="member"{{if .Href}} href="{{.Href}}"{{end}} data-kind="{{.Kind}}" data-presence="{{if .Online}}online{{else}}offline{{end}}"{{if .Following}} data-following{{end}}><span class="member-avatar" aria-hidden="true"><span data-slot="initial">{{.Initial}}</span><span class="presence"></span></span><span class="member-main"><span class="member-name" data-slot="name">{{.Name}}</span><span class="member-meta"><span data-slot="seen">{{.Seen}}</span> <span class="member-follows" data-slot="follows">{{.Follows}}</span></span></span></a>

@@ -1,6 +1,0 @@
-{{- /* Server-parsed message text (CONTRACTS 3.3 Segment): text, inline
-     code, code blocks and http(s) links, which the server validated. The
-     body keeps line breaks with CSS; nothing here adds whitespace. */ -}}
-{{- range . -}}
-{{- if eq .T "text"}}{{.V}}{{else if eq .T "code"}}<code>{{.V}}</code>{{else if eq .T "codeblock"}}<pre class="mono" data-lang="{{.Lang}}"><code>{{.V}}</code></pre>{{else if eq .T "link"}}<a href="{{.Href}}" rel="noopener noreferrer" target="_blank">{{.V}}</a>{{end -}}
-{{- end -}}

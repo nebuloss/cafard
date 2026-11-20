@@ -1,9 +1,0 @@
-{
-  "seq": 48213,
-  "ts": "2026-11-16T09:41:02.512904417Z",
-  "stream": "serial:lab/dut1",
-  "kind": "line",
-  "severity": 3,
-  "host": "bench-pi",
-  "text": "[    2.689001] dwc3 fe800000.usb: failed to initialize core: -110"
-}
