@@ -21,13 +21,22 @@ import (
 
 // The descriptions are what a model reads to choose a call. A change to one
 // is checked with scripts/probe-agent against a real model (rule 7).
+//
+// Measured on 23 Nov 2026 with Claude Sonnet through Claude Code, an agent
+// in two projects, one with a mention waiting: "check cafard" went
+// select_project (listing) → select_project → read_conversation →
+// read_file, paged; "look at the image I sent" read the fitted image. Told
+// only "on cafard", it once passed project "cafard", the server's name: the
+// refusal listed its projects and it recovered, and the description of
+// select_project now says so before it guesses.
 func (a *Agent) tools() []mcp.Tool {
 	return []mcp.Tool{
 		{
 			Name:  "select_project",
 			Title: "Select a project",
 			Description: "Choose the project this session works in. Call this first: every other tool needs it. " +
-				"Use the project the user or CLAUDE.md names. Without `project`, lists your projects and what is waiting " +
+				"Use the project the user or CLAUDE.md names; cafard is this server's name, not a project. " +
+				"Without `project`, lists your projects and what is waiting " +
 				"for you in each, so you can ask the user which one. Calling it again switches project.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{
 				"project":{"type":"string","description":"The project's name, as the user or CLAUDE.md gives it."},

@@ -28,6 +28,11 @@ const (
 	// idle ends a session nobody has used for this long: a client that
 	// exited without DELETE.
 	idle = 12 * time.Hour
+	// shown is how recently a session must have been used to be listed
+	// beside its agent: `claude -p` exits without ending its session, and a
+	// member list of finished tasks says nothing. The lease claims will
+	// have (docs/design.md, "Claims") is the same length.
+	shown = 15 * time.Minute
 	// perAgent bounds an agent's sessions, against a client that
 	// initializes in a loop; the oldest goes first.
 	perAgent = 64
@@ -125,14 +130,14 @@ func (ss *sessions) set(id, project, task string) {
 	}
 }
 
-// tasks lists what an agent's live sessions in a project are on, for the
+// tasks lists what an agent's recent sessions in a project are on, for the
 // member list: "upload drop", "ota rc3".
 func (ss *sessions) tasks(agentID int64, project string) []string {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 	var out []string
 	for _, s := range ss.all {
-		if s.agentID == agentID && s.project == project && ss.now().Sub(s.lastSeen) <= idle {
+		if s.agentID == agentID && s.project == project && ss.now().Sub(s.lastSeen) <= shown {
 			t := s.task
 			if t == "" {
 				t = "no task named"
