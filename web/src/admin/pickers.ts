@@ -2,6 +2,7 @@ import { Component } from '@shared/component';
 import { Html, html } from '@shared/html';
 import { Icon } from '@shared/icons';
 import { PickerState, PickerView, type PickItem } from '@shared/picker';
+import { ui } from '@shared/ui';
 import { Avatar } from '@shared/widgets';
 import type { AdminApp } from './app';
 import { AdminStore } from './store';
@@ -9,7 +10,7 @@ import type { Member, Project } from './types';
 
 /** The close button of a dialog. */
 export function closeButton(): Html {
-  return html`<button class="icon-btn" data-act="close" aria-label="Close">${Icon.of('close')}</button>`;
+  return html`<button class="${ui.iconBtn}" data-act="close" aria-label="Close">${Icon.of('close')}</button>`;
 }
 
 /** Items for the member picker, from the store. */
@@ -67,7 +68,7 @@ export class PickerDialog extends Component {
 
   static forProject(app: AdminApp, p: Project): PickerDialog {
     const current = p.members.map((m) => m.name);
-    return new PickerDialog(app, `Members of ${p.name}`, `Tick to add, untick to remove. People and agents see every conversation in ${p.name}; devices only send to it.`,
+    return new PickerDialog(app, `Members of ${p.name}`, `People and agents see every conversation in ${p.name}; devices only send.`,
       new PickerState(memberItems(app.store.members), current, current), true,
       (members) => app.store.api.patch(`/projects/${AdminStore.path(p.name)}`, { members }));
   }
@@ -79,9 +80,9 @@ export class PickerDialog extends Component {
   }
 
   protected view(): Html {
-    return html`<div class="m-head"><div class="t"><h2>${this.title}</h2><p>${this.sub}</p></div>${closeButton()}</div>
-      <div class="m-body"><div class="pk-slot"></div></div>
-      <div class="m-foot"><button class="btn tonal" data-act="close">Cancel</button><button class="btn filled" id="pkSave" data-act="pk-save" disabled>Save</button></div>`;
+    return html`<div class="${ui.dialogHead}"><div class="min-w-0 flex-1"><h2>${this.title}</h2><p>${this.sub}</p></div>${closeButton()}</div>
+      <div class="${ui.dialogBody}"><div class="pk-slot"></div></div>
+      <div class="${ui.dialogFoot}"><button class="${ui.btn('tonal')}" data-act="close">Cancel</button><button class="${ui.btn('filled')}" id="pkSave" data-act="pk-save" disabled>Save</button></div>`;
   }
 
   protected override afterRender(): void {

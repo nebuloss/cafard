@@ -1,6 +1,7 @@
 import { Component } from './component';
 import { Html, html } from './html';
 import { Icon } from './icons';
+import { ui } from './ui';
 
 /** Something the picker can tick: a member or a project. */
 export interface PickItem {
@@ -101,7 +102,7 @@ export class PickerView extends Component {
     readonly state: PickerState,
     private readonly opts: { kinds: boolean; inline: boolean; placeholder: string; onChange?: () => void },
   ) {
-    super('div', 'picker');
+    super('div', 'flex min-w-0 flex-col gap-2.5');
     this.actions = {
       'pk-toggle': (t) => {
         this.state.toggle(t.dataset['v'] ?? '');
@@ -135,12 +136,12 @@ export class PickerView extends Component {
   protected view(): Html {
     const kinds: [KindFilter, string][] = [['all', 'All'], ['person', 'People'], ['agent', 'Agents'], ['device', 'Devices']];
     const seg = this.opts.kinds
-      ? html`<div class="seg-wrap"><div class="seg" role="group" aria-label="Show">${kinds.map(
-          ([k, l]) => html`<button type="button" aria-pressed="${String(this.state.kind === k)}" data-act="pk-kind" data-v="${k}">${l}</button>`,
-        )}</div></div>`
+      ? html`<div class="${ui.seg}" role="group" aria-label="Show">${kinds.map(
+          ([k, l]) => html`<button type="button" class="${ui.segBtn}" aria-pressed="${String(this.state.kind === k)}" data-act="pk-kind" data-v="${k}">${l}</button>`,
+        )}</div>`
       : Html.empty;
-    return html`<div class="pk-tools"><label class="search">${Icon.of('search')}<input class="pk-q" type="search" placeholder="${this.opts.placeholder}" aria-label="${this.opts.placeholder}" value="${this.state.query}" autocomplete="off"></label>${seg}</div>
-      <div class="pk-list" role="listbox" aria-multiselectable="true"></div><div class="pk-sum" aria-live="polite"></div>`;
+    return html`<div class="flex flex-wrap items-center gap-2"><label class="${ui.search} flex-[1_1_14rem] border border-outline-variant">${Icon.of('search')}<input class="pk-q" type="search" placeholder="${this.opts.placeholder}" aria-label="${this.opts.placeholder}" value="${this.state.query}" autocomplete="off"></label>${seg}</div>
+      <div class="pk-list max-h-[min(360px,46vh)] overflow-y-auto rounded-md3-m border border-outline-variant bg-surface-lowest" role="listbox" aria-multiselectable="true"></div><div class="pk-sum min-h-[18px] text-[12.5px] text-on-surface-variant [&_b]:text-on-surface" aria-live="polite"></div>`;
   }
 
   protected override afterRender(): void {
@@ -161,13 +162,13 @@ export class PickerView extends Component {
         const on = s.selected.has(it.id);
         const tag = this.opts.inline ? null : s.tag(it.id);
         const pill =
-          tag === 'add' ? html`<span class="pill ok">will be added</span>`
-          : tag === 'remove' ? html`<span class="pill err">will be removed</span>`
-          : tag === 'member' ? html`<span class="pill muted">member</span>`
+          tag === 'add' ? html`<span class="${ui.pill.ok}">will be added</span>`
+          : tag === 'remove' ? html`<span class="${ui.pill.err}">will be removed</span>`
+          : tag === 'member' ? html`<span class="${ui.pill.muted}">member</span>`
           : Html.empty;
-        return html`<button type="button" class="pk-row" role="option" aria-selected="${String(on)}" data-act="pk-toggle" data-v="${it.id}" ${Html.raw(it.disabled ? 'disabled' : '')}><span class="box">${on ? Icon.of('check') : ''}</span>${it.avatar}<span class="m"><b>${it.label}</b>${it.kind && it.kind !== 'person' ? html`<span class="kind ${it.kind}">${it.kind}</span>` : ''}<span class="s">${it.sub}</span></span>${pill}</button>`;
+        return html`<button type="button" class="group flex w-full items-center gap-2.5 border-b border-outline-variant px-3 py-2 text-left last:border-0 hover:bg-surface-low disabled:cursor-default disabled:opacity-50" role="option" aria-selected="${String(on)}" data-act="pk-toggle" data-v="${it.id}" ${Html.raw(it.disabled ? 'disabled' : '')}><span class="grid size-5 shrink-0 place-items-center rounded-[5px] border-2 border-outline group-aria-selected:border-primary group-aria-selected:bg-primary group-aria-selected:text-on-primary [&_.ic]:size-3.5 [&_.ic]:stroke-[2.8]">${on ? Icon.of('check') : ''}</span>${it.avatar}<span class="min-w-0 flex-1"><b class="mr-1.5 font-semibold">${it.label}</b>${it.kind && it.kind !== 'person' ? html`<span class="${ui.kind[it.kind] ?? ''}">${it.kind}</span>` : ''}<span class="block truncate text-[12.5px] text-on-surface-variant">${it.sub}</span></span>${pill}</button>`;
       }),
-    ).value || html`<div class="empty">Nothing matches “${s.query}”.</div>`.value;
+    ).value || html`<div class="${ui.empty}">Nothing matches “${s.query}”.</div>`.value;
     const { add, remove } = s.changes();
     const shown = rows.length < s.items.length ? `Showing ${rows.length} of ${s.items.length}. ` : '';
     const summary = this.opts.inline

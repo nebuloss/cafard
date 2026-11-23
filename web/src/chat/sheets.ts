@@ -5,13 +5,15 @@ import { Html, html } from '@shared/html';
 import { Icon } from '@shared/icons';
 import { PickerState, PickerView } from '@shared/picker';
 import { Toaster } from '@shared/toast';
+import { ui } from '@shared/ui';
 import { Avatar } from '@shared/widgets';
 import type { ChatApp } from './app';
+import { look } from './look';
 import type { Address } from './store';
 import type { FileInfo, LinesPage, Member, Message, Signin } from './types';
 
-function closeButton(): Html {
-  return html`<button class="icon-btn" data-act="close" aria-label="Close">${Icon.of('close')}</button>`;
+function closeButton(cls: string = ui.iconBtn): Html {
+  return html`<button class="${cls}" data-act="close" aria-label="Close">${Icon.of('close')}</button>`;
 }
 
 /** Errors as people read them. */
@@ -23,6 +25,7 @@ function reason(e: unknown): string {
 // does; it decides nothing, it only helps the eye.
 const ERR = /\b(error|errors|fail|failed|failure|panic|fatal|timeout|timed out|denied|exception|segfault|oops|hang)\b/i;
 const WARN = /\bwarn(ing)?\b/i;
+const LOG_EMPTY = 'p-4 text-(--log-dim)';
 
 /**
  * LogViewer shows a text file a page at a time, never whole
@@ -73,12 +76,12 @@ export class LogViewer extends Component {
 
   protected view(): Html {
     const f = this.file;
-    return html`<div class="sheet-head"><div class="t"><h3>${f.name}</h3><p class="log-meta">${this.meta()}</p></div>${closeButton()}</div>
-      <div class="log-tools"><label class="search">${Icon.of('search')}<input class="log-q" type="search" placeholder="Search in this log" value="${this.query}" autocomplete="off"></label>
-        <span class="log-count"></span>
-        <button class="btn tonal sm" data-act="start">Start</button><button class="btn tonal sm" data-act="end">End</button>
-        ${f.state === 'live' ? html`<label class="switch"><input type="checkbox" class="log-follow" ${Html.raw(this.follow ? 'checked' : '')}> Follow live</label>` : ''}</div>
-      <div class="logbody"><p class="loading">Loading…</p></div>`;
+    return html`<div class="${look.sheetHead}"><div class="min-w-0 flex-1"><h3>${f.name}</h3><p class="log-meta">${this.meta()}</p></div>${closeButton()}</div>
+      <div class="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-outline-variant px-4 py-2"><label class="${look.search} h-9 flex-[1_1_200px]">${Icon.of('search')}<input class="log-q" type="search" placeholder="Search in this log" value="${this.query}" autocomplete="off"></label>
+        <span class="log-count text-[12.5px] text-on-surface-variant tabular-nums"></span>
+        <button class="${ui.btn('tonal', 'sm')}" data-act="start">Start</button><button class="${ui.btn('tonal', 'sm')}" data-act="end">End</button>
+        ${f.state === 'live' ? html`<label class="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-semibold"><input type="checkbox" class="log-follow size-4 accent-primary" ${Html.raw(this.follow ? 'checked' : '')}> Follow live</label>` : ''}</div>
+      <div class="logbody min-h-0 flex-1 overflow-auto bg-(--log-bg) pt-2 pb-6 font-mono text-[12.5px]/[1.6] text-(--log-fg)"><p class="p-4">Loading…</p></div>`;
   }
 
   private meta(): string {
@@ -108,7 +111,7 @@ export class LogViewer extends Component {
     try {
       this.page = await this.app.store.api.get<LinesPage>(this.url());
     } catch (e) {
-      this.$('.logbody').innerHTML = html`<p class="empty">${reason(e)}</p>`.value;
+      this.$('.logbody').innerHTML = html`<p class="${LOG_EMPTY}">${reason(e)}</p>`.value;
       return;
     }
     this.draw(mode === 'end');
@@ -129,11 +132,11 @@ export class LogViewer extends Component {
     if (!body || !this.page) return;
     const q = this.mode === 'search' ? this.query.trim().toLowerCase() : '';
     const rows = this.page.lines.map((l) => {
-      const cls = ERR.test(l.text) ? 'err' : WARN.test(l.text) ? 'warn' : '';
-      return html`<div class="ln ${cls}"><span class="n">${String(l.n)}</span><span class="t">${q ? this.highlight(l.text, q) : l.text || ' '}${l.cut ? ' …' : ''}</span></div>`;
+      const cls = ERR.test(l.text) ? 'text-(--log-err)' : WARN.test(l.text) ? 'text-(--log-warn)' : '';
+      return html`<div class="flex pr-4 whitespace-pre"><span class="w-16 shrink-0 pr-3.5 text-right text-(--log-num) tabular-nums select-none">${String(l.n)}</span><span class="${cls}">${q ? this.highlight(l.text, q) : l.text || ' '}${l.cut ? ' …' : ''}</span></div>`;
     });
-    const more = this.page.next ? html`<button class="btn tonal sm more" data-act="more">More</button>` : Html.empty;
-    body.innerHTML = html`${rows.length ? rows : html`<p class="empty">${this.mode === 'search' ? 'No line matches.' : 'Empty.'}</p>`}${more}`.value;
+    const more = this.page.next ? html`<button class="${ui.btn('tonal', 'sm')} mx-4 my-3" data-act="more">More</button>` : Html.empty;
+    body.innerHTML = html`${rows.length ? rows : html`<p class="${LOG_EMPTY}">${this.mode === 'search' ? 'No line matches.' : 'Empty.'}</p>`}${more}`.value;
     this.$('.log-count').textContent = this.mode === 'search' ? `${this.page.matches ?? 0} matching line${this.page.matches === 1 ? '' : 's'}` : '';
     this.$('.log-meta').textContent = this.meta();
     if (toEnd) body.scrollTop = body.scrollHeight;
@@ -142,7 +145,7 @@ export class LogViewer extends Component {
   private highlight(text: string, q: string): Html {
     const i = text.toLowerCase().indexOf(q);
     if (i < 0) return html`${text}`;
-    return html`${text.slice(0, i)}<mark>${text.slice(i, i + q.length)}</mark>${text.slice(i + q.length)}`;
+    return html`${text.slice(0, i)}<mark class="rounded-xs bg-(--log-warn) text-(--log-on-warn)">${text.slice(i, i + q.length)}</mark>${text.slice(i + q.length)}`;
   }
 
   /** Called when the conversation changed: a live log grew, or ended. */
@@ -154,6 +157,8 @@ export class LogViewer extends Component {
     else this.$('.log-meta').textContent = this.meta();
   }
 }
+
+const LB_NAV = 'absolute top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/12 text-white';
 
 /** ImageViewer shows a message's photos full screen, one at a time. */
 export class ImageViewer extends Component {
@@ -186,11 +191,11 @@ export class ImageViewer extends Component {
     if (!f) return Html.empty;
     const by = `${this.message.author.display_name || this.message.author.name} · ${new Date(this.message.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}`;
     const nav = this.images.length > 1
-      ? html`<button class="lb-nav l" data-act="prev" aria-label="Previous">${Icon.of('back')}</button><button class="lb-nav r" data-act="next" aria-label="Next">${Icon.of('chev')}</button>`
+      ? html`<button class="${LB_NAV} left-[max(12px,env(safe-area-inset-left,0px))]" data-act="prev" aria-label="Previous">${Icon.of('back')}</button><button class="${LB_NAV} right-[max(12px,env(safe-area-inset-right,0px))]" data-act="next" aria-label="Next">${Icon.of('chev')}</button>`
       : Html.empty;
-    return html`<div class="lb-head"><div class="t"><b>${f.name}</b>${by}${this.images.length > 1 ? ` · ${this.index + 1} of ${this.images.length}` : ''}</div>
-      <a class="icon-btn" href="${f.url}" download="${f.name}" aria-label="Download">${Icon.of('folder')}</a>${closeButton()}</div>
-      <div class="lb-img"><img src="${f.url}" alt="${f.name}">${nav}</div>`;
+    return html`<div class="flex items-center gap-2.5 pt-[calc(10px+env(safe-area-inset-top,0px))] pr-3 pb-2.5 pl-4"><div class="min-w-0 flex-1 text-[13px]"><b class="block text-sm">${f.name}</b>${by}${this.images.length > 1 ? ` · ${this.index + 1} of ${this.images.length}` : ''}</div>
+      <a class="${look.iconBtnDark}" href="${f.url}" download="${f.name}" aria-label="Download">${Icon.of('folder')}</a>${closeButton(look.iconBtnDark)}</div>
+      <div class="relative grid min-h-0 flex-1 place-items-center px-4 pb-6"><img class="max-h-full max-w-full rounded-md object-contain" src="${f.url}" alt="${f.name}">${nav}</div>`;
   }
 
   protected override afterRender(): void {
@@ -245,24 +250,25 @@ export class DetailsSheet extends Component {
     const c = this.app.store.conversation(this.address);
     const me = this.app.store.me;
     const kindText = (m: Member) => m.kind === 'person' ? 'Person' : m.kind === 'agent' ? `Agent${m.description ? ' · ' + m.description : ''}` : `Device · sends only${m.description ? ' · ' + m.description : ''}`;
-    const members = this.members.map((m) => html`<div class="mem">${Avatar.of(m)}<div class="m-main"><div class="m-name">${m.display_name || m.name}${m.kind !== 'person' ? html`<span class="kind ${m.kind}">${m.kind}</span>` : ''}</div><div class="m-sub">${m.name === me?.name ? 'You' : kindText(m)}</div></div></div>`);
+    const members = this.members.map((m) => html`<div class="${look.mem}">${Avatar.of(m)}<div class="min-w-0 flex-1"><div class="${look.memName}">${m.display_name || m.name}${m.kind !== 'person' ? html`<span class="${ui.kind[m.kind] ?? ''}">${m.kind}</span>` : ''}</div><div class="${look.memSub}">${m.name === me?.name ? 'You' : kindText(m)}</div></div></div>`);
     const files = this.files().filter((f) => f.state !== 'deleted' && f.state !== 'cut').map((f) => {
-      const inner = html`<span class="fi">${Icon.of(f.lines_url ? 'list' : 'folder')}</span><span class="f-main"><span class="f-name">${f.name}</span><span class="f-meta">${Bytes.format(f.size)}${f.state === 'live' ? ' · live' : ''}</span></span>`;
+      const inner = html`<span class="grid size-10 shrink-0 place-items-center rounded-md3-s bg-surface-high">${Icon.of(f.lines_url ? 'list' : 'folder')}</span><span class="${look.fileMain}"><span class="${look.fileName}">${f.name}</span><span class="${look.fileMeta}">${Bytes.format(f.size)}${f.state === 'live' ? ' · live' : ''}</span></span>`;
+      const row = 'flex w-full items-center gap-2.5 px-4 py-2 text-left text-inherit no-underline hover:bg-surface-container';
       // A log opens in the viewer; anything else is a download.
       return f.lines_url
-        ? html`<button class="file-row" data-act="log" data-v="${String(f.id)}">${inner}</button>`
-        : html`<a class="file-row" href="${f.url}" download="${f.name}">${inner}</a>`;
+        ? html`<button class="${row}" data-act="log" data-v="${String(f.id)}">${inner}</button>`
+        : html`<a class="${row}" href="${f.url}" download="${f.name}">${inner}</a>`;
     });
     const send = `curl -T boot.log -H "Authorization: Bearer cfd_…" ${location.origin}/api/v1/send/${this.address}/`;
-    return html`<div class="sheet-head"><div class="t"><h3>${c?.title ?? this.address.name}</h3><p>${this.address.project}${c?.closed ? ' · closed' : ''}</p></div>${closeButton()}</div>
-      <div class="sheet-scroll">
-        <div class="sec">Address for agents and scripts</div>
-        <div class="addr"><div class="row2"><code>${this.address.toString()}</code><button class="copy" data-act="copy" data-v="${this.address.toString()}">Copy</button></div>
-          <p>A device sends here with <code>${send}</code></p></div>
-        <div class="sec">Members · ${this.members.length}</div>${members}
-        ${me?.kind === 'person' ? html`<div class="pad"><button class="btn tonal" data-act="add">Add or remove people and agents</button></div>` : ''}
-        <div class="sec">Files</div>${files.length ? files : html`<p class="mem m-sub">No files yet.</p>`}
-        <div class="pad"><button class="btn tonal" data-act="toggle-closed">${c?.closed ? 'Reopen conversation' : 'Close conversation'}</button></div>
+    return html`<div class="${look.sheetHead}"><div class="min-w-0 flex-1"><h3>${c?.title ?? this.address.name}</h3><p>${this.address.project}${c?.closed ? ' · closed' : ''}</p></div>${closeButton()}</div>
+      <div class="${look.sheetScroll}">
+        <div class="${look.sec}">Address for agents and scripts</div>
+        <div class="mx-4 mt-1 flex flex-col gap-1.5 rounded-xl bg-surface-container px-3 py-2.5 text-[12.5px] [&_code]:font-mono [&_code]:[overflow-wrap:anywhere]"><div class="flex items-center gap-2"><code class="min-w-0 flex-1">${this.address.toString()}</code><button class="rounded-md px-2 py-1 font-semibold text-primary" data-act="copy" data-v="${this.address.toString()}">Copy</button></div>
+          <p class="text-on-surface-variant">A device sends here with <code>${send}</code></p></div>
+        <div class="${look.sec}">Members · ${this.members.length}</div>${members}
+        ${me?.kind === 'person' ? html`<div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="add">Add or remove people and agents</button></div>` : ''}
+        <div class="${look.sec}">Files</div>${files.length ? files : html`<p class="${look.note}">No files yet.</p>`}
+        <div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="toggle-closed">${c?.closed ? 'Reopen conversation' : 'Close conversation'}</button></div>
       </div>`;
   }
 
@@ -312,9 +318,9 @@ class MembersDialog extends Component {
   }
 
   protected view(): Html {
-    return html`<div class="m-head"><div class="t"><h2>Members of ${this.project}</h2><p>Tick to add, untick to remove. They see every conversation in ${this.project}.</p></div>${closeButton()}</div>
-      <div class="m-body"><div class="pk-slot"></div></div>
-      <div class="m-foot"><button class="btn tonal" data-act="close">Cancel</button><button class="btn filled save" data-act="save" disabled>Save</button></div>`;
+    return html`<div class="${ui.dialogHead}"><div class="min-w-0 flex-1"><h2>Members of ${this.project}</h2></div>${closeButton()}</div>
+      <div class="${ui.dialogBody}"><div class="pk-slot"></div></div>
+      <div class="${ui.dialogFoot}"><button class="${ui.btn('tonal')}" data-act="close">Cancel</button><button class="${ui.btn('filled')} save" data-act="save" disabled>Save</button></div>`;
   }
 
   protected override afterRender(): void {
@@ -373,19 +379,19 @@ export class ProfileSheet extends Component {
 
   protected view(): Html {
     const me = this.app.store.me;
-    const signins = this.signins === null ? html`<p class="mem m-sub">Loading…</p>`
-      : this.signins.map((s) => html`<div class="mem"><div class="m-main"><div class="m-name">${s.what}${s.current ? ' · this one' : ''}</div><div class="m-sub">${s.surface === 'admin' ? 'admin UI' : 'chat app'} · ${s.from} · ${time.ago(s.last_used)}</div></div>${s.current ? '' : html`<button class="btn tonal sm" data-act="sign-out-one" data-v="${String(s.id)}">Sign out</button>`}</div>`);
+    const signins = this.signins === null ? html`<p class="${look.note}">Loading…</p>`
+      : this.signins.map((s) => html`<div class="${look.mem}"><div class="min-w-0 flex-1"><div class="${look.memName}">${s.what}${s.current ? ' · this one' : ''}</div><div class="${look.memSub}">${s.surface === 'admin' ? 'admin UI' : 'chat app'} · ${s.from} · ${time.ago(s.last_used)}</div></div>${s.current ? '' : html`<button class="${ui.btn('tonal', 'sm')}" data-act="sign-out-one" data-v="${String(s.id)}">Sign out</button>`}</div>`);
+    // The QR code stays black on white in both themes, for the camera.
     const phone = this.phone
-      ? html`<div class="phone-code"><div class="qr">${this.phone.qr ? html`<img src="${this.phone.qr}" alt="QR code that signs in a phone">` : ''}</div><p>Scan it with the phone's camera. It works once, ${time.until(this.phone.expires_at)}, and signs that phone in as you.</p></div>`
-      : html`<form class="pad phone-form" novalidate><p class="help">Shows a code a phone scans to be signed in as you, for two minutes. Your password first, so a computer left unlocked cannot do it.</p>
-          <div class="row"><input class="input" type="password" name="password" autocomplete="current-password" placeholder="Your password" aria-label="Your password"><button class="btn filled" type="submit">Show code</button></div>
-          ${this.error ? html`<p class="ferr">${this.error}</p>` : ''}</form>`;
-    return html`<div class="sheet-head">${me ? Avatar.of(me) : ''}<div class="t"><h3>${me?.display_name || me?.name || ''}</h3><p>@${me?.name ?? ''}${me?.admin ? ' · admin' : ''}</p></div>${closeButton()}</div>
-      <div class="sheet-scroll">
-        <div class="sec">Sign in another phone</div>${phone}
-        <div class="sec">Signed in</div>${signins}
-        <div class="pad"><button class="btn tonal" data-act="sign-out">Sign out of this browser</button></div>
-        <p class="help pad">To change your password, ask an admin for a password link: it signs you out everywhere too.</p>
+      ? html`<div class="flex flex-wrap items-center gap-3.5 px-4 pt-2 pb-3"><div class="w-40 max-w-full shrink-0 rounded-xl bg-white p-2">${this.phone.qr ? html`<img class="block w-full [image-rendering:pixelated]" src="${this.phone.qr}" alt="QR code that signs in a phone">` : ''}</div><p class="flex-[1_1_180px] text-[13px] text-on-surface-variant">Scan it with the phone's camera. It works once, ${time.until(this.phone.expires_at)}, and signs that phone in as you.</p></div>`
+      : html`<form class="${look.pad}" novalidate>
+          <div class="flex flex-wrap gap-2"><input class="${ui.input} flex-[1_1_180px]" type="password" name="password" autocomplete="current-password" placeholder="Your password" aria-label="Your password"><button class="${ui.btn('filled')}" type="submit">Show code</button></div>
+          ${this.error ? html`<p class="${ui.error} mt-2">${this.error}</p>` : ''}</form>`;
+    return html`<div class="${look.sheetHead}">${me ? Avatar.of(me) : ''}<div class="min-w-0 flex-1"><h3>${me?.display_name || me?.name || ''}</h3><p>@${me?.name ?? ''}${me?.admin ? ' · admin' : ''}</p></div>${closeButton()}</div>
+      <div class="${look.sheetScroll}">
+        <div class="${look.sec}">Sign in another phone</div>${phone}
+        <div class="${look.sec}">Signed in</div>${signins}
+        <div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="sign-out">Sign out of this browser</button></div>
       </div>`;
   }
 
@@ -417,7 +423,7 @@ export class SignInView extends Component {
     private readonly app: ChatApp,
     private readonly message?: string,
   ) {
-    super('div', 'signin');
+    super('div', 'grid min-h-full place-items-center px-[max(16px,env(safe-area-inset-left,0px))] py-6');
     this.root.addEventListener('submit', (e) => {
       e.preventDefault();
       void this.submit();
@@ -425,15 +431,14 @@ export class SignInView extends Component {
   }
 
   protected view(): Html {
-    return html`<form novalidate>
-      <div class="brand">${Icon.logo} cafard</div>
-      <h1>Sign in</h1>
-      <p>With the password you chose from your join link. No password yet? Ask an admin for a link.</p>
-      ${this.message ? html`<p class="ferr" role="alert">${this.message}</p>` : ''}
-      <div class="field"><label for="u">Username</label><input class="input" id="u" autocomplete="username" autocapitalize="none" required></div>
-      <div class="field"><label for="p">Password</label><input class="input" id="p" type="password" autocomplete="current-password" required></div>
-      <p class="ferr" id="sErr" hidden></p>
-      <button class="btn filled" type="submit">Sign in</button></form>`;
+    return html`<form class="flex w-[min(380px,100%)] flex-col gap-3.5" novalidate>
+      <div class="flex items-center gap-2 text-xl font-bold tracking-[-.01em] [&_svg]:size-[26px] [&_svg]:text-primary">${Icon.logo} cafard</div>
+      <h1 class="text-[22px] font-bold">Sign in</h1>
+      ${this.message ? html`<p class="${ui.error}" role="alert">${this.message}</p>` : ''}
+      <div class="${ui.field}"><label class="${ui.label}" for="u">Username</label><input class="${ui.input}" id="u" autocomplete="username" autocapitalize="none" required></div>
+      <div class="${ui.field}"><label class="${ui.label}" for="p">Password</label><input class="${ui.input}" id="p" type="password" autocomplete="current-password" required></div>
+      <p class="${ui.error}" id="sErr" hidden></p>
+      <button class="${ui.btn('filled')}" type="submit">Sign in</button></form>`;
   }
 
   focus(): void {

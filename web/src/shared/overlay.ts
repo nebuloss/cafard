@@ -7,7 +7,23 @@ import { Component } from './component';
  */
 export type LayerStyle = 'right' | 'center' | 'full' | 'bottom' | 'lightbox';
 
-const DEFAULT_CLASS: Record<LayerStyle, string> = { right: 'drawer', center: 'modal', full: 'sheet', bottom: 'sheet', lightbox: 'lightbox' };
+// Where each style puts the layer, and what its content looks like: MD3's
+// dialog and side sheet, on a dimmed backdrop.
+const SCRIM: Record<LayerStyle, string> = {
+  right: 'fixed inset-0 z-40 flex justify-end bg-black/45',
+  center: 'fixed inset-0 z-40 flex items-center justify-center bg-black/45 sm:p-4',
+  full: 'fixed inset-0 z-40 flex bg-black/45',
+  bottom: 'fixed inset-0 z-40 flex items-end bg-black/45',
+  lightbox: 'fixed inset-0 z-40 flex bg-black/90',
+};
+
+const DEFAULT_CLASS: Record<LayerStyle, string> = {
+  right: 'flex h-full w-full max-w-[460px] flex-col bg-surface animate-sheet-in',
+  center: 'flex h-full w-full flex-col overflow-hidden bg-surface sm:h-auto sm:max-h-full sm:max-w-[620px] sm:rounded-md3-xl sm:[animation:pop_200ms_cubic-bezier(.2,0,0,1)]',
+  full: 'flex h-full w-full flex-col bg-surface',
+  bottom: 'flex max-h-[90%] w-full flex-col rounded-t-md3-xl bg-surface',
+  lightbox: 'flex h-full w-full flex-col',
+};
 
 /**
  * Layer is one level of things drawn over the page: a drawer, or a dialog.
@@ -39,9 +55,9 @@ export class Layer {
     this.content = content;
     this.onClose = onClose ?? null;
     const scrim = document.createElement('div');
-    scrim.className = `scrim ${style}`;
+    scrim.className = SCRIM[style];
     scrim.dataset['scrim'] = '';
-    content.root.classList.add(className ?? DEFAULT_CLASS[style]);
+    content.root.className = `${content.root.className} ${className ?? DEFAULT_CLASS[style]}`.trim();
     content.root.setAttribute('role', 'dialog');
     content.root.setAttribute('aria-modal', 'true');
     scrim.append(content.root);

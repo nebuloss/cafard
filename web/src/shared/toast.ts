@@ -6,7 +6,8 @@ export class Toaster {
   static show(message: string): void {
     if (!Toaster.el) {
       Toaster.el = document.createElement('div');
-      Toaster.el.className = 'toast';
+      Toaster.el.className =
+        'fixed bottom-6 left-1/2 z-50 max-w-[calc(100%-32px)] -translate-x-1/2 rounded-md3-s bg-on-surface px-4 py-3 text-sm text-surface elevation-2';
       Toaster.el.setAttribute('role', 'status');
       document.body.append(Toaster.el);
     }

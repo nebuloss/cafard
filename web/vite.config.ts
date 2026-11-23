@@ -2,6 +2,7 @@
 // step 4c, `--mode chat`. Each is self-contained under dist/<mode>, with its
 // own assets, so the admin UI's code is never served on the public listener:
 // the two listeners embed different directories (internal/webui).
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -17,6 +18,7 @@ const devAPI: Record<string, Record<string, string>> = {
 
 export default defineConfig(({ mode }) => ({
   root: resolve(here, 'src', mode),
+  plugins: [tailwindcss()],
   base: '/',
   publicDir: false,
   resolve: { alias: { '@shared': resolve(here, 'src/shared') } },

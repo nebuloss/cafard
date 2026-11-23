@@ -146,10 +146,24 @@ a live server is a script under `scripts/`, run by hand, and says so.
   lives in its own class (`PickerState`, `Time`) with a test under
   `web/test`. Markup is built with the `html` tag, which escapes every value
   it is given; `Html.raw` is for markup written in this repo only.
+- **Styled with Tailwind, in claudication's design** (the owner's rule):
+  utility classes in the markup, as claudication's admin UI is written.
+  Repeated recipes (buttons, cards, tables, fields) are in
+  `web/src/shared/ui.ts`, after claudication's primitives; each UI's
+  stylesheet is the Tailwind import, `shared/base.css` and its `@source`
+  lines, little else. Write every class out whole: Tailwind finds them by
+  reading the source.
+- The design is shared with claudication: `web/src/design/theme.css` is a
+  copy of claudication's MD3 tokens (light and dark), state layer and
+  elevation, made by `scripts/sync-design`. Change the design in
+  claudication, then copy it again; never edit the copy. Use the tokens
+  (`bg-surface-container`, `text-on-surface-variant`), never raw colours.
 - The pages' Content-Security-Policy allows no inline script and no `style`
   attribute; set data-driven sizes through `element.style` after rendering
-  (`Component.sizeBars`). Colours are claudication's MD3 tokens as CSS
-  variables: use the tokens, not raw colours.
+  (`Component.sizeBars`).
+- No explanatory text on screen: a page has no title paragraph (the trail
+  names it), a field no help line unless it prevents a mistake. Say it in a
+  tooltip if it must be said.
 - The UI's words are the ones in the design doc's glossary: person, agent,
   device, member, session, project, conversation, message, file. Not channel,
   server, workspace or topic.

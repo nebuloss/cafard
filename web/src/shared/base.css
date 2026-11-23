@@ -1,0 +1,21 @@
+/* What both UIs start from, after Tailwind and the shared design: the few
+   rules a utility cannot say. Everything else is a class in the markup
+   (shared/ui.ts). Imported by admin.css and chat.css, each of which tells
+   Tailwind where its classes are. */
+@import "../design/theme.css";
+
+/* The hidden attribute always hides, whatever display a utility gives the
+   element. */
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+body { font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button { cursor: pointer; }
+
+/* Line icons (shared/icons.ts), drawn in the current colour. */
+.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+@keyframes pop { from { transform: translateY(16px); opacity: 0; } }
+@keyframes pulse { 50% { opacity: .3; } }

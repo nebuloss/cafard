@@ -4,6 +4,7 @@ import { Layer } from '@shared/overlay';
 import { Toaster } from '@shared/toast';
 import { ConversationView } from './conversation';
 import { ConversationList } from './list';
+import { look } from './look';
 import { LiveFeed } from './live';
 import { LogViewer, ProfileSheet, SignInView } from './sheets';
 import { Address, ChatStore } from './store';
@@ -49,7 +50,7 @@ export class ChatApp {
       if (await this.store.whoAmI()) await this.showApp();
       else this.showSignIn();
     } catch {
-      this.root.innerHTML = html`<p class="loading">cafard does not answer. Is it running?</p>`.value;
+      this.root.innerHTML = html`<p class="${look.loading}">cafard does not answer. Is it running?</p>`.value;
     }
   }
 
@@ -68,11 +69,11 @@ export class ChatApp {
   async showApp(): Promise<void> {
     await this.attempt(() => this.store.loadAll());
     this.frame = document.createElement('div');
-    this.frame.className = 'app';
+    this.frame.className = 'group/app grid min-h-0 flex-1 grid-cols-1 min-[840px]:grid-cols-[340px_1fr]';
     this.frame.append(this.list.root);
     this.list.render();
     const shell = document.createElement('div');
-    shell.className = 'shell';
+    shell.className = 'flex h-full flex-col';
     shell.append(this.frame);
     this.root.replaceChildren(shell);
     this.live.start();
@@ -104,8 +105,8 @@ export class ChatApp {
       await view.load();
     } else {
       const empty = document.createElement('main');
-      empty.className = 'chat';
-      empty.innerHTML = html`<div class="empty"><h2>Pick a conversation</h2><p>Or start one with +. Photos, logs and messages go to everyone in its project, agents included.</p></div>`.value;
+      empty.className = look.pane;
+      empty.innerHTML = html`<div class="${look.empty}"><h2>Pick a conversation</h2></div>`.value;
       this.frame.append(empty);
     }
     this.list.drawRows();
@@ -162,11 +163,11 @@ export class ChatApp {
 
   openLog(f: FileInfo): void {
     this.log = new LogViewer(this, f);
-    this.layer.open(this.log, 'full', () => (this.log = null));
+    this.layer.open(this.log, 'full', () => (this.log = null), look.fullSheet);
   }
 
   openProfile(): void {
-    this.layer.open(new ProfileSheet(this), 'right', undefined, 'sheet');
+    this.layer.open(new ProfileSheet(this), 'right', undefined, look.sideSheet);
   }
 
   /** Runs an action, showing a refusal as a toast; done is shown when it worked. */

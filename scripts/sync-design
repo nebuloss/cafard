@@ -1,0 +1,30 @@
+#!/bin/sh
+# Copies the design cafard shares with claudication into web/src/design/theme.css.
+#
+#   scripts/sync-design [CLAUDICATION_CHECKOUT]   (default ~/misc/claudication)
+#
+# claudication is where the design is made: its Material 3 tokens (light and
+# dark), the state layer, elevation, the stacked table, reduced motion. They
+# are the part of web/src/ui/styles/index.css after its Tailwind import and
+# @source lines, which are claudication's own. cafard keeps a copy rather than
+# a dependency: there is no package registry between the two repositories,
+# and a copy is reviewed when it changes. Run this after the design changes
+# there, then build and look.
+set -eu
+
+src="${1:-$HOME/misc/claudication}/web/src/ui/styles/index.css"
+here=$(cd "$(dirname "$0")/.." && pwd)
+dst="$here/web/src/design/theme.css"
+
+[ -f "$src" ] || { echo "sync-design: no $src" >&2; exit 1; }
+
+rev=$(git -C "$(dirname "$src")" rev-parse --short HEAD 2>/dev/null || echo unknown)
+{
+	echo "/* The design cafard shares with claudication, copied by scripts/sync-design"
+	echo "   from claudication's web/src/ui/styles/index.css at $rev. Change it there"
+	echo "   and copy it again; an edit here is lost at the next copy. */"
+	# Everything after the @source line: the theme, not claudication's build.
+	awk 'found { print } /^@source / { found = 1 }' "$src"
+} > "$dst.tmp"
+mv "$dst.tmp" "$dst"
+echo "sync-design: $dst from claudication $rev"

@@ -1,0 +1,397 @@
+/* The design cafard shares with claudication, copied by scripts/sync-design
+   from claudication's web/src/ui/styles/index.css at 36fcd67. Change it there
+   and copy it again; an edit here is lost at the next copy. */
+
+/* Material Design 3 tokens, seeded from a clay #C96442 — the family the
+   upstream this gateway fronts is dressed in, so the tool reads as belonging
+   beside it rather than as a generic dashboard.
+
+   Tailwind 4 emits utilities as var() references, so redefining the same
+   variables under prefers-color-scheme below flips the whole theme without
+   duplicating a single utility class. */
+@theme {
+  /* Clay #C96442 is the accent, not the atmosphere. The surfaces below are
+     near-neutral on purpose: seeded straight from the clay hue, every card,
+     border and background came out a tint of the same red and the accent had
+     nothing to stand against. A faint warm cast is enough to keep it warm. */
+  --color-primary: #8f4c33;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #ffdbd0;
+  --color-on-primary-container: #3a0b01;
+
+  /* Secondary and tertiary are real hues rather than two more clays — the old
+     primary-container and secondary-container were the same #ffdbd0, so a
+     tonal button and a filled one were indistinguishable. */
+  --color-secondary: #4a6572;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #d3e4ec;
+  --color-on-secondary-container: #0b1f28;
+
+  --color-tertiary: #4d6b52;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #cfe9d3;
+  --color-on-tertiary-container: #0a2011;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #410002;
+
+  /* MD3 leaves both of these undefined; a gateway whose whole job is reporting
+     whether a credential works needs a success, and a quota meter needs a
+     warning that is not the same colour as an accent. */
+  --color-success: #3b6939;
+  --color-on-success: #ffffff;
+  --color-success-container: #bcf0b4;
+  --color-on-success-container: #002105;
+
+  --color-warning: #8a5300;
+  --color-on-warning: #ffffff;
+  --color-warning-container: #ffdeb0;
+  --color-on-warning-container: #2b1700;
+
+  /* The help marker: a plain blue, so "there is more to read here" is not
+     mistaken for the accent, a warning or a link. */
+  --color-info: #2a6fdb;
+  --color-info-container: #dce7fb;
+  --color-on-info-container: #0b2a5b;
+
+  --color-surface: #faf9f7;
+  --color-on-surface: #1c1b19;
+  --color-surface-variant: #e8e5e1;
+  --color-on-surface-variant: #4a4643;
+
+  --color-surface-lowest: #ffffff;
+  --color-surface-low: #f5f3f0;
+  --color-surface-container: #efedea;
+  --color-surface-high: #e8e5e1;
+  --color-surface-highest: #e1ddd8;
+
+  --color-outline: #79746e;
+  /* One step darker than the MD3 default: at NV80 a divider measured 1.4:1
+     against the surfaces it separates, which on a page made of stacked cards
+     is indistinguishable from no divider at all. */
+  --color-outline-variant: #a8a29b;
+
+  /* Categorical series colours, for charts where the bar identifies a model, a
+     key or an account rather than a magnitude. Fixed order, never cycled, and
+     validated as a set against the card surface — worst adjacent CVD ΔE 9.1,
+     normal-vision ΔE 19.6. Four sit under 3:1 on the light surface, which the
+     relief rule permits because every bar carries a visible label and value. */
+  --color-series-1: #2a78d6;
+  --color-series-2: #eb6834;
+  --color-series-3: #1baf7a;
+  --color-series-4: #eda100;
+  --color-series-5: #e87ba4;
+  --color-series-6: #008300;
+  --color-series-7: #4a3aa7;
+  --color-series-8: #e34948;
+
+  /* Syntax colours for the config viewer. Five roles, which is all the three
+     languages it shows need: a comment, a key, a string, a number or keyword,
+     and punctuation. Chosen against --color-surface-lowest rather than the
+     card, because that is the ground the code sits on, and kept clear of the
+     series hues so a highlighted word never reads as a chart legend. */
+  --color-code-comment: #6b6560;
+  --color-code-key: #2a5db0;
+  --color-code-string: #1f7a52;
+  --color-code-number: #9a4b16;
+  --color-code-punct: #8a837c;
+
+  /* A sheet slides in from the edge it sits on. */
+  --animate-sheet-in: sheet-in 180ms cubic-bezier(0.2, 0, 0, 1);
+  @keyframes sheet-in {
+    from {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+  }
+
+  /* MD3 shape scale */
+  --radius-md3-xs: 4px;
+  --radius-md3-s: 8px;
+  --radius-md3-m: 12px;
+  --radius-md3-l: 16px;
+  --radius-md3-xl: 28px;
+  --radius-md3-full: 9999px;
+}
+
+/* The accents, as plain variables rather than in @theme: Tailwind writes out
+   only the theme variables a utility uses, and these are read by var() in
+   an inline style (brands/accents.ts), which it cannot see. Before the dark
+   blocks below, which redefine them. */
+:root {
+  /* The accents an account or a client wears (store.Accents): the tile its
+     mark sits on, which tells two of one provider or one type apart. Soft
+     enough to carry any mark in its own colours; none is a status colour. */
+  --color-accent-blue: #d3e3ff;
+  --color-accent-violet: #e8dcff;
+  --color-accent-teal: #c6ebe4;
+  --color-accent-pink: #ffd8e6;
+  --color-accent-indigo: #dadfff;
+  --color-accent-cyan: #c9ecf6;
+  --color-accent-sand: #efe0c2;
+  --color-accent-slate: #dce3eb;
+}
+
+/* Light is the base palette on bare :root; dark is redefined twice — in the
+   prefers-color-scheme query (guarded so an explicit light choice still wins)
+   and on [data-theme="dark"], so the in-app toggle overrides the OS in both
+   directions and "auto" needs no JavaScript at all: it stamps nothing and lets
+   the media query decide.
+
+   The duplication is the price of that. It is the same shape the other
+   projects here use, and worth more than one definition would be. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-primary: #ffb59d;
+    --color-on-primary: #55200a;
+    --color-primary-container: #72351e;
+    --color-on-primary-container: #ffdbd0;
+
+    --color-secondary: #a8cad9;
+    --color-on-secondary: #0f333f;
+    --color-secondary-container: #33474f;
+    --color-on-secondary-container: #cfe6ef;
+
+    --color-tertiary: #a8d0ac;
+    --color-on-tertiary: #14361c;
+    --color-tertiary-container: #33503a;
+    --color-on-tertiary-container: #cfe9d3;
+
+    --color-error: #ffb4ab;
+    --color-on-error: #690005;
+    --color-error-container: #93000a;
+    --color-on-error-container: #ffdad6;
+
+    --color-success: #a1d399;
+    --color-on-success: #0a390c;
+    --color-success-container: #235024;
+    --color-on-success-container: #bcf0b4;
+
+    --color-warning: #f0bb70;
+    --color-on-warning: #472a00;
+    --color-warning-container: #663d00;
+    --color-on-warning-container: #ffdeb0;
+    --color-info: #a8c7fa;
+    --color-info-container: #123a73;
+    --color-on-info-container: #d8e6ff;
+
+    --color-surface: #141312;
+    --color-on-surface: #e9e5e1;
+    --color-surface-variant: #4a4643;
+    --color-on-surface-variant: #c9c4be;
+
+    --color-surface-lowest: #0e0d0c;
+    --color-surface-low: #1c1a19;
+    --color-surface-container: #211f1d;
+    --color-surface-high: #2b2926;
+    --color-surface-highest: #363330;
+
+    --color-outline: #948e87;
+    --color-outline-variant: #7a746e;
+
+    /* The same eight hues stepped for the dark surface, not an automatic
+       flip: all eight clear 3:1 here, worst adjacent CVD ΔE 8.4. */
+    --color-series-1: #3987e5;
+    --color-series-2: #d95926;
+    --color-series-3: #199e70;
+    --color-series-4: #c98500;
+    --color-series-5: #d55181;
+    --color-series-6: #008300;
+    --color-series-7: #9085e9;
+    --color-series-8: #e66767;
+
+    /* The same five roles stepped for the dark ground. */
+    --color-code-comment: #8d867f;
+    --color-code-key: #86b4f5;
+    --color-code-string: #6ecfa0;
+    --color-code-number: #e8a877;
+    --color-code-punct: #7f7973;
+    /* The accents, deep enough for a mark to read on them. */
+    --color-accent-blue: #22406b;
+    --color-accent-violet: #41306b;
+    --color-accent-teal: #164842;
+    --color-accent-pink: #5e2944;
+    --color-accent-indigo: #2e3675;
+    --color-accent-cyan: #164a57;
+    --color-accent-sand: #4d3f22;
+    --color-accent-slate: #36434f;
+  }
+}
+
+:root[data-theme="dark"] {
+color-scheme: dark;
+
+  --color-primary: #ffb59d;
+  --color-on-primary: #55200a;
+  --color-primary-container: #72351e;
+  --color-on-primary-container: #ffdbd0;
+
+  --color-secondary: #a8cad9;
+  --color-on-secondary: #0f333f;
+  --color-secondary-container: #33474f;
+  --color-on-secondary-container: #cfe6ef;
+
+  --color-tertiary: #a8d0ac;
+  --color-on-tertiary: #14361c;
+  --color-tertiary-container: #33503a;
+  --color-on-tertiary-container: #cfe9d3;
+
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
+
+  --color-success: #a1d399;
+  --color-on-success: #0a390c;
+  --color-success-container: #235024;
+  --color-on-success-container: #bcf0b4;
+
+  --color-warning: #f0bb70;
+  --color-on-warning: #472a00;
+  --color-warning-container: #663d00;
+  --color-on-warning-container: #ffdeb0;
+  --color-info: #a8c7fa;
+  --color-info-container: #123a73;
+  --color-on-info-container: #d8e6ff;
+
+  --color-surface: #141312;
+  --color-on-surface: #e9e5e1;
+  --color-surface-variant: #4a4643;
+  --color-on-surface-variant: #c9c4be;
+
+  --color-surface-lowest: #0e0d0c;
+  --color-surface-low: #1c1a19;
+  --color-surface-container: #211f1d;
+  --color-surface-high: #2b2926;
+  --color-surface-highest: #363330;
+
+  --color-outline: #948e87;
+  --color-outline-variant: #7a746e;
+
+  /* The same eight hues stepped for the dark surface, not an automatic
+     flip: all eight clear 3:1 here, worst adjacent CVD ΔE 8.4. */
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+  --color-series-3: #199e70;
+  --color-series-4: #c98500;
+  --color-series-5: #d55181;
+  --color-series-6: #008300;
+  --color-series-7: #9085e9;
+  --color-series-8: #e66767;
+  /* The same five roles stepped for the dark ground. */
+  --color-code-comment: #8d867f;
+  --color-code-key: #86b4f5;
+  --color-code-string: #6ecfa0;
+  --color-code-number: #e8a877;
+  --color-code-punct: #7f7973;
+  /* The accents, deep enough for a mark to read on them. */
+  --color-accent-blue: #22406b;
+  --color-accent-violet: #41306b;
+  --color-accent-teal: #164842;
+  --color-accent-pink: #5e2944;
+  --color-accent-indigo: #2e3675;
+  --color-accent-cyan: #164a57;
+  --color-accent-sand: #4d3f22;
+  --color-accent-slate: #36434f;
+}
+
+html {
+  /* color-scheme is what makes form controls, scrollbars and the caret follow
+     the theme; without it they stay light on a dark page. The dark blocks
+     above override it. */
+  color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* MD3 state layers: interaction is expressed as a translucent overlay of the
+   content colour, not by swapping the background. 8% hover, 12% pressed. */
+@utility state-layer {
+  position: relative;
+  isolation: isolate;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+    pointer-events: none;
+  }
+  &:hover::after {
+    opacity: 0.08;
+  }
+  &:active::after {
+    opacity: 0.12;
+  }
+}
+
+/* MD3 elevation level 2, for menus and lists over the page: the key shadow
+   and the ambient one MD3 specifies, rather than a generic drop shadow. */
+@utility elevation-2 {
+  box-shadow:
+    0 1px 2px 0 rgb(0 0 0 / 0.3),
+    0 2px 6px 2px rgb(0 0 0 / 0.15);
+}
+
+/* Table's stack: below sm, each row a card of label/value pairs, two to a
+   line, and an unlabelled cell (the row's name, a detail unfolded under it)
+   across the card. Unlayered on purpose: it has to beat the cells' own
+   padding and alignment utilities, which sit in Tailwind's utilities layer
+   and would otherwise win whatever the specificity. The labels are the
+   column headings again, in the same small capitals. */
+@media (width < 40rem) {
+  .table-stack,
+  .table-stack > tbody {
+    display: block;
+  }
+  .table-stack > thead {
+    display: none;
+  }
+  .table-stack > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem 1rem;
+    padding: 0.875rem 1rem;
+  }
+  .table-stack > tbody > tr > td {
+    padding: 0;
+    text-align: start;
+    /* A stacked row is a card of cells, not a grid of columns: no rules. */
+    border-right-width: 0 !important;
+  }
+  .table-stack > tbody > tr > td:not([data-label]) {
+    grid-column: 1 / -1;
+  }
+  .table-stack > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+    color: var(--color-on-surface-variant);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

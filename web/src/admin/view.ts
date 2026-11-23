@@ -1,6 +1,7 @@
 import { Component } from '@shared/component';
 import { time } from '@shared/format';
 import { Html, html } from '@shared/html';
+import { ui } from '@shared/ui';
 import type { AdminApp } from './app';
 import type { AdminStore } from './store';
 
@@ -11,7 +12,7 @@ import type { AdminStore } from './store';
  */
 export abstract class View extends Component {
   constructor(protected readonly app: AdminApp) {
-    super('div', 'page');
+    super('div', 'flex flex-col gap-4 pb-6');
   }
 
   protected get store(): AdminStore {
@@ -29,6 +30,6 @@ export abstract class View extends Component {
 
   /** A card: its title and actions on one line, then its body. */
   protected card(title: string | Html, body: Html, aside?: Html, extra = ''): Html {
-    return html`<section class="card ${extra}"><div class="card-h"><h2>${title}</h2>${aside ? html`<div class="aside">${aside}</div>` : ''}</div>${body}</section>`;
+    return html`<section class="${ui.card} ${extra}"><div class="${ui.cardHead}"><h2 class="${ui.cardTitle}">${title}</h2>${aside ? html`<div class="${ui.cardAside}">${aside}</div>` : ''}</div>${body}</section>`;
   }
 }

@@ -2,6 +2,7 @@ import { Component } from '@shared/component';
 import { Bytes, time } from '@shared/format';
 import { Html, html } from '@shared/html';
 import { Icon } from '@shared/icons';
+import { ui } from '@shared/ui';
 import { Avatar, Meter, Switch } from '@shared/widgets';
 import type { AdminApp } from './app';
 import { CreateMemberFlow, CreateProjectFlow } from './create';
@@ -13,12 +14,18 @@ import { View } from './view';
 function linkPill(m: Member): Html {
   if (m.joined || !m.link) return Html.empty;
   switch (m.link.state) {
-    case 'waiting': return html`<span class="pill warn">link waiting</span>`;
-    case 'expired': return html`<span class="pill err">link expired</span>`;
-    case 'cancelled': return html`<span class="pill muted">link cancelled</span>`;
+    case 'waiting': return html`<span class="${ui.pill.warn}">link waiting</span>`;
+    case 'expired': return html`<span class="${ui.pill.err}">link expired</span>`;
+    case 'cancelled': return html`<span class="${ui.pill.muted}">link cancelled</span>`;
     default: return Html.empty;
   }
 }
+
+/** A table's head, its cells, and a name cell: the item's avatar and name. */
+const TH = (label: string, extra = '') => html`<th class="${ui.th} ${extra}">${label}</th>`;
+const TD = ui.td;
+const WHO = 'flex min-w-0 items-center gap-2 [&_.nm]:font-semibold [&_.nm]:whitespace-nowrap';
+const NUM = 'text-right tabular-nums';
 
 const KIND_LABEL: Record<string, string> = { all: 'All', person: 'People', agent: 'Agents', device: 'Devices' };
 
@@ -61,12 +68,12 @@ export class MembersView extends View {
     const count = (k: string) => members.filter((m) => k === 'all' || m.kind === k).length;
     const review = this.review();
     const seg = (['all', 'person', 'agent', 'device'] as const).map((k) =>
-      html`<button aria-pressed="${String(this.app.ui.kind === k)}" data-act="filter" data-v="${k}">${KIND_LABEL[k]} <span class="c">${count(k)}</span></button>`);
-    const tools = html`<label class="search">${Icon.of('search')}<input id="q" type="search" placeholder="Search" value="${this.app.ui.query}" autocomplete="off"></label>
-      <div class="seg" role="group" aria-label="Show">${seg}</div>
-      <button class="btn filled sm" data-act="new">${Icon.of('plus')}New</button>`;
-    return html`${review.length ? html`<div class="notice">${Icon.of('warn')}<p>${review.join(' · ')}</p></div>` : ''}
-      ${this.card('Members', html`<div class="tbl-wrap"><table class="rows"><thead><tr><th>Name</th><th>Projects</th><th>Last used</th><th>From</th><th class="r">Active</th></tr></thead><tbody></tbody></table></div>`, tools)}`;
+      html`<button class="${ui.segBtn}" aria-pressed="${String(this.app.ui.kind === k)}" data-act="filter" data-v="${k}">${KIND_LABEL[k]} <span class="font-normal text-on-surface-variant">${count(k)}</span></button>`);
+    const tools = html`<label class="${ui.search}">${Icon.of('search')}<input id="q" type="search" placeholder="Search" value="${this.app.ui.query}" autocomplete="off"></label>
+      <div class="${ui.seg}" role="group" aria-label="Show">${seg}</div>
+      <button class="${ui.btn('filled', 'sm')}" data-act="new">${Icon.of('plus')}New</button>`;
+    return html`${review.length ? html`<div class="${ui.notice}">${Icon.of('warn')}<p>${review.join(' · ')}</p></div>` : ''}
+      ${this.card('Members', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Name')}${TH('Projects')}${TH('Last used')}${TH('From')}${TH('Active', 'text-right')}</tr></thead><tbody></tbody></table></div>`, tools)}`;
   }
 
   protected override afterRender(): void {
@@ -77,15 +84,15 @@ export class MembersView extends View {
   /** Draws the rows only, so the search keeps its focus while typing. */
   private drawRows(): void {
     const rows = this.rows().map((m) => {
-      const tags = html`${m.kind !== 'person' ? html`<span class="kind ${m.kind}">${m.kind}</span>` : ''}${linkPill(m)}`;
-      const chips = m.projects.length ? m.projects.map((p) => html`<span class="chip">${p}</span>`) : html`<span class="dim">none</span>`;
+      const tags = html`${m.kind !== 'person' ? html`<span class="${ui.kind[m.kind] ?? ''}">${m.kind}</span>` : ''}${linkPill(m)}`;
+      const chips = m.projects.length ? m.projects.map((p) => html`<span class="${ui.chip}">${p}</span>`) : html`<span class="${ui.dim}">none</span>`;
       const used = m.joined || m.kind === 'device' ? time.ago(m.last_used) : 'not joined';
-      return html`<tr class="${m.enabled ? '' : 'off'}" role="button" tabindex="0" data-act="open" data-v="${m.name}">
-        <td><span class="who">${Avatar.of(m, 'sm')}<span class="nm">${m.display_name || m.name}</span>${m.display_name && m.display_name !== m.name ? html`<span class="dim">@${m.name}</span>` : ''}${tags}</span>${m.description ? html`<span class="desc">${m.description}</span>` : ''}</td>
-        <td><span class="chips">${chips}</span></td><td class="time">${used}</td><td class="mono dim">${m.last_from ?? ''}</td>
-        <td class="r">${Switch.of(m.enabled, 'pause', m.name, `${m.enabled ? 'Pause' : 'Resume'} ${m.name}`)}</td></tr>`;
+      return html`<tr class="${ui.trLink} ${m.enabled ? '' : 'opacity-55'}" role="button" tabindex="0" data-act="open" data-v="${m.name}">
+        <td class="${TD}"><span class="${WHO}">${Avatar.of(m, 'sm')}<span class="nm">${m.display_name || m.name}</span>${m.display_name && m.display_name !== m.name ? html`<span class="${ui.dim}">@${m.name}</span>` : ''}${tags}</span>${m.description ? html`<span class="mt-0.5 ml-9 block max-w-[60ch] truncate text-[12.5px] text-on-surface-variant">${m.description}</span>` : ''}</td>
+        <td class="${TD}"><span class="flex flex-wrap gap-1">${chips}</span></td><td class="${TD} whitespace-nowrap text-[13px]">${used}</td><td class="${TD} font-mono text-xs text-on-surface-variant">${m.last_from ?? ''}</td>
+        <td class="${TD} text-right">${Switch.of(m.enabled, 'pause', m.name, `${m.enabled ? 'Pause' : 'Resume'} ${m.name}`)}</td></tr>`;
     });
-    this.$('tbody').innerHTML = (rows.length ? Html.join(rows) : html`<tr><td colspan="5" class="empty">Nobody matches.</td></tr>`).value;
+    this.$('tbody').innerHTML = (rows.length ? Html.join(rows) : html`<tr><td colspan="5" class="${ui.empty}">Nobody matches.</td></tr>`).value;
   }
 }
 
@@ -102,14 +109,14 @@ export class ProjectsView extends View {
   protected view(): Html {
     const ps = [...this.store.projects].sort((a, b) => Number(!!a.archived) - Number(!!b.archived) || a.name.localeCompare(b.name));
     const rows = ps.map((p) => {
-      const stack = html`${p.members.slice(0, 6).map((m) => Avatar.of(m, 'sm'))}${p.members.length > 6 ? html`<span class="more">+${p.members.length - 6}</span>` : ''}`;
-      return html`<tr class="${p.archived ? 'off' : ''}" role="button" tabindex="0" data-act="open" data-v="${p.name}">
-        <td><span class="who">${Avatar.project(p.name, 'sm')}<span class="nm">${p.name}</span>${p.archived ? html`<span class="pill muted">archived</span>` : ''}</span></td>
-        <td><span class="stack">${stack}</span></td><td class="num">${p.conversations}</td><td class="num">${p.files}</td><td class="meter-cell">${Meter.of(p)}</td></tr>`;
+      const stack = html`${p.members.slice(0, 6).map((m) => Avatar.of(m, 'sm'))}${p.members.length > 6 ? html`<span class="ml-2 self-center text-xs text-on-surface-variant">+${p.members.length - 6}</span>` : ''}`;
+      return html`<tr class="${ui.trLink} ${p.archived ? 'opacity-55' : ''}" role="button" tabindex="0" data-act="open" data-v="${p.name}">
+        <td class="${TD}"><span class="${WHO}">${Avatar.project(p.name, 'sm')}<span class="nm">${p.name}</span>${p.archived ? html`<span class="${ui.pill.muted}">archived</span>` : ''}</span></td>
+        <td class="${TD}"><span class="flex pl-2 [&>span]:-ml-2 [&>span]:ring-2 [&>span]:ring-surface-lowest">${stack}</span></td><td class="${TD} ${NUM}">${p.conversations}</td><td class="${TD} ${NUM}">${p.files}</td><td class="${TD} min-w-56">${Meter.of(p)}</td></tr>`;
     });
-    return this.card('Projects', html`<div class="tbl-wrap"><table class="rows"><thead><tr><th>Name</th><th>Members</th><th class="num">Conversations</th><th class="num">Files</th><th>Storage</th></tr></thead>
-      <tbody>${rows.length ? rows : html`<tr><td colspan="5" class="empty">No project yet.</td></tr>`}</tbody></table></div>`,
-      html`<button class="btn filled sm" data-act="new-project">${Icon.of('plus')}New project</button>`);
+    return this.card('Projects', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Name')}${TH('Members')}${TH('Conversations', 'text-right')}${TH('Files', 'text-right')}${TH('Storage')}</tr></thead>
+      <tbody>${rows.length ? rows : html`<tr><td colspan="5" class="${ui.empty}">No project yet.</td></tr>`}</tbody></table></div>`,
+      html`<button class="${ui.btn('filled', 'sm')}" data-act="new-project">${Icon.of('plus')}New project</button>`);
   }
 }
 
@@ -133,11 +140,11 @@ export class AuditView extends View {
   protected view(): Html {
     const f = this.app.ui.audit;
     const seg = ([['all', 'All'], ['access', 'Access'], ['projects', 'Projects'], ['signins', 'Sign-ins']] as const).map(([k, l]) =>
-      html`<button aria-pressed="${String(f === k)}" data-act="afilter" data-v="${k}">${l}</button>`);
+      html`<button class="${ui.segBtn}" aria-pressed="${String(f === k)}" data-act="afilter" data-v="${k}">${l}</button>`);
     const rows = this.store.audit.filter((e) => f === 'all' || AuditView.kindOf(e) === f).map((e) =>
-      html`<tr><td class="time">${time.when(e.at)}</td><td><b>${e.actor}</b> ${e.action} <b>${e.target}</b></td><td class="mono dim">${e.origin}</td></tr>`);
-    return this.card('Audit log', html`<div class="tbl-wrap"><table><thead><tr><th>When</th><th>What</th><th>From</th></tr></thead><tbody>${rows.length ? rows : html`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`}</tbody></table></div>`,
-      html`<div class="seg" role="group" aria-label="Show">${seg}</div>`);
+      html`<tr class="${ui.tr}"><td class="${TD} whitespace-nowrap text-[13px] text-on-surface-variant tabular-nums">${time.when(e.at)}</td><td class="${TD}"><b>${e.actor}</b> ${e.action} <b>${e.target}</b></td><td class="${TD} font-mono text-xs text-on-surface-variant">${e.origin}</td></tr>`);
+    return this.card('Audit log', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('When')}${TH('What')}${TH('From')}</tr></thead><tbody>${rows.length ? rows : html`<tr><td colspan="3" class="${ui.empty}">Nothing yet.</td></tr>`}</tbody></table></div>`,
+      html`<div class="${ui.seg}" role="group" aria-label="Show">${seg}</div>`);
   }
 }
 
@@ -160,25 +167,25 @@ export class OverviewView extends View {
     const total = ps.reduce((s, p) => s + p.bytes, 0);
     const files = ps.reduce((s, p) => s + p.files, 0);
     const tile = (href: string, label: string, value: string | number, sub: string) =>
-      html`<a class="tile" href="${href}"><span class="tl">${label}</span><span class="big">${value}</span><span class="dim">${sub}</span></a>`;
+      html`<a class="state-layer flex flex-col gap-0.5 rounded-md3-xl bg-surface-container px-4 py-3.5 text-inherit no-underline" href="${href}"><span class="text-[13px] font-semibold text-on-surface-variant">${label}</span><span class="text-[28px] font-bold tabular-nums">${value}</span><span class="text-[12.5px] text-on-surface-variant">${sub}</span></a>`;
     const review = this.review();
     const waiting = this.store.links.filter((l) => l.state === 'waiting').map((l) => {
       const what = l.kind === 'agent' ? 'install' : l.kind === 'password' ? 'password' : 'join';
-      return html`<tr><td><a href="${pathOf('members', l.member)}">${l.member}</a></td><td>${what}</td><td class="time">${time.until(l.expires_at)}</td><td class="r"><button class="btn sm danger-text" data-act="cancel-link" data-v="${String(l.id)}">Cancel</button></td></tr>`;
+      return html`<tr class="${ui.tr}"><td class="${TD}"><a class="${ui.link}" href="${pathOf('members', l.member)}">${l.member}</a></td><td class="${TD}">${what}</td><td class="${TD} text-[13px]">${time.until(l.expires_at)}</td><td class="${TD} text-right"><button class="${ui.btn('danger-text', 'sm')}" data-act="cancel-link" data-v="${String(l.id)}">Cancel</button></td></tr>`;
     });
-    const storage = ps.map((p) => html`<tr role="button" tabindex="0" data-act="open" data-v="${p.name}"><td><span class="who">${Avatar.project(p.name, 'sm')}<span class="nm">${p.name}</span>${p.archived ? html`<span class="pill muted">archived</span>` : ''}</span></td><td class="num">${p.files}</td><td class="meter-cell">${Meter.of(p)}</td></tr>`);
-    return html`<div class="tiles">
+    const storage = ps.map((p) => html`<tr class="${ui.trLink}" role="button" tabindex="0" data-act="open" data-v="${p.name}"><td class="${TD}"><span class="${WHO}">${Avatar.project(p.name, 'sm')}<span class="nm">${p.name}</span>${p.archived ? html`<span class="${ui.pill.muted}">archived</span>` : ''}</span></td><td class="${TD} ${NUM}">${p.files}</td><td class="${TD} min-w-56">${Meter.of(p)}</td></tr>`);
+    return html`<div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))]">
         ${tile('/members', 'People', n('person'), `${ms.filter((m) => m.kind === 'person' && !m.joined).length} not joined`)}
         ${tile('/members', 'Agents', n('agent'), `${ms.filter((m) => m.kind === 'agent' && m.enabled).length} active`)}
         ${tile('/members', 'Devices', n('device'), `${ms.filter((m) => m.kind === 'device' && m.enabled).length} active`)}
         ${tile('/projects', 'Projects', ps.length, `${ps.filter((p) => p.archived).length} archived`)}
         ${tile('/projects', 'Files', Bytes.format(total), `${files} files`)}
       </div>
-      <div class="cards">
-        ${this.card('To review', review.length ? html`<ul class="plain">${review.map((r) => html`<li>${Icon.of('warn')}${r}</li>`)}</ul>` : html`<p class="dim">Nothing.</p>`)}
-        ${this.card('Links waiting', waiting.length ? html`<div class="tbl-wrap"><table><thead><tr><th>For</th><th>Link</th><th>Expires</th><th></th></tr></thead><tbody>${waiting}</tbody></table></div>` : html`<p class="dim">None.</p>`)}
+      <div class="${ui.cards}">
+        ${this.card('To review', review.length ? html`<ul class="m-0 flex list-none flex-col gap-1.5 p-0 [&_.ic]:size-[18px] [&_.ic]:text-warning [&_li]:flex [&_li]:items-center [&_li]:gap-2">${review.map((r) => html`<li>${Icon.of('warn')}${r}</li>`)}</ul>` : html`<p class="${ui.dim}">Nothing.</p>`)}
+        ${this.card('Links waiting', waiting.length ? html`<div class="${ui.tableWrap}"><table class="w-full border-collapse text-sm"><thead><tr class="${ui.tr}">${TH('For')}${TH('Link')}${TH('Expires')}${TH('')}</tr></thead><tbody>${waiting}</tbody></table></div>` : html`<p class="${ui.dim}">None.</p>`)}
       </div>
-      ${this.card('Storage', html`<div class="tbl-wrap"><table class="rows"><thead><tr><th>Project</th><th class="num">Files</th><th>Used</th></tr></thead><tbody>${storage.length ? storage : html`<tr><td colspan="3" class="empty">No project yet.</td></tr>`}</tbody></table></div>`)}`;
+      ${this.card('Storage', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Project')}${TH('Files', 'text-right')}${TH('Used')}</tr></thead><tbody>${storage.length ? storage : html`<tr><td colspan="3" class="${ui.empty}">No project yet.</td></tr>`}</tbody></table></div>`)}`;
   }
 }
 
@@ -186,15 +193,15 @@ export class OverviewView extends View {
 export class SettingsView extends View {
   protected view(): Html {
     const c = this.store.config;
-    if (!c) return html`<p class="loading">Loading…</p>`;
-    return html`<div class="cards">
-      ${this.card('Listeners', html`<dl class="kv">
+    if (!c) return html`<p class="${ui.empty}">Loading…</p>`;
+    return html`<div class="${ui.cards}">
+      ${this.card('Listeners', html`<dl class="${ui.kv}">
         <dt>listen</dt><dd><code>${c.listen}</code></dd>
         <dt>public-url</dt><dd><code>${c.public_url}</code></dd>
         <dt>admin-listen</dt><dd><code>${c.admin_listen}</code></dd>
         <dt>state-dir</dt><dd><code>${c.state_dir}</code></dd>
-        <dt>Build</dt><dd><code>${c.version}</code></dd></dl>`, html`<span class="dim">/etc/cafard/config.yaml</span>`)}
-      ${this.card('Limits', html`<dl class="kv">
+        <dt>Build</dt><dd><code>${c.version}</code></dd></dl>`, html`<span class="${ui.dim} font-mono text-xs">/etc/cafard/config.yaml</span>`)}
+      ${this.card('Limits', html`<dl class="${ui.kv}">
         <dt>Largest upload</dt><dd>${Bytes.format(c.max_upload)}</dd>
         <dt>Link life</dt><dd>${c.link_hours} h, at most ${c.link_max_hours / 24} days</dd>
         <dt>Admin sign-in</dt><dd>${c.admin_signin_hours} h after last use</dd>
@@ -209,7 +216,7 @@ export class SignInView extends Component {
     private readonly app: AdminApp,
     private readonly message?: string,
   ) {
-    super('div', 'signin');
+    super('div', 'grid min-h-full place-items-center px-4 py-6');
     this.root.addEventListener('submit', (e) => {
       e.preventDefault();
       void this.submit();
@@ -217,13 +224,13 @@ export class SignInView extends Component {
   }
 
   protected view(): Html {
-    return html`<form novalidate>
-      <div class="brand">${Icon.logo} cafard <small>admin</small></div>
-      ${this.message ? html`<p class="ferr" role="alert">${this.message}</p>` : ''}
+    return html`<form class="${ui.card} w-full max-w-sm gap-4 p-6" novalidate>
+      <div class="flex items-center gap-2 text-lg font-bold [&_svg]:size-7 [&_svg]:text-primary">${Icon.logo} cafard <small class="text-[13px] font-semibold text-on-surface-variant">admin</small></div>
+      ${this.message ? html`<p class="${ui.error}" role="alert">${this.message}</p>` : ''}
       <input type="text" name="username" value="admin" autocomplete="username" hidden>
-      <div class="field"><label for="p">Admin password</label><input class="input" id="p" type="password" autocomplete="current-password" required></div>
-      <span class="ferr" id="sErr" hidden></span>
-      <button class="btn filled" type="submit">Sign in</button></form>`;
+      <div class="${ui.field}"><label class="${ui.label}" for="p">Admin password</label><input class="${ui.input}" id="p" type="password" autocomplete="current-password" required></div>
+      <span class="${ui.error}" id="sErr" hidden></span>
+      <button class="${ui.btn('filled')}" type="submit">Sign in</button></form>`;
   }
 
   focus(): void {

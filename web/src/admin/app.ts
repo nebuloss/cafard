@@ -4,6 +4,7 @@ import { Html, html } from '@shared/html';
 import { Icon } from '@shared/icons';
 import { Layer } from '@shared/overlay';
 import { Toaster } from '@shared/toast';
+import { ui } from '@shared/ui';
 import { AdminStore } from './store';
 import { MemberPage, ProjectPage } from './pages';
 import { canonical, fromHash, navLevel, placeOf, trailOf, type Place } from './route';
@@ -132,6 +133,10 @@ export class AdminApp {
   }
 }
 
+/** A rail entry: a pill, filled when it is the page. */
+const RAIL_ITEM =
+  'state-layer flex min-h-9 shrink-0 items-center gap-3 rounded-md3-full px-3 font-semibold text-on-surface no-underline md:min-h-10 aria-[current=page]:bg-secondary-container aria-[current=page]:text-on-secondary-container';
+
 /**
  * Shell is the frame: the top bar, the rail of the current level down the
  * side (a row above the page on a phone), the trail of every level above the
@@ -140,7 +145,7 @@ export class AdminApp {
  */
 class Shell extends Component {
   constructor(private readonly app: AdminApp) {
-    super('div', 'shell');
+    super('div', 'flex h-full flex-col');
     this.actions = {
       signout: async () => {
         await this.app.attempt(() => this.app.store.signOut());
@@ -170,18 +175,20 @@ class Shell extends Component {
     const level = navLevel(path);
     const counts: Record<string, number> = { '/members': this.app.store.members.length, '/projects': this.app.store.projects.length };
     const current = (href: string) => Html.raw(href === level.current ? 'aria-current="page"' : '');
-    const rail = html`${level.back ? html`<a class="back" href="${level.back.href}">${Icon.of('back')}${level.back.label}</a>` : ''}
-      ${level.items.map((l) => html`<a href="${l.href}" ${current(l.href)}>${l.icon ? Icon.of(l.icon) : ''}<span class="l">${l.label}</span>${!level.back && counts[l.href] ? html`<span class="n">${counts[l.href]}</span>` : ''}</a>`)}`;
+    const rail = html`${level.back ? html`<a class="${RAIL_ITEM} mb-1.5 bg-surface-lowest font-medium text-on-surface-variant max-md:mr-1 max-md:mb-0" href="${level.back.href}">${Icon.of('back')}${level.back.label}</a>` : ''}
+      ${level.items.map((l) => html`<a class="${RAIL_ITEM}" href="${l.href}" ${current(l.href)}>${l.icon ? Icon.of(l.icon) : ''}<span class="min-w-0 truncate">${l.label}</span>${!level.back && counts[l.href] ? html`<span class="ml-auto text-xs font-bold text-on-surface-variant max-md:ml-1">${counts[l.href]}</span>` : ''}</a>`)}`;
     const trail = trailOf(path, (k, n) => this.app.nameOf(k, n));
     const crumbs = trail.map((c, i) => {
       const last = i === trail.length - 1;
-      return html`${i > 0 ? html`<span class="sep">${Icon.of('chev')}</span>` : ''}<a href="${c.href}" ${Html.raw(last ? 'aria-current="page"' : '')} ${Html.raw(i === 0 ? 'aria-label="Overview"' : '')}>${i === 0 ? Icon.of('home') : html`${c.icon ? Icon.of(c.icon) : ''}<span>${c.label}</span>`}</a>`;
+      return html`${i > 0 ? html`<span class="flex opacity-40 [&_.ic]:size-3.5">${Icon.of('chev')}</span>` : ''}<a class="state-layer flex items-center gap-1.5 rounded-md3-full py-1.5 text-[13.5px] font-semibold whitespace-nowrap text-inherit no-underline aria-[current=page]:bg-surface-lowest aria-[current=page]:text-on-surface [&_.ic]:size-[17px] ${i === 0 ? 'px-2' : 'px-3'}" href="${c.href}" ${Html.raw(last ? 'aria-current="page"' : '')} ${Html.raw(i === 0 ? 'aria-label="Overview"' : '')}>${i === 0 ? Icon.of('home') : html`${c.icon ? Icon.of(c.icon) : ''}<span>${c.label}</span>`}</a>`;
     });
-    return html`<header class="top"><a class="brand" href="/" title="cafard admin">${Icon.logo}<span>cafard</span></a>
-      <nav class="trail" aria-label="Breadcrumb">${crumbs}</nav>
-      <button class="btn text sm" data-act="signout">Sign out</button></header>
-      <div class="body"><nav class="rail" aria-label="${level.back ? 'Pages' : 'Sections'}">${rail}</nav>
-      <main class="main"><div class="page"></div></main></div>`;
+    // Two rows, as claudication's header: the name and the controls, then
+    // the trail across the whole width.
+    return html`<header class="shrink-0 px-3 pt-2 pb-3 md:px-4"><div class="flex min-h-10 items-center gap-3"><a class="mr-auto flex shrink-0 items-center gap-2 text-[17px] font-bold text-inherit no-underline [&_svg]:size-[26px] [&_svg]:text-primary" href="/" title="cafard admin">${Icon.logo}<span>cafard</span><small class="text-[13px] font-semibold text-on-surface-variant">admin</small></a>
+      <button class="${ui.btn('text', 'sm')}" data-act="signout">Sign out</button></div>
+      <nav class="trail mt-2 flex w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-md3-full bg-primary-container p-1 text-on-primary-container [scrollbar-width:none]" aria-label="Breadcrumb">${crumbs}</nav></header>
+      <div class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-3 md:grid-cols-[13.5rem_minmax(0,1fr)] md:grid-rows-1 md:gap-4 md:px-4"><nav class="rail flex gap-0.5 self-start overflow-auto rounded-md3-full bg-surface-container p-1 [scrollbar-width:none] md:max-h-full md:flex-col md:rounded-md3-xl md:p-2" aria-label="${level.back ? 'Pages' : 'Sections'}">${rail}</nav>
+      <main class="min-h-0 min-w-0 overflow-y-auto"><div class="page"></div></main></div>`;
   }
 
   protected override afterRender(): void {

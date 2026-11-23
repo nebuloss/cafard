@@ -2,7 +2,7 @@
   "name": "cafard-web",
   "version": "0.1.0",
   "private": true,
-  "description": "cafard's web UIs, the admin UI and the chat app: TypeScript classes, compiled into the static Go binary that serves them.",
+  "description": "cafard's web UIs, the admin UI and the chat app: TypeScript classes styled with Tailwind and the design shared with claudication (src/design), compiled into the static Go binary that serves them.",
   "type": "module",
   "scripts": {
     "build": "vite build --mode admin && vite build --mode chat",
@@ -16,7 +16,9 @@
     "node": ">=20.19"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^20.14.2",
+    "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.0",
     "vitest": "^2.1.9"
