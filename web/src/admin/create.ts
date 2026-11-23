@@ -23,6 +23,28 @@ function head(title: string, sub: string): Html {
 
 const FIELD_HELP = 'text-[12.5px] text-on-surface-variant';
 
+/**
+ * The MCP clients an agent's command can set up, as the join link knows them
+ * (internal/httpapi/join/clients.go, Clients): the server refuses an id it
+ * does not know, so a client added there is added here too.
+ */
+const CLIENTS: { id: string; name: string }[] = [
+  { id: 'claude-code', name: 'Claude Code' },
+  { id: 'codex', name: 'Codex' },
+  { id: 'crush', name: 'crush' },
+  { id: 'opencode', name: 'opencode' },
+];
+
+/**
+ * The command that runs an agent's link, as internal/install's Command
+ * writes it: every client the machine has when all are chosen, else only
+ * those named.
+ */
+function installCommand(link: string, windows: boolean, chosen: ReadonlySet<string>): string {
+  const q = chosen.size === CLIENTS.length ? '' : `&clients=${CLIENTS.filter((c) => chosen.has(c.id)).map((c) => c.id).join(',')}`;
+  return windows ? `irm '${link}?shell=ps1${q}' | iex` : `curl -fsSL '${link}?shell=sh${q}' | sh`;
+}
+
 /** Text to copy, with its button. */
 function copyBox(text: string): Html {
   return html`<div class="flex items-stretch overflow-hidden rounded-md3-s border border-outline-variant bg-surface-container"><code class="min-w-0 flex-1 overflow-x-auto px-3 py-2.5 text-[12.5px] whitespace-nowrap">${text}</code><button class="state-layer shrink-0 border-l border-outline-variant px-3.5 text-[13px] font-semibold text-primary" data-act="copy" data-v="${text}">Copy</button></div>`;
@@ -139,6 +161,8 @@ export class GiveScreen extends Component {
   private state: Link['state'] = 'waiting';
   private usedAt = '';
   private usedFrom = '';
+  /** The clients an agent's commands set up: all of them until some are unticked. */
+  private readonly clients = new Set(CLIENTS.map((c) => c.id));
 
   constructor(
     private readonly app: AdminApp,
@@ -152,6 +176,12 @@ export class GiveScreen extends Component {
       close: () => this.app.layer.close(),
       done: () => this.app.layer.close(),
       copy: (t) => copy(t.dataset['v'] ?? ''),
+      client: (t) => {
+        const id = t.dataset['v'] ?? '';
+        if (this.clients.has(id)) this.clients.delete(id);
+        else this.clients.add(id);
+        this.render();
+      },
     };
     if (link) this.watch(link.id);
   }
@@ -170,10 +200,17 @@ export class GiveScreen extends Component {
     }
     const l = this.link;
     if (!l) return Html.empty;
+    const chip = (c: { id: string; name: string }) => {
+      const on = this.clients.has(c.id);
+      return html`<button type="button" class="state-layer inline-flex h-8 items-center gap-1.5 rounded-md3-s px-3 text-[13px] font-medium ${on ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant ring-1 ring-outline-variant ring-inset'}" role="checkbox" aria-checked="${String(on)}" data-act="client" data-v="${c.id}">${on ? Icon.of('check') : ''}${c.name}</button>`;
+    };
     const right = m.kind === 'agent'
-      ? html`<p class="text-[12.5px] text-on-surface-variant">Run on ${m.name}, as the user its agents run as.</p>
-        <div class="${ui.field}"><span class="${ui.label}">Linux / macOS</span>${copyBox(l.command ?? '')}</div>
-        <div class="${ui.field}"><span class="${ui.label}">Windows (PowerShell)</span>${copyBox(l.command_windows ?? '')}</div>`
+      ? html`<div class="${ui.field}"><span class="${ui.label}">Clients</span><div class="flex flex-wrap gap-2 [&_.ic]:size-4">${CLIENTS.map(chip)}</div></div>
+        ${this.clients.size
+          ? html`<div class="${ui.field}"><span class="${ui.label}">Linux / macOS</span>${copyBox(installCommand(l.url ?? '', false, this.clients))}</div>
+            <div class="${ui.field}"><span class="${ui.label}">Windows (PowerShell)</span>${copyBox(installCommand(l.url ?? '', true, this.clients))}</div>
+            <p class="${FIELD_HELP}">Run on ${m.name}, as the user its agents run as.</p>`
+          : html`<p class="${FIELD_HELP}">Choose at least one client.</p>`}`
       : html`<div class="${ui.field}"><span class="${ui.label}">Sign-in link</span>${copyBox(l.url ?? '')}</div><p class="text-[12.5px] text-on-surface-variant">${who} opens it, or scans the code, on the device they will use, and is signed in. No password.</p>`;
     const STATUS = 'flex items-center gap-2 rounded-md3-s px-3 py-2.5 text-[13.5px]';
     const dot = (on: boolean) => html`<span class="size-2 rounded-full ${on ? 'bg-success' : 'bg-warning animate-[pulse_1.4s_infinite]'}"></span>`;

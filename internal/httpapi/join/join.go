@@ -174,13 +174,20 @@ func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string
 		shellError(w, "sh", "shell="+shell+" is not one cafard writes for: use sh or ps1.")
 		return
 	}
+	// The clients are read before the link is spent: a mistyped one costs
+	// nothing but running the command again.
+	clients, err := ParseClients(r.URL.Query().Get("clients"))
+	if err != nil {
+		shellError(w, shell, err.Error())
+		return
+	}
 	id, token, err := j.acc.RedeemAgentLink(r.Context(), code, clientIP(r))
 	if err != nil {
 		j.refused(w, r, err)
 		return
 	}
-	j.log.Info("agent link redeemed", "agent", id.Name, "from", clientIP(r), "shell", shell)
-	b := agentBundle(j.publicURL, id.Name, token)
+	j.log.Info("agent link redeemed", "agent", id.Name, "from", clientIP(r), "shell", shell, "clients", clients)
+	b := agentBundle(j.publicURL, id.Name, token, clients...)
 	if err := b.Validate(); err != nil {
 		// What agentBundle writes is fixed, so this is a bug; the link is
 		// spent, and an admin makes another once it is fixed.

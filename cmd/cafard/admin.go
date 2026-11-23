@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"cafard/internal/config"
+	"cafard/internal/httpapi/join"
 	"cafard/internal/install"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -31,7 +32,8 @@ Commands:
   create project NAME [-retention DAYS] [-quota SIZE] [-member NAME]...
   add    PROJECT NAME...         put members in a project
   remove PROJECT NAME...         take them out
-  link   NAME [-hours N]         a new one-time link: a person's sign-in link, an
+  link   NAME [-hours N] [-clients claude-code,codex,crush,opencode]
+                                 a new one-time link: a person's sign-in link, an
                                  agent's install link; the old one stops working
   token  NAME                    a new token for a device; the old one stops working
   list                           everyone and every project
@@ -157,7 +159,10 @@ type adminCmd struct {
 
 // printLink makes a one-time link for i and prints it, with a QR code to
 // scan from a phone and what to do with it.
-func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Duration) error {
+//
+// clients are the MCP clients an agent's commands set up, by id; none is
+// every client its machine has.
+func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Duration, clients ...string) error {
 	code, l, err := a.acc.IssueLink(ctx, a.who, i, life)
 	if err != nil {
 		return err
@@ -167,8 +172,8 @@ func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Du
 	switch l.Kind {
 	case store.AgentLink:
 		fmt.Fprintf(a.out, "Run this once on %s's machine, as the user its agents run as (works once, until %s):\n\n", i.Name, until)
-		fmt.Fprintf(a.out, "  Linux / macOS:         %s\n", install.Command(url, false))
-		fmt.Fprintf(a.out, "  Windows (PowerShell):  %s\n", install.Command(url, true))
+		fmt.Fprintf(a.out, "  Linux / macOS:         %s\n", install.Command(url, false, clients...))
+		fmt.Fprintf(a.out, "  Windows (PowerShell):  %s\n", install.Command(url, true, clients...))
 		return nil
 	default:
 		fmt.Fprintf(a.out, "%s opens this to sign in, on the device they will use (works once, until %s):\n\n", i.Name, until)
@@ -184,15 +189,20 @@ func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Du
 func (a *adminCmd) link(ctx context.Context, name string, args []string) error {
 	fs := flag.NewFlagSet("link", flag.ContinueOnError)
 	hours := fs.Int("hours", 24, "how long the link waits, 168 at most")
+	only := fs.String("clients", "", "an agent's MCP clients to set up, by id; every one it has by default")
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
+		return usageError(err.Error())
+	}
+	clients, err := join.ParseClients(*only)
+	if err != nil {
 		return usageError(err.Error())
 	}
 	i, err := a.st.IdentityByName(ctx, name)
 	if err != nil {
 		return fmt.Errorf("no member %q", name)
 	}
-	return a.printLink(ctx, i, time.Duration(*hours)*time.Hour)
+	return a.printLink(ctx, i, time.Duration(*hours)*time.Hour, clients...)
 }
 
 func (a *adminCmd) createPerson(ctx context.Context, name string, args []string) error {

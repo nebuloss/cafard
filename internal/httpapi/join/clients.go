@@ -3,7 +3,9 @@ package join
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	"cafard/internal/install"
 )
@@ -34,10 +36,67 @@ const (
 	tokenEnv  = "CAFARD_TOKEN"
 )
 
+// Client is an MCP client an agent's link can set up, as the admin UI and
+// the command name it: its id in ?clients=, and its name.
+type Client struct {
+	ID, Name string
+}
+
+// Clients are the clients a link sets up, in the order the admin UI lists
+// them.
+var Clients = []Client{
+	{"claude-code", "Claude Code"},
+	{"codex", "Codex"},
+	{"crush", "crush"},
+	{"opencode", "opencode"},
+}
+
+// ParseClients reads ?clients=: ids separated by commas, each one of
+// Clients. Empty is every client.
+func ParseClients(q string) ([]string, error) {
+	if q == "" {
+		return nil, nil
+	}
+	var out []string
+	for _, id := range strings.Split(q, ",") {
+		id = strings.TrimSpace(id)
+		if !slices.ContainsFunc(Clients, func(c Client) bool { return c.ID == id }) {
+			var ids []string
+			for _, c := range Clients {
+				ids = append(ids, c.ID)
+			}
+			return nil, fmt.Errorf("no client %q: the clients are %s", id, strings.Join(ids, ", "))
+		}
+		if !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
 // agentBundle is what an agent's link installs on its machine: the token, in
 // ~/.config/cafard/token for anything else on the machine that wants it, and
-// every MCP client that is there.
-func agentBundle(base, name, token string) install.Bundle {
+// the MCP clients chosen (every one there is, when none is), each only if
+// the machine has it.
+func agentBundle(base, name, token string, chosen ...string) install.Bundle {
+	b := everyClient(base, name, token)
+	if len(chosen) == 0 {
+		return b
+	}
+	byName := map[string]string{}
+	for _, c := range Clients {
+		byName[c.Name] = c.ID
+	}
+	keep := func(client string) bool {
+		id, isClient := byName[client]
+		return !isClient || slices.Contains(chosen, id)
+	}
+	b.Files = slices.DeleteFunc(b.Files, func(f install.File) bool { return !keep(f.Client) })
+	b.Runs = slices.DeleteFunc(b.Runs, func(r install.Run) bool { return !keep(r.Client) })
+	return b
+}
+
+func everyClient(base, name, token string) install.Bundle {
 	mcp := base + mcpPath
 	bearer := "Bearer " + token
 	return install.Bundle{Name: name, Files: []install.File{

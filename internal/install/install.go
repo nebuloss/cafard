@@ -177,11 +177,18 @@ type Bundle struct {
 
 // Command is the line that runs a join link's script: curl into sh on Linux
 // and macOS, irm into iex on Windows.
-func Command(link string, windows bool) string {
-	if windows {
-		return "irm '" + link + "?shell=ps1' | iex"
+//
+// clients, if any, are the clients the script sets up, by id; none is every
+// client the machine has.
+func Command(link string, windows bool, clients ...string) string {
+	q := ""
+	if len(clients) > 0 {
+		q = "&clients=" + strings.Join(clients, ",")
 	}
-	return "curl -fsSL '" + link + "?shell=sh' | sh"
+	if windows {
+		return "irm '" + link + "?shell=ps1" + q + "' | iex"
+	}
+	return "curl -fsSL '" + link + "?shell=sh" + q + "' | sh"
 }
 
 // Limits on what a bundle may hold: enough for every client there is
