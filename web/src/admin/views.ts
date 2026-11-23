@@ -174,18 +174,18 @@ export class OverviewView extends View {
       return html`<tr class="${ui.tr}"><td class="${TD}"><a class="${ui.link}" href="${pathOf('members', l.member)}">${l.member}</a></td><td class="${TD}">${what}</td><td class="${TD} text-[13px]">${time.until(l.expires_at)}</td><td class="${TD} text-right"><button class="${ui.btn('danger-text', 'sm')}" data-act="cancel-link" data-v="${String(l.id)}">Cancel</button></td></tr>`;
     });
     const storage = ps.map((p) => html`<tr class="${ui.trLink}" role="button" tabindex="0" data-act="open" data-v="${p.name}"><td class="${TD}"><span class="${WHO}">${Avatar.project(p.name, 'sm')}<span class="nm">${p.name}</span>${p.archived ? html`<span class="${ui.pill.muted}">archived</span>` : ''}</span></td><td class="${TD} ${NUM}">${p.files}</td><td class="${TD} min-w-56">${Meter.of(p)}</td></tr>`);
-    return html`<div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))]">
+    return html`<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         ${tile('/members', 'People', n('person'), `${ms.filter((m) => m.kind === 'person' && !m.joined).length} not joined`)}
         ${tile('/members', 'Agents', n('agent'), `${ms.filter((m) => m.kind === 'agent' && m.enabled).length} active`)}
         ${tile('/members', 'Devices', n('device'), `${ms.filter((m) => m.kind === 'device' && m.enabled).length} active`)}
         ${tile('/projects', 'Projects', ps.length, `${ps.filter((p) => p.archived).length} archived`)}
         ${tile('/projects', 'Files', Bytes.format(total), `${files} files`)}
       </div>
-      <div class="${ui.cards}">
-        ${this.card('To review', review.length ? html`<ul class="m-0 flex list-none flex-col gap-1.5 p-0 [&_.ic]:size-[18px] [&_.ic]:text-warning [&_li]:flex [&_li]:items-center [&_li]:gap-2">${review.map((r) => html`<li>${Icon.of('warn')}${r}</li>`)}</ul>` : html`<p class="${ui.dim}">Nothing.</p>`)}
-        ${this.card('Links waiting', waiting.length ? html`<div class="${ui.tableWrap}"><table class="w-full border-collapse text-sm"><thead><tr class="${ui.tr}">${TH('For')}${TH('Link')}${TH('Expires')}${TH('')}</tr></thead><tbody>${waiting}</tbody></table></div>` : html`<p class="${ui.dim}">None.</p>`)}
-      </div>
-      ${this.card('Storage', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Project')}${TH('Files', 'text-right')}${TH('Used')}</tr></thead><tbody>${storage.length ? storage : html`<tr><td colspan="3" class="${ui.empty}">No project yet.</td></tr>`}</tbody></table></div>`)}`;
+      ${this.layout({
+        side: [this.card('To review', review.length ? html`<ul class="m-0 flex list-none flex-col gap-1.5 p-0 [&_.ic]:size-[18px] [&_.ic]:text-warning [&_li]:flex [&_li]:items-center [&_li]:gap-2">${review.map((r) => html`<li>${Icon.of('warn')}${r}</li>`)}</ul>` : html`<p class="${ui.dim}">Nothing.</p>`),
+        this.card('Links waiting', waiting.length ? html`<div class="${ui.tableWrap}"><table class="w-full border-collapse text-sm"><thead><tr class="${ui.tr}">${TH('For')}${TH('Link')}${TH('Expires')}${TH('')}</tr></thead><tbody>${waiting}</tbody></table></div>` : html`<p class="${ui.dim}">None.</p>`)],
+        main: [this.card('Storage', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Project')}${TH('Files', 'text-right')}${TH('Used')}</tr></thead><tbody>${storage.length ? storage : html`<tr><td colspan="3" class="${ui.empty}">No project yet.</td></tr>`}</tbody></table></div>`)],
+      })}`;
   }
 }
 
@@ -194,7 +194,7 @@ export class SettingsView extends View {
   protected view(): Html {
     const c = this.store.config;
     if (!c) return html`<p class="${ui.empty}">Loading…</p>`;
-    return html`<div class="${ui.cards}">
+    return html`<div class="grid items-start gap-4 lg:grid-cols-2">
       ${this.card('Listeners', html`<dl class="${ui.kv}">
         <dt>listen</dt><dd><code>${c.listen}</code></dd>
         <dt>public-url</dt><dd><code>${c.public_url}</code></dd>

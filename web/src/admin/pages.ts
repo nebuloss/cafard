@@ -99,8 +99,7 @@ export class MemberPage extends ItemPage {
     if (!m) return this.gone('member', this.name, '/members');
     const kindTxt = m.kind === 'person' ? 'Person' : m.kind === 'agent' ? 'Agent · connects with its token' : 'Device · sends only';
     const head = this.itemHead(Avatar.of(m), html`${m.display_name || m.name}${!m.enabled ? html`<span class="${ui.pill.muted}">paused</span>` : ''}`, `${kindTxt} · @${m.name}`);
-    const body = [...this.overviewSections(m), this.projectsSection(m), this.accessSection(m), ...this.advancedSections(m)];
-    return html`${head}<div class="${ui.cards}">${body}</div>`;
+    return html`${head}${this.layout({ side: this.overviewSections(m), main: [this.projectsSection(m), this.accessSection(m)], end: this.advancedSections(m) })}`;
   }
 
   private overviewSections(m: Member): Html[] {
@@ -109,9 +108,6 @@ export class MemberPage extends ItemPage {
     if (m.kind !== 'person') {
       out.push(html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">${m.kind === 'agent' ? 'What it can do' : 'Note'}</h2><div class="${ui.field}"><textarea class="${ui.textarea}" id="desc" aria-label="Description" placeholder="${m.kind === 'agent' ? 'What this machine can do: serial console of the be98 unit; can flash it' : ''}">${m.description ?? ''}</textarea></div><div class="flex flex-wrap items-center gap-2.5"><button class="${ui.btn('tonal', 'sm')}" data-act="save-desc">Save</button></div></div>`);
     }
-    out.push(html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Summary</h2><dl class="${ui.kv}">
-      <dt>${m.kind === 'person' ? 'Signed in' : 'Last used'}</dt><dd>${m.joined || m.kind === 'device' ? html`${time.ago(m.last_used)} <span class="font-mono text-xs">${m.last_from ?? ''}</span>` : 'Not joined yet'}</dd>
-      <dt>State</dt><dd>${m.enabled ? 'Working' : 'Paused'}</dd></dl></div>`);
     return out;
   }
 
@@ -210,15 +206,7 @@ export class ProjectPage extends ItemPage {
     if (!p) return this.gone('project', this.name, '/projects');
     const head = this.itemHead(Avatar.project(p.name), html`${p.name}${p.archived ? html`<span class="${ui.pill.muted}">archived · read-only</span>` : ''}`,
       `${p.conversations} conversations · ${p.files} files · ${p.members.length} members`);
-    const body = [this.summarySection(p), this.membersSection(p), this.filesSection(p), ...this.advancedSections(p)];
-    return html`${head}<div class="${ui.cards}">${body}</div>`;
-  }
-
-  private summarySection(p: Project): Html {
-    return html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Summary</h2><dl class="${ui.kv}">
-        <dt>Conversations</dt><dd>${p.conversations}</dd>
-        <dt>Members</dt><dd>${p.members.length}</dd>
-        <dt>State</dt><dd>${p.archived ? 'Archived, read-only' : 'Open'}</dd></dl></div>`;
+    return html`${head}${this.layout({ side: [this.filesSection(p)], main: [this.membersSection(p)], end: this.advancedSections(p) })}`;
   }
 
   private membersSection(p: Project): Html {
