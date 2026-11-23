@@ -1,5 +1,5 @@
 import { ApiClient } from '@shared/api';
-import type { AuditEntry, Config, Link, Member, Project } from './types';
+import type { AuditEntry, Config, Link, Member, Notice, Project } from './types';
 
 /**
  * AdminStore holds what the admin UI shows, read from /admin/api. Every
@@ -13,6 +13,8 @@ export class AdminStore {
   projects: Project[] = [];
   audit: AuditEntry[] = [];
   links: Link[] = [];
+  /** What needs the admin, read on every load: the bell is on every page. */
+  notices: Notice[] = [];
   config: Config | null = null;
 
   constructor(readonly api: ApiClient) {}
@@ -41,15 +43,32 @@ export class AdminStore {
 
   /** Reads what every page needs, and what the tab's pages need besides. */
   async load(tab: string): Promise<void> {
-    const [m, p] = await Promise.all([
+    const [m, p, n] = await Promise.all([
       this.api.get<{ members: Member[] }>('/members'),
       this.api.get<{ projects: Project[] }>('/projects'),
+      this.api.get<{ notices: Notice[] }>('/notices'),
     ]);
     this.members = m.members;
     this.projects = p.projects;
+    this.notices = n.notices;
     if (tab === 'audit') this.audit = (await this.api.get<{ entries: AuditEntry[] }>('/audit')).entries;
     if (tab === 'overview') this.links = (await this.api.get<{ links: Link[] }>('/links')).links;
     if (!this.config) this.config = await this.api.get<Config>('/config');
+  }
+
+  async loadNotices(): Promise<void> {
+    this.notices = (await this.api.get<{ notices: Notice[] }>('/notices')).notices;
+  }
+
+  /** The notices not marked read: what the bell counts. */
+  unread(): Notice[] {
+    return this.notices.filter((n) => !n.read);
+  }
+
+  async markRead(ids: string[]): Promise<void> {
+    await this.api.post('/notices/read', { ids });
+    const now = new Date().toISOString();
+    for (const n of this.notices) if (ids.includes(n.id)) n.read = now;
   }
 
   member(name: string): Member | undefined {

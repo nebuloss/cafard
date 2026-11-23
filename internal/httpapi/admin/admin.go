@@ -32,6 +32,8 @@
 //	DELETE /admin/api/projects/{name}         {confirm: name}
 //	GET    /admin/api/links
 //	DELETE /admin/api/links/{id}
+//	GET    /admin/api/notices                 what needs the admin now (notices.go)
+//	POST   /admin/api/notices/read            {ids, read?}
 //	GET    /admin/api/audit
 //	GET    /admin/api/config
 package admin
@@ -108,6 +110,8 @@ func (a *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/links", a.auth(a.links))
 	mux.HandleFunc("DELETE /admin/api/links/{id}", a.auth(a.cancelLink))
 	mux.HandleFunc("GET /admin/api/audit", a.auth(a.audit))
+	mux.HandleFunc("GET /admin/api/notices", a.auth(a.noticeList))
+	mux.HandleFunc("POST /admin/api/notices/read", a.auth(a.noticesRead))
 	mux.HandleFunc("GET /admin/api/config", a.auth(a.config))
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "No route "+r.Method+" "+r.URL.Path+".")

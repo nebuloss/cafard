@@ -6,6 +6,7 @@ import { Layer } from '@shared/overlay';
 import { Toaster } from '@shared/toast';
 import { ui } from '@shared/ui';
 import { AdminStore } from './store';
+import { NoticeCenter, bell } from './notices';
 import { MemberPage, ProjectPage } from './pages';
 import { canonical, fromHash, navLevel, placeOf, trailOf, type Place } from './route';
 import type { View } from './view';
@@ -80,6 +81,7 @@ export class AdminApp {
 
   async showShell(): Promise<void> {
     this.shell = new Shell(this);
+    this.watchNotices();
     this.root.replaceChildren(this.shell.root);
     await this.refresh();
   }
@@ -89,6 +91,36 @@ export class AdminApp {
     if (!this.store.signedIn || !this.shell) return;
     await this.attempt(() => this.store.load(this.place.tab));
     this.shell.render();
+  }
+
+  private noticeTimer: ReturnType<typeof setInterval> | undefined;
+
+  /**
+   * Reads the notices again every minute, so the bell counts a link that
+   * just expired without the page being touched. The rest of the page waits
+   * for the admin to move: redrawing it under them would lose what they type.
+   */
+  private watchNotices(): void {
+    clearInterval(this.noticeTimer);
+    this.noticeTimer = setInterval(async () => {
+      if (!this.store.signedIn || !this.shell) return;
+      try {
+        await this.store.loadNotices();
+      } catch {
+        return;
+      }
+      this.redrawBell();
+    }, 60_000);
+  }
+
+  /** Draws the bell again, from the store's notices. */
+  redrawBell(): void {
+    const slot = document.querySelector<HTMLElement>('.bell-slot');
+    if (slot) slot.innerHTML = bell(this.store.unread()).value;
+  }
+
+  openNotices(): void {
+    this.layer.open(new NoticeCenter(this), 'right');
   }
 
   /** Goes to a page of this UI: a new entry in the history, then the page. */
@@ -151,6 +183,7 @@ class Shell extends Component {
         await this.app.attempt(() => this.app.store.signOut());
         this.app.showSignIn('You are signed out.');
       },
+      notices: () => this.app.openNotices(),
     };
   }
 
@@ -185,6 +218,7 @@ class Shell extends Component {
     // Two rows, as claudication's header: the name and the controls, then
     // the trail across the whole width.
     return html`<header class="shrink-0 px-3 pt-2 pb-3 md:px-4"><div class="flex min-h-10 items-center gap-3"><a class="mr-auto flex shrink-0 items-center gap-2 text-[17px] font-bold text-inherit no-underline [&_svg]:size-[26px] [&_svg]:text-primary" href="/" title="cafard admin">${Icon.logo}<span>cafard</span><small class="text-[13px] font-semibold text-on-surface-variant">admin</small></a>
+      <span class="bell-slot contents">${bell(this.app.store.unread())}</span>
       <button class="${ui.btn('text', 'sm')}" data-act="signout">Sign out</button></div>
       <nav class="trail mt-2 flex w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-md3-full bg-primary-container p-1 text-on-primary-container [scrollbar-width:none]" aria-label="Breadcrumb">${crumbs}</nav></header>
       <div class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-3 md:grid-cols-[13.5rem_minmax(0,1fr)] md:grid-rows-1 md:gap-4 md:px-4"><nav class="rail flex gap-0.5 self-start overflow-auto rounded-md3-full bg-surface-container p-1 [scrollbar-width:none] md:max-h-full md:flex-col md:rounded-md3-xl md:p-2" aria-label="${level.back ? 'Pages' : 'Sections'}">${rail}</nav>

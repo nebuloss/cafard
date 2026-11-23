@@ -66,14 +66,12 @@ export class MembersView extends View {
   protected view(): Html {
     const members = this.store.members;
     const count = (k: string) => members.filter((m) => k === 'all' || m.kind === k).length;
-    const review = this.review();
     const seg = (['all', 'person', 'agent', 'device'] as const).map((k) =>
       html`<button class="${ui.segBtn}" aria-pressed="${String(this.app.ui.kind === k)}" data-act="filter" data-v="${k}">${KIND_LABEL[k]} <span class="font-normal text-on-surface-variant">${count(k)}</span></button>`);
     const tools = html`<label class="${ui.search}">${Icon.of('search')}<input id="q" type="search" placeholder="Search" value="${this.app.ui.query}" autocomplete="off"></label>
       <div class="${ui.seg}" role="group" aria-label="Show">${seg}</div>
       <button class="${ui.btn('filled', 'sm')}" data-act="new">${Icon.of('plus')}New</button>`;
-    return html`${review.length ? html`<div class="${ui.notice}">${Icon.of('warn')}<p>${review.join(' · ')}</p></div>` : ''}
-      ${this.card('Members', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Name')}${TH('Projects')}${TH('Last used')}${TH('From')}${TH('Active', 'text-right')}</tr></thead><tbody></tbody></table></div>`, tools)}`;
+    return html`${this.card('Members', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Name')}${TH('Projects')}${TH('Last used')}${TH('From')}${TH('Active', 'text-right')}</tr></thead><tbody></tbody></table></div>`, tools)}`;
   }
 
   protected override afterRender(): void {
@@ -131,6 +129,12 @@ export class AuditView extends View {
     };
   }
 
+  protected override afterRender(): void {
+    super.afterRender();
+    // The card is the window's height, and its table scrolls inside it.
+    this.root.classList.add('h-full', 'pb-4');
+  }
+
   static kindOf(e: AuditEntry): string {
     if (/signed (in|out)|sign-in/.test(e.action)) return 'signins';
     if (/project/.test(e.action)) return 'projects';
@@ -143,8 +147,8 @@ export class AuditView extends View {
       html`<button class="${ui.segBtn}" aria-pressed="${String(f === k)}" data-act="afilter" data-v="${k}">${l}</button>`);
     const rows = this.store.audit.filter((e) => f === 'all' || AuditView.kindOf(e) === f).map((e) =>
       html`<tr class="${ui.tr}"><td class="${TD} whitespace-nowrap text-[13px] text-on-surface-variant tabular-nums">${time.when(e.at)}</td><td class="${TD}"><b>${e.actor}</b> ${e.action} <b>${e.target}</b></td><td class="${TD} font-mono text-xs text-on-surface-variant">${e.origin}</td></tr>`);
-    return this.card('Audit log', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('When')}${TH('What')}${TH('From')}</tr></thead><tbody>${rows.length ? rows : html`<tr><td colspan="3" class="${ui.empty}">Nothing yet.</td></tr>`}</tbody></table></div>`,
-      html`<div class="${ui.seg}" role="group" aria-label="Show">${seg}</div>`);
+    return this.card('Audit log', html`<div class="${ui.tableWrap} min-h-0 flex-1 overflow-auto"><table class="${ui.table}"><thead class="sticky top-0 z-10 bg-surface-lowest shadow-[0_1px_0_var(--color-outline-variant)]"><tr>${TH('When')}${TH('What')}${TH('From')}</tr></thead><tbody>${rows.length ? rows : html`<tr><td colspan="3" class="${ui.empty}">Nothing yet.</td></tr>`}</tbody></table></div>`,
+      html`<div class="${ui.seg}" role="group" aria-label="Show">${seg}</div>`, 'h-full min-h-0');
   }
 }
 
@@ -168,7 +172,6 @@ export class OverviewView extends View {
     const files = ps.reduce((s, p) => s + p.files, 0);
     const tile = (href: string, label: string, value: string | number, sub: string) =>
       html`<a class="state-layer flex flex-col gap-0.5 rounded-md3-xl bg-surface-container px-4 py-3.5 text-inherit no-underline" href="${href}"><span class="text-[13px] font-semibold text-on-surface-variant">${label}</span><span class="text-[28px] font-bold tabular-nums">${value}</span><span class="text-[12.5px] text-on-surface-variant">${sub}</span></a>`;
-    const review = this.review();
     const waiting = this.store.links.filter((l) => l.state === 'waiting').map((l) => {
       const what = l.kind === 'agent' ? 'install' : l.kind === 'password' ? 'password' : 'join';
       return html`<tr class="${ui.tr}"><td class="${TD}"><a class="${ui.link}" href="${pathOf('members', l.member)}">${l.member}</a></td><td class="${TD}">${what}</td><td class="${TD} text-[13px]">${time.until(l.expires_at)}</td><td class="${TD} text-right"><button class="${ui.btn('danger-text', 'sm')}" data-act="cancel-link" data-v="${String(l.id)}">Cancel</button></td></tr>`;
@@ -182,8 +185,7 @@ export class OverviewView extends View {
         ${tile('/projects', 'Files', Bytes.format(total), `${files} files`)}
       </div>
       ${this.layout({
-        side: [this.card('To review', review.length ? html`<ul class="m-0 flex list-none flex-col gap-1.5 p-0 [&_.ic]:size-[18px] [&_.ic]:text-warning [&_li]:flex [&_li]:items-center [&_li]:gap-2">${review.map((r) => html`<li>${Icon.of('warn')}${r}</li>`)}</ul>` : html`<p class="${ui.dim}">Nothing.</p>`),
-        this.card('Links waiting', waiting.length ? html`<div class="${ui.tableWrap}"><table class="w-full border-collapse text-sm"><thead><tr class="${ui.tr}">${TH('For')}${TH('Link')}${TH('Expires')}${TH('')}</tr></thead><tbody>${waiting}</tbody></table></div>` : html`<p class="${ui.dim}">None.</p>`)],
+        side: [this.card('Links waiting', waiting.length ? html`<div class="${ui.tableWrap}"><table class="w-full border-collapse text-sm"><thead><tr class="${ui.tr}">${TH('For')}${TH('Link')}${TH('Expires')}${TH('')}</tr></thead><tbody>${waiting}</tbody></table></div>` : html`<p class="${ui.dim}">None.</p>`)],
         main: [this.card('Storage', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Project')}${TH('Files', 'text-right')}${TH('Used')}</tr></thead><tbody>${storage.length ? storage : html`<tr><td colspan="3" class="${ui.empty}">No project yet.</td></tr>`}</tbody></table></div>`)],
       })}`;
   }

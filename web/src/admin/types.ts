@@ -78,3 +78,15 @@ export interface Config {
   admin_signin_hours: number;
   chat_signin_days: number;
 }
+
+/** Something that needs the admin now (internal/httpapi/admin/notices.go). */
+export interface Notice {
+  id: string;
+  severity: 'error' | 'warn' | 'info';
+  kind: 'member' | 'project';
+  title: string;
+  detail?: string;
+  link?: string;
+  since?: string;
+  read?: string;
+}
