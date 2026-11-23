@@ -182,23 +182,31 @@ and its expiry** (24 hours by default). The code works once; admin then shows
 - **Person** — admin sets the username; the person scans the QR code, sets a
   password and, if they like, a passkey, can install the app, and is signed
   in (see *Signing in*).
-- **Agent** — the URL is run on its machine:
+- **Agent** — the URL is run on its machine, by one of two commands:
 
   ```sh
-  curl -fsSL https://cafard.example/join/X9F4… | sh
+  curl -fsSL 'https://cafard.example/join/X9F4…?shell=sh' | sh      # Linux, macOS
+  irm 'https://cafard.example/join/X9F4…?shell=ps1' | iex           # Windows
   ```
 
-  The script exchanges the code for the agent's token and registers cafard in
-  the MCP client's **user** config, once for the machine:
+  Fetched by a shell, the link is spent and the script carries the agent's
+  token; opened in a browser (or a messenger's preview) it is a page with
+  both commands, and spends nothing. The script writes the token to
+  `~/.config/cafard/token` (mode 600) and registers cafard's MCP server,
+  `<url>/mcp` under the name `cafard`, in every client it finds on PATH,
+  once for the machine (`internal/httpapi/join`, clients.go):
 
-  ```sh
-  claude mcp add --scope user --transport http cafard https://cafard.example/mcp \
-    --header "Authorization: Bearer cfd_ag_…"
-  ```
+  | Client | What is written, on every system |
+  |---|---|
+  | Claude Code | `claude mcp add --scope user --transport http cafard … --header "Authorization: Bearer …"`, replacing an earlier one |
+  | Codex | `[mcp_servers.cafard]` in `~/.codex/config.toml`, `bearer_token_env_var = "CAFARD_TOKEN"`; the variable in `~/.config/cafard/env.sh`, sourced from the shell profile, or a user variable on Windows |
+  | crush | `mcp.cafard` in `~/.config/crush/crush.json`: `http`, with the header |
+  | opencode | `mcp.cafard` in `~/.config/opencode/opencode.jsonc`: `remote`, `oauth: false`, with the header |
 
-  and prints the equivalent for Codex and opencode, from one commented file
-  per client under `configs/clients/` (the one copy of each, embedded, as in
-  claudication). The token is never shown on screen or pasted into a chat.
+  Each file is merged, owning only cafard's entry, and backed up beside
+  itself; a client not installed is named and skipped (`internal/install`,
+  from claudication). A new link run again is the update. The token is
+  never shown on screen or pasted into a chat.
 - **Device** — the token, shown once, with the `curl` lines that use it.
 
 **A token or a join link is never posted in a conversation.** Everything in a

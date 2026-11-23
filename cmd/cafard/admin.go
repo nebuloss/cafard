@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"cafard/internal/config"
+	"cafard/internal/install"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
 )
@@ -166,8 +167,8 @@ func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Du
 	switch l.Kind {
 	case store.AgentLink:
 		fmt.Fprintf(a.out, "Run this once on %s's machine, as the user its agents run as (works once, until %s):\n\n", i.Name, until)
-		fmt.Fprintf(a.out, "  curl -fsSL %s | sh\n\n", url)
-		fmt.Fprintln(a.out, "It exchanges the link for the agent's token and keeps it in ~/.config/cafard/token. The token is never shown.")
+		fmt.Fprintf(a.out, "  Linux / macOS:         %s\n", install.Command(url, false))
+		fmt.Fprintf(a.out, "  Windows (PowerShell):  %s\n", install.Command(url, true))
 		return nil
 	default:
 		fmt.Fprintf(a.out, "%s opens this to sign in, on the device they will use (works once, until %s):\n\n", i.Name, until)

@@ -25,6 +25,7 @@ var layers = map[string]int{
 	"internal/mcp":       0,
 	"internal/imagefit":  0,
 	"internal/uploads":   0,
+	"internal/install":   0,
 
 	"internal/store": 1,
 

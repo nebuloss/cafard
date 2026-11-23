@@ -83,7 +83,8 @@ func TestAdminFromAnEmptyInstall(t *testing.T) {
 	// An agent comes with an install link; its token is never printed.
 	agent := b.must("create", "agent", "dev-code", "-project", "be98,zeeos")
 	agentCode := linkRE.FindStringSubmatch(agent)
-	if agentCode == nil || tokenRE.MatchString(agent) || !strings.Contains(agent, "curl -fsSL https://cafard.example/join/") {
+	if agentCode == nil || tokenRE.MatchString(agent) || !strings.Contains(agent, "curl -fsSL 'https://cafard.example/join/") ||
+		!strings.Contains(agent, "irm 'https://cafard.example/join/") {
 		t.Fatalf("create agent printed:\n%s", agent)
 	}
 	if out, code := b.admin("token", "dev-code"); code != 1 || !strings.Contains(out, "never shown") {

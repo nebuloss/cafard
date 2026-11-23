@@ -13,6 +13,10 @@ type pageData struct {
 	Expires  time.Time
 	Error    string
 	Spent    bool
+	// Agent is an agent's link opened in a browser: the commands that run
+	// it, by shell.
+	Agent   bool
+	Sh, PS1 string
 }
 
 func page(w http.ResponseWriter, status int, d pageData) {
@@ -53,6 +57,10 @@ button { width:100%; font:inherit; font-weight:600; min-height:46px; border:0; b
 .err { padding:10px 14px; border-radius:12px; background:var(--error-container); color:var(--on-surface); }
 .user { font-weight:700; color:var(--on-surface); }
 small { color:var(--on-surface-variant); }
+.cmd { display:flex; flex-direction:column; gap:6px; }
+.cmd span { font-weight:600; font-size:13px; }
+pre { margin:0; padding:10px 12px; border-radius:12px; border:1px solid var(--outline-variant); background:var(--surface-lowest);
+  font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; white-space:pre-wrap; word-break:break-all; user-select:all; }
 </style>
 </head>
 <body>
@@ -61,6 +69,12 @@ small { color:var(--on-surface-variant); }
 {{- if .Spent}}
   <h1>{{.Title}}</h1>
   <div class="err">{{.Error}}</div>
+{{- else if .Agent}}
+  <h1>Set up {{.Name}}</h1>
+  <p>Run on its machine, as the user its agents run as.</p>
+  <div class="cmd"><span>Linux / macOS</span><pre>{{.Sh}}</pre></div>
+  <div class="cmd"><span>Windows (PowerShell)</span><pre>{{.PS1}}</pre></div>
+  <small>Works once, until {{.Expires.Format "2 Jan 15:04"}}.</small>
 {{- else}}
   <h1>Sign in as {{.Name}}</h1>
   <p>On this device, as <span class="user">{{.Username}}</span>.</p>

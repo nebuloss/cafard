@@ -3,22 +3,26 @@
 //
 //	GET  /join/{code}        a person's link: a page with a Sign in button.
 //	                         a phone's QR code: signs in, and opens the chat.
-//	                         an agent's link: the install script, for
-//	                         `curl -fsSL …/join/{code} | sh`.
+//	                         an agent's link, from a browser: a page with the
+//	                         two commands that run it.
+//	                         an agent's link, from a shell: the install
+//	                         script, carrying the agent's token, for
+//	                         `curl -fsSL '…/join/{code}?shell=sh' | sh` or
+//	                         `irm '…/join/{code}?shell=ps1' | iex`.
 //	POST /join/{code}        the Sign in button: signs this browser in, and
 //	                         opens the chat.
-//	POST /join/{code}/token  the install script exchanging the code for the
-//	                         agent's token, once.
+//	POST /join/{code}/token  the agent's token, once, for the scripts handed
+//	                         out before the script carried it.
 //
-// The page and the script hold no secret: the code is in the URL already,
-// and the token exists only from the moment the script asks for it. Every
-// route is rate-limited per address, so a code cannot be guessed at speed;
-// at 256 bits it could not be anyway.
+// The pages hold no secret: the code is in the URL already. Every route is
+// rate-limited per address, so a code cannot be guessed at speed; at 256
+// bits it could not be anyway.
 //
-// A person's link is used by the button, not by opening it: a link sent in
-// a message is fetched by the messenger's preview before the person taps it,
-// and a link used by a GET would be spent by the preview. The phone's QR
-// code is scanned, never sent, and lasts two minutes: opening it is enough.
+// A link sent in a message is fetched by the messenger's preview before
+// anyone taps it, so no browser spends a link by opening it: a person's is
+// used by the button, and an agent's only by a shell — curl, wget or
+// PowerShell, which no preview is. The phone's QR code is scanned, never
+// sent, and lasts two minutes: opening it is enough.
 package join
 
 import (
@@ -30,6 +34,7 @@ import (
 	"time"
 
 	"cafard/internal/httpapi/httpx"
+	"cafard/internal/install"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -71,11 +76,26 @@ func (j *Join) limited(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// wantsScript is a request from curl or wget, which gets shell rather than a
-// page: an agent's link is run, a person's is opened.
-func wantsScript(r *http.Request) bool {
+// shellOf is the shell a request is from — "sh" for curl or wget, "ps1" for
+// PowerShell's irm, whose user agent starts Mozilla/5.0 like a browser's but
+// names it — or "" for a browser, which gets a page. The query says which
+// script a shell wants; without one, as in the commands made before there
+// were two, curl and wget want sh.
+func shellOf(r *http.Request) string {
 	ua := r.UserAgent()
-	return strings.HasPrefix(ua, "curl/") || strings.HasPrefix(ua, "Wget/")
+	def := ""
+	switch {
+	case strings.Contains(ua, "PowerShell"):
+		def = "ps1"
+	case strings.HasPrefix(ua, "curl/"), strings.HasPrefix(ua, "Wget/"):
+		def = "sh"
+	default:
+		return ""
+	}
+	if q := r.URL.Query().Get("shell"); q != "" {
+		return q
+	}
+	return def
 }
 
 func (j *Join) open(w http.ResponseWriter, r *http.Request) {
@@ -85,12 +105,19 @@ func (j *Join) open(w http.ResponseWriter, r *http.Request) {
 		j.refused(w, r, err)
 		return
 	}
+	shell := shellOf(r)
 	if l.Kind == store.AgentLink {
-		j.script(w, code, id)
+		if shell == "" {
+			link := j.publicURL + "/join/" + code
+			page(w, http.StatusOK, pageData{Title: "Set up " + id.Name, Name: id.Name, Expires: l.ExpiresAt, Agent: true,
+				Sh: install.Command(link, false), PS1: install.Command(link, true)})
+			return
+		}
+		j.script(w, r, code, shell)
 		return
 	}
-	if wantsScript(r) {
-		shellError(w, http.StatusBadRequest, "This link is for "+id.Name+", a person: open it in a browser.")
+	if shell != "" {
+		shellError(w, shell, "This link is for "+id.Name+", a person: open it in a browser.")
 		return
 	}
 	if l.Kind == store.SigninLink {
@@ -139,6 +166,39 @@ func (j *Join) signInPerson(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+// script redeems an agent's link and serves the script that sets the
+// machine up with its token: the token exists from this moment, and only in
+// this response.
+func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string) {
+	if shell != "sh" && shell != "ps1" {
+		shellError(w, "sh", "shell="+shell+" is not one cafard writes for: use sh or ps1.")
+		return
+	}
+	id, token, err := j.acc.RedeemAgentLink(r.Context(), code, clientIP(r))
+	if err != nil {
+		j.refused(w, r, err)
+		return
+	}
+	j.log.Info("agent link redeemed", "agent", id.Name, "from", clientIP(r), "shell", shell)
+	b := agentBundle(j.publicURL, id.Name, token)
+	if err := b.Validate(); err != nil {
+		// What agentBundle writes is fixed, so this is a bug; the link is
+		// spent, and an admin makes another once it is fixed.
+		j.log.Error("install bundle", "err", err)
+		shellError(w, shell, "cafard could not write the script; the error is in its log.")
+		return
+	}
+	if shell == "ps1" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprint(w, install.PowerShell(b))
+		return
+	}
+	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+	fmt.Fprint(w, install.Shell(b))
+}
+
+// token is the exchange the scripts served before this one made: they post
+// the code and keep what comes back.
 func (j *Join) token(w http.ResponseWriter, r *http.Request) {
 	id, token, err := j.acc.RedeemAgentLink(r.Context(), r.PathValue("code"), clientIP(r))
 	if err != nil {
@@ -163,26 +223,27 @@ func (j *Join) refused(w http.ResponseWriter, r *http.Request, err error) {
 		j.log.Error("join link", "err", err)
 		ref = &access.Refusal{Message: "cafard could not do that; the error is in its log."}
 	}
-	if wantsScript(r) {
-		shellError(w, http.StatusGone, ref.Message)
+	if shell := shellOf(r); shell != "" {
+		shellError(w, shell, ref.Message)
 		return
 	}
 	page(w, http.StatusGone, pageData{Title: "This link no longer works", Error: ref.Message, Spent: true})
 }
 
-// shellError is a script that says why and fails, so `curl … | sh` prints a
-// reason rather than running nothing.
+// shellError is a script that says why and fails, so `curl … | sh` and
+// `irm … | iex` print a reason rather than running nothing.
 //
-// It is served as 200 whatever went wrong. The install command is
-// `curl -fsSL`, and -f makes curl print nothing at all for an error status:
-// sh would get an empty script, and the person would see only curl's
-// "returned error: 410". The script's own exit status is the failure.
-func shellError(w http.ResponseWriter, _ int, msg string) {
-	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+// It is served as 200 whatever went wrong. The sh command is `curl -fsSL`,
+// and -f makes curl print nothing at all for an error status: sh would get
+// an empty script, and the person would see only curl's "returned error:
+// 410". irm would throw on one before iex ran anything. The script's own
+// failure is the failure.
+func shellError(w http.ResponseWriter, shell, msg string) {
+	if shell == "ps1" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	} else {
+		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+	}
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "#!/bin/sh\necho %s >&2\nexit 1\n", shellQuote("cafard: "+msg))
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	fmt.Fprint(w, install.Failure(shell == "ps1", msg))
 }

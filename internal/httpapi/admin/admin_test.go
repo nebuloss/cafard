@@ -204,8 +204,11 @@ func TestCreatePeopleAgentsAndDevices(t *testing.T) {
 		t.Fatalf("create agent: %d %v", code, out)
 	}
 	agentLink := out["link"].(map[string]any)
-	if cmd := agentLink["command"].(string); cmd != "curl -fsSL "+agentLink["url"].(string)+" | sh" {
+	if cmd := agentLink["command"].(string); cmd != "curl -fsSL '"+agentLink["url"].(string)+"?shell=sh' | sh" {
 		t.Errorf("agent command: %q", cmd)
+	}
+	if cmd := agentLink["command_windows"].(string); cmd != "irm '"+agentLink["url"].(string)+"?shell=ps1' | iex" {
+		t.Errorf("agent command for Windows: %q", cmd)
 	}
 
 	code, out = r.call("POST", "/admin/api/members", map[string]any{"kind": "device", "name": "dev-build", "projects": []string{"be98"}})
@@ -213,20 +216,14 @@ func TestCreatePeopleAgentsAndDevices(t *testing.T) {
 		t.Fatalf("create device: %d %v", code, out)
 	}
 
-	// The install script, fetched the way curl does, then its token exchange.
-	req, _ := http.NewRequest("GET", agentLink["url"].(string), nil)
+	// The install script, fetched the way curl does, carries the token.
+	req, _ := http.NewRequest("GET", agentLink["url"].(string)+"?shell=sh", nil)
 	req.Header.Set("User-Agent", "curl/8.5.0")
 	resp, _ := http.DefaultClient.Do(req)
 	script, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if !strings.HasPrefix(string(script), "#!/bin/sh") || !strings.Contains(string(script), "/token") || strings.Contains(string(script), "cfd_ag_") {
+	if !strings.HasPrefix(string(script), "#!/bin/sh") || !strings.Contains(string(script), "cfd_ag_") {
 		t.Errorf("install script:\n%s", script)
-	}
-	resp, _ = http.Post(agentLink["url"].(string)+"/token", "", nil)
-	tok, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if !strings.HasPrefix(string(tok), "cfd_ag_") {
-		t.Errorf("token exchange: %d %s", resp.StatusCode, tok)
 	}
 
 	_, out = r.call("GET", "/admin/api/members", nil)
