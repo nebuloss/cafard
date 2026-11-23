@@ -10,8 +10,11 @@ CGO; the UI is built into the binary with `go:embed`. It follows
 claudication's way of working (`~/misc/claudication`); when in doubt about a
 convention, do what claudication does.
 
-**Status: step 1 of the build order is in** — the store, the files, the access
-rules and `cafard serve` with both listeners. [`docs/design.md`](docs/design.md)
+**Status: steps 1 and 2 of the build order are in** — the store, the files,
+the access rules, `cafard serve` with both listeners, `/api/v1` behind agent
+and device tokens (send with `curl`, live logs included; read conversations
+and files by page), and `cafard admin` to create everyone from the box.
+[`docs/design.md`](docs/design.md)
 is the design: the model, the access rules, the surfaces, the MCP tools, the
 order to build in, and what is left for later. As code lands, each section
 moves into the package comment it describes, and the design doc keeps only
@@ -94,8 +97,14 @@ The Makefile pins `GOTOOLCHAIN` to the `go` directive in `go.mod` (1.26.0),
 so a plain `go` command may resolve a different compiler than `make` does.
 The web UI's targets (`test-web`, `typecheck`, `dev`) come with step 4.
 
-Subcommands today: `serve [-config FILE]` and `version`. `passwd`, `backup`,
-`restore` and `vacuum` come with the steps that need them.
+Subcommands today: `serve`, `config` (check and print the configuration),
+`admin` (people, agents, devices, projects, tokens; `cafard admin -h`) and
+`version`. `backup`, `restore` and `vacuum` come with the steps that need
+them.
+
+`go doc ./internal/httpapi/api` lists the routes. To try a deployed box:
+`scripts/devdeploy.sh` puts the pushed branch in a Proxmox container, and
+`cafard admin` inside it creates the first admin, a project and tokens.
 
 The tests need no credentials and no network. A package whose tests build an
 HTTP client calls `testenv.Offline` from its `TestMain`. Anything that talks to

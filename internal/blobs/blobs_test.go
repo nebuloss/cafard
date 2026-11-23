@@ -88,6 +88,48 @@ func TestOpenClearsLeftoverUploads(t *testing.T) {
 	}
 }
 
+// A live upload is readable while it arrives, under its key, and becomes an
+// ordinary blob when it ends.
+func TestStagedBlobIsReadableBeforeItEnds(t *testing.T) {
+	s, _ := open(t)
+	w, err := s.Create("17")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Create("17"); err == nil {
+		t.Error("two blobs staged under one key")
+	}
+	w.Write([]byte("[ 1.0] boot\n"))
+	r, err := s.OpenStaged("17")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(r)
+	r.Close()
+	if string(got) != "[ 1.0] boot\n" {
+		t.Errorf("read while arriving: %q", got)
+	}
+	w.Write([]byte("[ 2.0] wl0: link down\n"))
+	if w.Size() != 34 {
+		t.Errorf("size %d", w.Size())
+	}
+	sum, size, err := w.Commit()
+	if err != nil || size != 34 || !s.Has(sum) {
+		t.Fatalf("commit: %s %d %v", sum, size, err)
+	}
+	if _, err := s.OpenStaged("17"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("still staged after commit: %v", err)
+	}
+	for _, bad := range []string{"", "../x", "A", "a/b"} {
+		if _, err := s.Create(bad); err == nil {
+			t.Errorf("Create(%q) accepted", bad)
+		}
+		if _, err := s.OpenStaged(bad); !errors.Is(err, ErrNotFound) {
+			t.Errorf("OpenStaged(%q): %v", bad, err)
+		}
+	}
+}
+
 func TestRemove(t *testing.T) {
 	s, _ := open(t)
 	sum, _, _ := s.Put(strings.NewReader("secret in a log"))

@@ -19,18 +19,17 @@ import (
 	"net/http"
 	"strings"
 
-	"cafard/internal/blobs"
+	"cafard/internal/httpapi/api"
 	"cafard/internal/service/access"
-	"cafard/internal/store"
+	"cafard/internal/service/chat"
 	"cafard/internal/version"
 )
 
 // Deps is what the surfaces are built from.
 type Deps struct {
 	Log    *slog.Logger
-	Store  *store.Store
-	Blobs  *blobs.Store
 	Access *access.Service
+	Chat   *chat.Service
 }
 
 type Server struct {
@@ -50,6 +49,9 @@ func (s *Server) Admin() http.Handler { return s.admin }
 func publicMux(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
+	if d.Access != nil && d.Chat != nil {
+		api.New(d.Log, d.Access, d.Chat).Register(mux)
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

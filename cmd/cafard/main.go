@@ -2,6 +2,7 @@
 //
 //	cafard serve [-config FILE]    run both listeners
 //	cafard config [-config FILE]   check the configuration, print it in full
+//	cafard admin COMMAND           people, agents, devices and projects
 //	cafard version                 print the build
 package main
 
@@ -25,6 +26,7 @@ import (
 	"cafard/internal/httpapi"
 	"cafard/internal/logging"
 	"cafard/internal/service/access"
+	"cafard/internal/service/chat"
 	"cafard/internal/store"
 	"cafard/internal/version"
 
@@ -40,6 +42,7 @@ const usage = `cafard: a message hub for people and agents on different machines
 Usage:
   cafard serve [-config FILE]    run the public and the admin listener
   cafard config [-config FILE]   check the configuration, print it in full
+  cafard admin  COMMAND          people, agents, devices and projects (cafard admin -h)
   cafard version                 print the build
 
 The configuration is described in configs/config.example.yaml.
@@ -55,6 +58,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return serve(args[1:], stderr)
 	case "config":
 		return showConfig(args[1:], stdout, stderr)
+	case "admin":
+		return admin(args[1:], stdout, stderr)
 	case "version", "-version", "--version":
 		fmt.Fprintln(stdout, "cafard", version.String())
 		return 0
@@ -143,7 +148,14 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	if err != nil {
 		return err
 	}
-	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Blobs: bl, Access: access.New(st)})
+	acc := access.New(st)
+	ch := chat.New(st, bl, acc)
+	if cut, err := ch.Start(ctx); err != nil {
+		return err
+	} else if cut > 0 {
+		log.Warn("uploads cut off by the last stop", "files", cut)
+	}
+	srv := httpapi.New(httpapi.Deps{Log: log, Access: acc, Chat: ch})
 
 	pubLn, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {

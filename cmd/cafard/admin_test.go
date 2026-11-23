@@ -1,0 +1,210 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"cafard/internal/config"
+)
+
+type box struct {
+	t    *testing.T
+	cfg  config.Config
+	path string
+}
+
+// newBox is an installed cafard: a config file and a state directory, as the
+// service leaves them after its first start.
+func newBox(t *testing.T) *box {
+	t.Helper()
+	dir := t.TempDir()
+	state := filepath.Join(dir, "state")
+	if err := os.MkdirAll(state, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "config.yaml")
+	// The file is what `cafard admin` reads; the ports in it are never bound.
+	// The server in serve() runs from cfg, on ports the kernel picks.
+	os.WriteFile(path, []byte("listen: 127.0.0.1:18330\nadmin-listen: 127.0.0.1:18331\nstate-dir: "+state+"\npublic-url: https://cafard.example\n"), 0o600)
+	cfg := config.Default()
+	cfg.Listen, cfg.AdminListen, cfg.StateDir, cfg.PublicURL = "127.0.0.1:0", "127.0.0.1:0", state, "https://cafard.example"
+	return &box{t: t, cfg: cfg, path: path}
+}
+
+// admin runs `cafard admin -config … args…` and returns what it printed.
+func (b *box) admin(args ...string) (string, int) {
+	b.t.Helper()
+	var out, errOut bytes.Buffer
+	code := run(append([]string{"admin", "-config", b.path}, args...), &out, &errOut)
+	return out.String() + errOut.String(), code
+}
+
+func (b *box) must(args ...string) string {
+	b.t.Helper()
+	out, code := b.admin(args...)
+	if code != 0 {
+		b.t.Fatalf("cafard admin %s: %d\n%s", strings.Join(args, " "), code, out)
+	}
+	return out
+}
+
+var tokenRE = regexp.MustCompile(`cfd_(ag|dv)_[a-z2-7]{52}`)
+
+func TestAdminFromAnEmptyInstall(t *testing.T) {
+	b := newBox(t)
+
+	// Nothing works before the first admin.
+	if out, code := b.admin("create", "project", "be98"); code == 0 || !strings.Contains(out, "no admin yet") {
+		t.Errorf("before the first admin: %d %s", code, out)
+	}
+	if out := b.must("create", "person", "guillaume", "-name", "Guillaume"); !strings.Contains(out, "the first admin") {
+		t.Errorf("first person: %s", out)
+	}
+	if out := b.must("create", "person", "camille"); strings.Contains(out, "first admin") {
+		t.Errorf("second person became admin: %s", out)
+	}
+	b.must("create", "project", "be98", "-quota", "2G", "-member", "guillaume")
+	b.must("create", "project", "zeeos")
+
+	dev := b.must("create", "device", "dev-build", "-description", "build output", "-project", "be98")
+	devToken := tokenRE.FindString(dev)
+	if !strings.HasPrefix(devToken, "cfd_dv_") || !strings.Contains(dev, "https://cafard.example/api/v1/send/be98/") {
+		t.Fatalf("create device printed:\n%s", dev)
+	}
+	agent := b.must("create", "agent", "dev-code", "-project", "be98,zeeos")
+	agentToken := tokenRE.FindString(agent)
+	if !strings.HasPrefix(agentToken, "cfd_ag_") || !strings.Contains(agent, "Never paste it in a conversation") {
+		t.Fatalf("create agent printed:\n%s", agent)
+	}
+
+	b.must("add", "zeeos", "camille")
+	if out, code := b.admin("add", "zeeos", "camille"); code != 1 || !strings.Contains(out, "already a member") {
+		t.Errorf("adding twice: %d %s", code, out)
+	}
+	if out, code := b.admin("create", "agent", "nowhere", "-project", "nope"); code != 1 || !strings.Contains(out, `no project "nope"`) {
+		t.Errorf("an unknown project: %d %s", code, out)
+	}
+	if out, code := b.admin("frobnicate"); code != 2 || !strings.Contains(out, "unknown command") {
+		t.Errorf("an unknown command: %d %s", code, out)
+	}
+
+	list := b.must("list")
+	for _, want := range []string{"guillaume", "admin", "dev-build", "device", "be98", "zeeos", "camille"} {
+		if !strings.Contains(list, want) {
+			t.Errorf("list lacks %q:\n%s", want, list)
+		}
+	}
+
+	// The tokens work against the server, and a new one replaces the old.
+	pub := b.serve()
+	send := func(token, path, body string) int {
+		req, _ := http.NewRequest("PUT", "http://"+pub+path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := send(devToken, "/api/v1/send/be98/first/boot.log", "hello\n"); code != 201 {
+		t.Errorf("device send: %d", code)
+	}
+	newer := tokenRE.FindString(b.must("token", "dev-build"))
+	if code := send(devToken, "/api/v1/send/be98/first/boot.log", "again\n"); code != 401 {
+		t.Errorf("the replaced token: %d, want 401", code)
+	}
+	if code := send(newer, "/api/v1/send/be98/first/boot.log", "again\n"); code != 201 {
+		t.Errorf("the new token: %d", code)
+	}
+	req, _ := http.NewRequest("GET", "http://"+pub+"/api/v1/projects/be98/conversations/first/messages", nil)
+	req.Header.Set("Authorization", "Bearer "+agentToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || strings.Count(string(body), `"boot.log"`) != 2 {
+		t.Errorf("agent reads: %d %s", resp.StatusCode, body)
+	}
+
+	if out := b.must("list"); !strings.Contains(out, "from 127.0.0.1") {
+		t.Errorf("list does not show the token's last use:\n%s", out)
+	}
+}
+
+// -as names the admin to act as, and only an admin will do.
+func TestAdminActsAsAnAdminOnly(t *testing.T) {
+	b := newBox(t)
+	b.must("create", "person", "guillaume")
+	b.must("create", "person", "camille")
+	if out, code := b.admin("-as", "camille", "create", "project", "speedtest"); code != 1 || !strings.Contains(out, "camille is not an admin") {
+		t.Errorf("-as a non-admin: %d %s", code, out)
+	}
+	if out := b.must("-as", "guillaume", "create", "project", "speedtest"); !strings.Contains(out, "created project speedtest") {
+		t.Errorf("-as guillaume: %s", out)
+	}
+}
+
+func TestAdminNeedsTheStateDirectory(t *testing.T) {
+	b := newBox(t)
+	os.RemoveAll(b.cfg.StateDir)
+	if out, code := b.admin("list"); code != 1 || !strings.Contains(out, "start cafard once first") {
+		t.Errorf("no state directory: %d %s", code, out)
+	}
+	if _, err := os.Stat(b.cfg.StateDir); err == nil {
+		t.Error("cafard admin created the state directory")
+	}
+}
+
+func TestParseSize(t *testing.T) {
+	for in, want := range map[string]int64{"500M": 500 << 20, "5G": 5 << 30, "5GB": 5 << 30, "1t": 1 << 40, "1024": 1024} {
+		if got, err := parseSize(in); err != nil || got != want {
+			t.Errorf("parseSize(%q) = %d %v, want %d", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "five", "-1G", "0"} {
+		if _, err := parseSize(bad); err == nil {
+			t.Errorf("parseSize(%q) accepted", bad)
+		}
+	}
+}
+
+// serve starts the server on the box and returns the public address.
+func (b *box) serve() string {
+	b.t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	addrs := make(chan net.Addr, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- runServer(ctx, b.cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), func(p, _ net.Addr) { addrs <- p })
+	}()
+	b.t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(15 * time.Second):
+			b.t.Error("server did not stop")
+		}
+	})
+	select {
+	case a := <-addrs:
+		return a.String()
+	case err := <-done:
+		b.t.Fatalf("server stopped: %v", err)
+	case <-time.After(10 * time.Second):
+		b.t.Fatal("server did not start")
+	}
+	return ""
+}

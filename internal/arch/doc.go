@@ -4,19 +4,23 @@
 // Every package sits on a layer, and imports only from layers below its own.
 // Lowest first:
 //
-//	0  leaves       version logging testenv arch config blobs
-//	1  records      store
-//	2  rules        service/access
-//	3  HTTP         httpapi
-//	4  binary       cmd/cafard
+//	0  leaves         version logging testenv arch config blobs
+//	1  records        store
+//	2  rules          service/access
+//	3  services       service/chat
+//	4  HTTP surfaces  httpapi/api
+//	5  composition    httpapi
+//	6  binary         cmd/cafard
 //
 // Read upward, that is the path of a request: the binary starts the
-// composition root in httpapi, which asks service/access whether the caller
-// may do what it asks, and service/access reads and writes through the store.
+// composition root in httpapi, which hands each surface the services it
+// uses; /api/v1 (httpapi/api) passes a request to service/chat, which asks
+// service/access whether the caller may, then reads and writes through the
+// store and the blob store.
 //
 // The map grows with the code. docs/design.md has where it is going:
-// service/files, service/chat and service/attention between the rules and
-// HTTP, and one package per HTTP surface under httpapi.
+// service/files and service/attention beside chat, and the MCP server and
+// the admin API as surfaces of their own under httpapi.
 //
 // Two rules that layering alone does not say:
 //
