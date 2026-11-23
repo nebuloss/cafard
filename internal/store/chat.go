@@ -19,9 +19,15 @@ type Conversation struct {
 	Title     string
 	CreatedAt time.Time
 	ClosedAt  *time.Time
-	// Messages and LastAt are filled by Conversations, for listing.
-	Messages int
-	LastAt   *time.Time
+	// Filled by Conversations, for listing: how many messages, when the last
+	// one was sent, who sent it, the start of its text, how many files it
+	// has, and whether a file in the conversation is still arriving.
+	Messages   int
+	LastAt     *time.Time
+	LastAuthor string
+	LastText   string
+	LastFiles  int
+	Live       bool
 }
 
 // Message is text, files, or both, from one member.
@@ -112,7 +118,14 @@ func (s *Store) Conversation(ctx context.Context, id int64) (Conversation, error
 
 // Conversations lists a project's conversations, most recently active first.
 func (s *Store) Conversations(ctx context.Context, projectID int64) ([]Conversation, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+prefixed("c", conversationCols)+`, COUNT(m.id), MAX(m.created_at)
+	// The last message's author, text and files come from correlated
+	// subqueries on messages_by_conversation: a project lists tens of
+	// conversations, not thousands, and one query keeps the list one read.
+	rows, err := s.db.QueryContext(ctx, `SELECT `+prefixed("c", conversationCols)+`, COUNT(m.id), MAX(m.created_at),
+		(SELECT i.name FROM messages lm JOIN identities i ON i.id = lm.author_id WHERE lm.conversation_id = c.id ORDER BY lm.id DESC LIMIT 1),
+		(SELECT substr(lm.text, 1, 160) FROM messages lm WHERE lm.conversation_id = c.id ORDER BY lm.id DESC LIMIT 1),
+		(SELECT COUNT(*) FROM files f WHERE f.message_id = (SELECT MAX(lm.id) FROM messages lm WHERE lm.conversation_id = c.id)),
+		EXISTS (SELECT 1 FROM files f JOIN messages fm ON fm.id = f.message_id WHERE fm.conversation_id = c.id AND f.state = 'live')
 		FROM conversations c LEFT JOIN messages m ON m.conversation_id = c.id
 		WHERE c.project_id = ? GROUP BY c.id ORDER BY COALESCE(MAX(m.created_at), c.created_at) DESC, c.id DESC`, projectID)
 	if err != nil {
@@ -124,12 +137,15 @@ func (s *Store) Conversations(ctx context.Context, projectID int64) ([]Conversat
 		var c Conversation
 		var created int64
 		var closed, last sql.NullInt64
-		if err := rows.Scan(&c.ID, &c.ProjectID, &c.Name, &c.Title, &created, &closed, &c.Messages, &last); err != nil {
+		var author, text sql.NullString
+		if err := rows.Scan(&c.ID, &c.ProjectID, &c.Name, &c.Title, &created, &closed, &c.Messages, &last,
+			&author, &text, &c.LastFiles, &c.Live); err != nil {
 			return nil, err
 		}
 		c.CreatedAt = time.UnixMilli(created)
 		c.ClosedAt = fromMillis(closed)
 		c.LastAt = fromMillis(last)
+		c.LastAuthor, c.LastText = author.String, text.String
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -250,9 +266,29 @@ func (s *Store) File(ctx context.Context, id int64) (FileWhere, error) {
 // Messages returns up to limit messages of a conversation after the message
 // with id after (0 for the start), oldest first, with their authors and files.
 func (s *Store) Messages(ctx context.Context, conversationID, after int64, limit int) ([]Message, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.text, m.created_at, `+prefixed("i", identityCols)+`
+	return s.messages(ctx, `SELECT m.id, m.text, m.created_at, `+prefixed("i", identityCols)+`
 		FROM messages m JOIN identities i ON i.id = m.author_id
-		WHERE m.conversation_id = ? AND m.id > ? ORDER BY m.id LIMIT ?`, conversationID, after, limit)
+		WHERE m.conversation_id = ? AND m.id > ? ORDER BY m.id LIMIT ?`, conversationID, conversationID, after, limit)
+}
+
+// LatestMessages returns the last limit messages of a conversation, oldest
+// first: what a conversation opens on. Earlier ones come with Before.
+func (s *Store) LatestMessages(ctx context.Context, conversationID int64, limit int) ([]Message, error) {
+	return s.messages(ctx, `SELECT * FROM (SELECT m.id, m.text, m.created_at, `+prefixed("i", identityCols)+`
+		FROM messages m JOIN identities i ON i.id = m.author_id
+		WHERE m.conversation_id = ? ORDER BY m.id DESC LIMIT ?) ORDER BY 1`, conversationID, conversationID, limit)
+}
+
+// MessagesBefore returns up to limit messages before the message with id
+// before, oldest first: scrolling back through a long conversation.
+func (s *Store) MessagesBefore(ctx context.Context, conversationID, before int64, limit int) ([]Message, error) {
+	return s.messages(ctx, `SELECT * FROM (SELECT m.id, m.text, m.created_at, `+prefixed("i", identityCols)+`
+		FROM messages m JOIN identities i ON i.id = m.author_id
+		WHERE m.conversation_id = ? AND m.id < ? ORDER BY m.id DESC LIMIT ?) ORDER BY 1`, conversationID, conversationID, before, limit)
+}
+
+func (s *Store) messages(ctx context.Context, query string, conversationID int64, args ...any) ([]Message, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -281,12 +317,12 @@ func (s *Store) Messages(ctx context.Context, conversationID, after int64, limit
 	}
 
 	ids := make([]string, 0, len(out))
-	args := make([]any, 0, len(out))
+	fileArgs := make([]any, 0, len(out))
 	for _, m := range out {
 		ids = append(ids, "?")
-		args = append(args, m.ID)
+		fileArgs = append(fileArgs, m.ID)
 	}
-	frows, err := s.db.QueryContext(ctx, `SELECT `+fileCols+` FROM files WHERE message_id IN (`+strings.Join(ids, ", ")+`) ORDER BY id`, args...)
+	frows, err := s.db.QueryContext(ctx, `SELECT `+fileCols+` FROM files WHERE message_id IN (`+strings.Join(ids, ", ")+`) ORDER BY id`, fileArgs...)
 	if err != nil {
 		return nil, err
 	}

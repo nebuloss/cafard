@@ -265,13 +265,28 @@ type conversationJSON struct {
 	Unread   int        `json:"unread,omitempty"`
 	LastAt   *time.Time `json:"last_at,omitempty"`
 	Closed   bool       `json:"closed,omitempty"`
+	// Last is the latest message in short, for the list: who, the start of
+	// the text, how many files.
+	Last *lastJSON `json:"last,omitempty"`
+	// Live is a file in the conversation still arriving.
+	Live bool `json:"live,omitempty"`
+}
+
+type lastJSON struct {
+	Author string `json:"author"`
+	Text   string `json:"text,omitempty"`
+	Files  int    `json:"files,omitempty"`
 }
 
 func conversation(project string, c store.Conversation) conversationJSON {
-	j := conversationJSON{ID: c.ID, Address: project + "/" + c.Name, Name: c.Name, Title: c.Title, Messages: c.Messages, Closed: c.ClosedAt != nil}
+	j := conversationJSON{ID: c.ID, Address: project + "/" + c.Name, Name: c.Name, Title: c.Title, Messages: c.Messages,
+		Closed: c.ClosedAt != nil, Live: c.Live}
 	if c.LastAt != nil {
 		t := c.LastAt.UTC()
 		j.LastAt = &t
+	}
+	if c.LastAuthor != "" {
+		j.Last = &lastJSON{Author: c.LastAuthor, Text: c.LastText, Files: c.LastFiles}
 	}
 	return j
 }
@@ -388,9 +403,10 @@ func (a *API) conversations(w http.ResponseWriter, r *http.Request, who access.W
 func (a *API) messages(w http.ResponseWriter, r *http.Request, who access.Who) {
 	q := r.URL.Query()
 	after, _ := strconv.ParseInt(q.Get("after"), 10, 64)
+	before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	project, name := r.PathValue("project"), r.PathValue("conversation")
-	c, ms, err := a.chat.Messages(r.Context(), who, project, name, after, limit)
+	c, ms, err := a.chat.MessagesPage(r.Context(), who, project, name, chat.Page{After: after, Before: before, Limit: limit})
 	if err != nil {
 		a.fail(w, r, err)
 		return

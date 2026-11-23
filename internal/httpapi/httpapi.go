@@ -21,6 +21,7 @@ import (
 
 	"cafard/internal/httpapi/admin"
 	"cafard/internal/httpapi/api"
+	"cafard/internal/httpapi/httpx"
 	"cafard/internal/httpapi/join"
 	"cafard/internal/live"
 	"cafard/internal/service/access"
@@ -68,14 +69,11 @@ func publicMux(d Deps) http.Handler {
 	if d.Access != nil {
 		join.New(d.Log, d.Access, d.Admin.PublicURL).Register(mux)
 	}
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Write([]byte("cafard\n"))
-	})
+	// The chat app, at the root of the public listener. blob: images and
+	// media are the previews of photos chosen before they are sent; data:
+	// images are the QR code of "Sign in another phone".
+	mux.Handle("/", httpx.SPA(webui.Chat(), chatPolicy,
+		"cafard: this binary was built without its chat app. Build it with `make build`, which runs `make web` first.\nThe API is at /api/v1.\n"))
 	return secure(noAdmin(mux))
 }
 
@@ -96,6 +94,9 @@ func adminMux(d Deps) http.Handler {
 	}
 	return secure(mux)
 }
+
+const chatPolicy = "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; " +
+	"connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 
 // noAdmin answers 404 to every /admin path before any route sees it.
 //

@@ -325,6 +325,19 @@ const MaxPage = 200
 // Messages returns messages of a conversation after the one with id after,
 // oldest first.
 func (s *Service) Messages(ctx context.Context, who access.Who, project, conversation string, after int64, limit int) (store.Conversation, []store.Message, error) {
+	return s.MessagesPage(ctx, who, project, conversation, Page{After: after, Limit: limit})
+}
+
+// Page is which messages to read: after a message (new ones, for a page
+// that is open), before one (scrolling back), or else the latest, which is
+// what a conversation opens on.
+type Page struct {
+	After, Before int64
+	Limit         int
+}
+
+// MessagesPage reads a page of a conversation, oldest first.
+func (s *Service) MessagesPage(ctx context.Context, who access.Who, project, conversation string, pg Page) (store.Conversation, []store.Message, error) {
 	p, err := s.readable(ctx, who, project)
 	if err != nil {
 		return store.Conversation{}, nil, err
@@ -336,10 +349,19 @@ func (s *Service) Messages(ctx context.Context, who access.Who, project, convers
 	if err != nil {
 		return c, nil, err
 	}
+	limit := pg.Limit
 	if limit <= 0 || limit > MaxPage {
 		limit = MaxPage
 	}
-	ms, err := s.st.Messages(ctx, c.ID, after, limit)
+	var ms []store.Message
+	switch {
+	case pg.After > 0:
+		ms, err = s.st.Messages(ctx, c.ID, pg.After, limit)
+	case pg.Before > 0:
+		ms, err = s.st.MessagesBefore(ctx, c.ID, pg.Before, limit)
+	default:
+		ms, err = s.st.LatestMessages(ctx, c.ID, limit)
+	}
 	if err != nil {
 		return c, nil, err
 	}

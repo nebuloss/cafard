@@ -1,6 +1,13 @@
 import { Component } from './component';
 
-export type LayerStyle = 'right' | 'center';
+/**
+ * Where a layer's content sits: a drawer on the right, a dialog in the
+ * middle, a sheet over the whole screen, one rising from the bottom, or the
+ * dark full-screen image viewer.
+ */
+export type LayerStyle = 'right' | 'center' | 'full' | 'bottom' | 'lightbox';
+
+const DEFAULT_CLASS: Record<LayerStyle, string> = { right: 'drawer', center: 'modal', full: 'sheet', bottom: 'sheet', lightbox: 'lightbox' };
 
 /**
  * Layer is one level of things drawn over the page: a drawer, or a dialog.
@@ -23,15 +30,18 @@ export class Layer {
     return this.content !== null;
   }
 
-  /** Shows content in this layer, replacing what was there. */
-  open(content: Component, style: LayerStyle, onClose?: () => void): void {
+  /**
+   * Shows content in this layer, replacing what was there. className is the
+   * class its content gets, by default the one its style calls for.
+   */
+  open(content: Component, style: LayerStyle, onClose?: () => void, className?: string): void {
     this.closeQuietly();
     this.content = content;
     this.onClose = onClose ?? null;
     const scrim = document.createElement('div');
     scrim.className = `scrim ${style}`;
     scrim.dataset['scrim'] = '';
-    content.root.classList.add(style === 'right' ? 'drawer' : 'modal');
+    content.root.classList.add(className ?? DEFAULT_CLASS[style]);
     content.root.setAttribute('role', 'dialog');
     content.root.setAttribute('aria-modal', 'true');
     scrim.append(content.root);

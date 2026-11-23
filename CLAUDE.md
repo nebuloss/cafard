@@ -10,13 +10,14 @@ CGO; the UI is built into the binary with `go:embed`. It follows
 claudication's way of working (`~/misc/claudication`); when in doubt about a
 convention, do what claudication does.
 
-**Status: steps 1 to 3 of the build order are in, and step 4's back end** —
-the store, the files, the access rules, `cafard serve` with both listeners,
-`/api/v1` behind agent and device tokens and people's chat sign-in (send
-with `curl`, live logs included; read by page; conversations started from
-their first message; members, reads, file deletion, the profile), live
-notices through `internal/live` and `/api/v1/events`, `cafard admin` on the
-box, and the admin UI. The chat app itself (step 4c) is next.
+**Status: steps 1 to 4 of the build order are in** — the store, the files,
+the access rules, `cafard serve` with both listeners, `/api/v1` behind agent
+and device tokens and people's chat sign-in (send with `curl`, live logs
+included; read by page; conversations started from their first message;
+members, reads, file deletion, the profile), live notices through
+`internal/live` and `/api/v1/events`, `cafard admin` on the box, the admin
+UI, and the chat app at the public listener's root. Step 5, the MCP server,
+is next.
 [`docs/design.md`](docs/design.md)
 is the design: the model, the access rules, the surfaces, the MCP tools, the
 order to build in, and what is left for later. As code lands, each section
@@ -98,8 +99,10 @@ topic, and a tab's one event stream tells its panels to read again. MCP's
     make test-norace  # the same without cgo
 
 Git holds `internal/webui/dist` empty; a bare `go build` serves the APIs and
-says the UI is missing. For UI work, `cd web && npm run dev:admin` runs Vite
-proxying `/admin/api` to a local `cafard serve`.
+says the UI is missing. For UI work, `cd web && npm run dev:admin` (or
+`dev:chat`) runs Vite proxying the API to a local `cafard serve`. Neither
+UI has a page test runner; a change to one is checked in a browser against
+a deployed box (headless Chromium on dev-build works).
 
 One test: `go test ./internal/service/access -run TestName -race -count=1`.
 
@@ -131,8 +134,7 @@ a live server is a script under `scripts/`, run by hand, and says so.
   Commits are authored by the repository owner and carry no co-author or
   generated-by trailers.
 - **The web UIs are TypeScript, written as classes** (the owner's rule):
-  `web/src/admin` and, from step 4c, `web/src/chat`, sharing
-  `web/src/shared`. No framework. A piece of page is a `Component` subclass
+  `web/src/admin` and `web/src/chat`, sharing `web/src/shared`. No framework. A piece of page is a `Component` subclass
   that owns one element, returns its markup from `view()`, and declares its
   behaviour in `this.actions`, keyed by `data-act`. Logic that needs no page
   lives in its own class (`PickerState`, `Time`) with a test under

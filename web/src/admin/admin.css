@@ -1,3 +1,8 @@
+/* The hidden attribute always hides, whatever display a class gives the
+   element: the mockups relied on the artifact page's own reset for this, and
+   without it the drop zone covered the conversation. */
+[hidden] { display: none !important; }
+
 /* Layout: an operator's console. Desktop = nav rail + one wide list; a drawer
    slides in from the right for one member or project; creation is a modal that
    ends on the link-and-QR screen. Phone = nav becomes a scrolling tab strip.

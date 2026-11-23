@@ -5,7 +5,8 @@
   "description": "cafard's web UIs, the admin UI and the chat app: TypeScript classes, compiled into the static Go binary that serves them.",
   "type": "module",
   "scripts": {
-    "build": "vite build --mode admin",
+    "build": "vite build --mode admin && vite build --mode chat",
+    "dev:chat": "vite --mode chat",
     "dev:admin": "vite --mode admin",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"

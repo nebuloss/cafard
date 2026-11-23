@@ -43,6 +43,26 @@ export class ApiClient {
     return data as T;
   }
 
+  /**
+   * send is a request whose body is not JSON: text, or a file, as `curl -T`
+   * sends one. The answer is JSON like any other.
+   */
+  async send<T>(method: string, path: string, body: BodyInit, contentType?: string): Promise<T> {
+    const init: RequestInit = { method, credentials: 'same-origin', body, headers: contentType ? { 'Content-Type': contentType } : {} };
+    const resp = await fetch(this.base + path, init);
+    let data: Record<string, unknown> = {};
+    try {
+      data = (await resp.json()) as Record<string, unknown>;
+    } catch {
+      /* no body */
+    }
+    if (!resp.ok) {
+      if (resp.status === 401) this.onSignedOut();
+      throw new Refused(resp.status, String(data['error'] ?? 'error'), String(data['message'] ?? 'cafard could not do that.'));
+    }
+    return data as T;
+  }
+
   get<T>(path: string): Promise<T> {
     return this.request<T>('GET', path);
   }
