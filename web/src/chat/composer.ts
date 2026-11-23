@@ -79,8 +79,7 @@ export class Composer extends Component {
         <label class="icon-btn" title="Attach files" aria-label="Attach files"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9"/></svg><input type="file" multiple hidden></label>
         <textarea rows="1" placeholder="${this.opts.placeholder}" aria-label="Message"></textarea>
         <button class="send" type="button" data-act="send" aria-label="Send" disabled><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/></svg></button>
-      </form>
-      <div class="hint">Enter sends, Shift+Enter adds a line. Paste a screenshot, drop a log, type @ to call someone.</div>`;
+      </form>`;
   }
 
   protected override afterRender(): void {

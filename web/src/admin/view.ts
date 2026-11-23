@@ -4,10 +4,18 @@ import { Html, html } from '@shared/html';
 import type { AdminApp } from './app';
 import type { AdminStore } from './store';
 
-/** A page of the admin UI, drawn from the store. */
+/**
+ * A page of the admin UI, drawn from the store. A page has no title of its
+ * own: the trail in the top bar names it. What it shows is in cards, each
+ * with its title and its actions on one line, as claudication's are.
+ */
 export abstract class View extends Component {
   constructor(protected readonly app: AdminApp) {
     super('div', 'page');
+  }
+
+  protected get store(): AdminStore {
+    return this.app.store;
   }
 
   /** What to review: machines unused for a month, links that expired unused. */
@@ -19,11 +27,8 @@ export abstract class View extends Component {
     ];
   }
 
-  protected get store(): AdminStore {
-    return this.app.store;
-  }
-
-  protected head(title: string, text: string | Html, button?: Html): Html {
-    return html`<div class="page-head"><div class="t"><h1>${title}</h1><p>${text}</p></div>${button ?? ''}</div>`;
+  /** A card: its title and actions on one line, then its body. */
+  protected card(title: string | Html, body: Html, aside?: Html, extra = ''): Html {
+    return html`<section class="card ${extra}"><div class="card-h"><h2>${title}</h2>${aside ? html`<div class="aside">${aside}</div>` : ''}</div>${body}</section>`;
   }
 }

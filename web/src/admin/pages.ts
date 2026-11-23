@@ -111,7 +111,9 @@ export class MemberPage extends ItemPage {
         body = this.advancedSections(m);
         break;
       default:
-        body = this.overviewSections(m);
+        // The overview shows every part of the member at once; the pages
+        // beside it are each part on its own, for a link to land on.
+        body = [...this.overviewSections(m), this.projectsSection(m), this.accessSection(m)];
     }
     return html`${head}<div class="secs">${body}</div>`;
   }
@@ -120,36 +122,31 @@ export class MemberPage extends ItemPage {
     const out: Html[] = [];
     if (m.kind !== 'device' && !m.joined) out.push(this.linkSection(m));
     if (m.kind !== 'person') {
-      out.push(html`<div class="sec"><h3>${m.kind === 'agent' ? 'What this machine can do' : 'Note'}</h3><div class="field"><textarea class="input" id="desc" aria-label="Description">${m.description ?? ''}</textarea>${m.kind === 'agent' ? html`<span class="help">Agents read this, so they know whom to ask: "serial console of the be98 test unit; can flash it".</span>` : ''}</div><div class="row"><button class="btn tonal sm" data-act="save-desc">Save</button></div></div>`);
+      out.push(html`<div class="sec"><h3>${m.kind === 'agent' ? 'What it can do' : 'Note'}</h3><div class="field"><textarea class="input" id="desc" aria-label="Description" placeholder="${m.kind === 'agent' ? 'What this machine can do: serial console of the be98 unit; can flash it' : ''}">${m.description ?? ''}</textarea></div><div class="row"><button class="btn tonal sm" data-act="save-desc">Save</button></div></div>`);
     }
-    const base = pathOf('members', m.name);
-    const projects = m.projects.length ? m.projects.map((p) => html`<a class="chip" href="${pathOf('projects', p)}">${p}</a>`) : html`<span class="help">In no project: it can reach nothing.</span>`;
-    out.push(html`<div class="sec"><h3>At a glance</h3><dl class="kv">
-      <dt>Projects</dt><dd><div class="chips">${projects}</div></dd>
+    out.push(html`<div class="sec"><h3>Summary</h3><dl class="kv">
       <dt>${m.kind === 'person' ? 'Signed in' : 'Last used'}</dt><dd>${m.joined || m.kind === 'device' ? html`${time.ago(m.last_used)} <span class="mono">${m.last_from ?? ''}</span>` : 'Not joined yet'}</dd>
-      <dt>State</dt><dd>${m.enabled ? 'Working' : 'Paused'}</dd></dl>
-      <div class="row"><a class="btn tonal sm" href="${base}/projects">Projects</a><a class="btn tonal sm" href="${base}/access">${m.kind === 'person' ? 'Sign-ins' : 'Token'}</a></div></div>`);
+      <dt>State</dt><dd>${m.enabled ? 'Working' : 'Paused'}</dd></dl></div>`);
     return out;
   }
 
   private projectsSection(m: Member): Html {
     const chips = m.projects.map((p) => html`<span class="chip"><a href="${pathOf('projects', p)}">${p}</a><button data-act="rm-proj" data-p="${p}" aria-label="Remove from ${p}">${Icon.of('close')}</button></span>`);
-    return html`<div class="sec"><h3>Projects</h3><p class="help">${m.kind === 'device' ? 'It sends to these projects, and reads nothing.' : 'It sees every conversation in these projects.'}</p><div class="chips">${chips.length ? chips : html`<span class="help">In no project: it can reach nothing.</span>`}</div><div class="row"><button class="btn tonal sm" data-act="manage-projects">Add or remove projects</button></div></div>`;
+    return html`<div class="sec"><h3>Projects</h3><div class="chips">${chips.length ? chips : html`<span class="help">In no project: it can reach nothing.</span>`}</div><div class="row"><button class="btn tonal sm" data-act="manage-projects">Add or remove projects</button></div></div>`;
   }
 
   private accessSection(m: Member): Html {
     if (m.kind === 'person') {
       if (!m.joined) return this.linkSection(m);
-      return html`<div class="sec"><h3>Sign-ins</h3><div class="signins">${this.signinRows()}</div><div class="row"><button class="btn tonal sm" data-act="relink">New password link</button></div><span class="help">The link sets a new password and ends every sign-in. You never see the password.</span></div>`;
+      return html`<div class="sec"><h3>Sign-ins</h3><div class="signins">${this.signinRows()}</div><div class="row"><button class="btn tonal sm" data-act="relink" title="Sets a new password and ends every sign-in">New password link</button></div></div>`;
     }
     return html`<div class="sec"><h3>Token</h3><dl class="kv"><dt>Last used</dt><dd>${m.joined ? time.ago(m.last_used) : 'never'}</dd><dt>From</dt><dd class="mono">${m.last_from || '-'}</dd></dl>
-      <div class="row">${m.kind === 'agent' ? html`<button class="btn tonal sm" data-act="relink">New install link</button>` : html`<button class="btn tonal sm" data-act="regen">Regenerate token</button>`}</div>
-      <span class="help">${m.kind === 'agent' ? "Running the new link on the machine replaces the token; the old one stops working then. An agent's token is never shown." : 'The current token stops working at once.'}</span></div>`;
+      <div class="row">${m.kind === 'agent' ? html`<button class="btn tonal sm" data-act="relink" title="Run on the machine, it replaces the token">New install link</button>` : html`<button class="btn tonal sm" data-act="regen" title="The current token stops working at once">Regenerate token</button>`}</div></div>`;
   }
 
   private advancedSections(m: Member): Html[] {
     return [
-      html`<div class="sec"><h3>Pause</h3><div class="line"><div class="m"><b>Paused</b><span>Stops working until switched back. Nothing is lost.</span></div>${Switch.of(!m.enabled, 'pause', m.name, 'Paused')}</div></div>`,
+      html`<div class="sec"><h3>Pause</h3><div class="line"><div class="m"><b>Paused</b><span>Nothing is lost.</span></div>${Switch.of(!m.enabled, 'pause', m.name, 'Paused')}</div></div>`,
       html`<div class="sec"><h3>Remove</h3>${this.confirming
         ? html`<div class="confirm"><p><b>Remove ${m.name} from cafard?</b></p><ul>
             <li>${m.kind === 'person' ? 'Every sign-in ends now.' : 'Its token stops working on the next request.'}</li>
@@ -241,20 +238,18 @@ export class ProjectPage extends ItemPage {
         body = this.advancedSections(p);
         break;
       default:
-        body = this.overviewSections(p);
+        body = [...this.overviewSections(p), this.filesSection(p)];
     }
     return html`${head}<div class="secs">${body}</div>`;
   }
 
   private overviewSections(p: Project): Html[] {
-    const base = pathOf('projects', p.name);
     return [
-      html`<div class="sec"><h3>At a glance</h3><dl class="kv">
+      html`<div class="sec"><h3>Summary</h3><dl class="kv">
         <dt>Conversations</dt><dd>${p.conversations}</dd>
         <dt>Files</dt><dd>${p.files}, ${Bytes.format(p.bytes)} of ${Bytes.format(p.quota_bytes)}</dd>
         <dt>Retention</dt><dd>${p.retention_days} days</dd>
-        <dt>State</dt><dd>${p.archived ? 'Archived: readable, nothing can be posted' : 'Open'}</dd></dl>
-        <div class="row"><a class="btn tonal sm" href="${base}/members">Members</a><a class="btn tonal sm" href="${base}/files">Files</a></div></div>`,
+        <dt>State</dt><dd>${p.archived ? 'Archived, read-only' : 'Open'}</dd></dl></div>`,
       this.membersSection(p, 6),
     ];
   }
@@ -264,7 +259,7 @@ export class ProjectPage extends ItemPage {
     const rows = p.members.slice(0, shown).map((m) => html`<a class="line" href="${pathOf('members', m.name)}">${Avatar.of(m, 'sm')}<div class="m"><b>${m.display_name || m.name}</b><span>${m.kind === 'person' ? 'Person' : m.kind === 'agent' ? 'Agent · reads and writes' : 'Device · sends only'}</span></div><span class="chev">${Icon.of('chev')}</span></a>`);
     return html`<div class="sec"><h3>Members · ${count('person')} people, ${count('agent')} agents, ${count('device')} devices</h3>${rows.length ? rows : html`<span class="help">Nobody yet.</span>`}
       ${p.members.length > shown ? html`<a class="more-line" href="${pathOf('projects', p.name, 'members')}">and ${p.members.length - shown} more</a>` : ''}
-      ${p.archived ? html`<span class="help">Archived: members cannot change until it is unarchived.</span>` : html`<div class="row"><button class="btn tonal sm" data-act="manage-members">Add or remove members</button></div>`}</div>`;
+      ${p.archived ? '' : html`<div class="row"><button class="btn tonal sm" data-act="manage-members">Add or remove members</button></div>`}</div>`;
   }
 
   private filesSection(p: Project): Html {
@@ -274,13 +269,13 @@ export class ProjectPage extends ItemPage {
     const quotas = [1, 2, 5, 10, 20, 50].map((g) => g * 2 ** 30);
     if (!quotas.includes(p.quota_bytes)) quotas.push(p.quota_bytes);
     return html`<div class="sec"><h3>Files</h3>${Meter.of(p)}
-      <div class="field"><label for="pRet">Retention</label><select class="input" id="pRet">${days.sort((a, b) => a - b).map((d) => option(d, `${d} days`, p.retention_days))}</select><span class="help">Files older than this expire; messages stay.</span></div>
+      <div class="field"><label for="pRet">Retention</label><select class="input" id="pRet">${days.sort((a, b) => a - b).map((d) => option(d, `${d} days`, p.retention_days))}</select></div>
       <div class="field"><label for="pQuota">Quota</label><select class="input" id="pQuota">${quotas.sort((a, b) => a - b).map((b) => option(b, Bytes.format(b), p.quota_bytes))}</select></div></div>`;
   }
 
   private advancedSections(p: Project): Html[] {
     return [
-      html`<div class="sec"><h3>${p.archived ? 'Archived' : 'Archive'}</h3><p class="help">${p.archived ? 'Everything is readable and nothing can be posted.' : 'Keeps everything readable and stops all posting. You can undo it.'}</p><div class="row"><button class="btn tonal sm" data-act="archive">${p.archived ? 'Unarchive' : 'Archive project'}</button></div></div>`,
+      html`<div class="sec"><h3>${p.archived ? 'Archived' : 'Archive'}</h3><p class="dim">${p.archived ? 'Readable; nothing can be posted.' : 'Readable; stops all posting. Can be undone.'}</p><div class="row"><button class="btn tonal sm" data-act="archive">${p.archived ? 'Unarchive' : 'Archive project'}</button></div></div>`,
       html`<div class="sec"><h3>Delete</h3>${this.confirming
         ? html`<div class="confirm"><p><b>This cannot be undone.</b> Deleting ${p.name} removes, for every member:</p><ul><li>${p.conversations} conversations and their messages</li><li>${p.files} files, ${Bytes.format(p.bytes)}</li><li>${p.members.length} memberships</li></ul>
             <div class="field"><label for="pName">Type <b>${p.name}</b> to confirm</label><input class="input" id="pName" autocomplete="off"></div>

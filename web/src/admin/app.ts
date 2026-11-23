@@ -177,12 +177,11 @@ class Shell extends Component {
       const last = i === trail.length - 1;
       return html`${i > 0 ? html`<span class="sep">${Icon.of('chev')}</span>` : ''}<a href="${c.href}" ${Html.raw(last ? 'aria-current="page"' : '')} ${Html.raw(i === 0 ? 'aria-label="Overview"' : '')}>${i === 0 ? Icon.of('home') : html`${c.icon ? Icon.of(c.icon) : ''}<span>${c.label}</span>`}</a>`;
     });
-    return html`<header class="top"><a class="brand" href="/">${Icon.logo} cafard <small>admin</small></a>
-      <span class="where" title="This UI is served only on admin-listen">${Icon.of('lock')}Internal network only</span>
-      <span class="grow"></span>
-      <span class="me"><span>admin</span><button data-act="signout">Sign out</button></span></header>
+    return html`<header class="top"><a class="brand" href="/" title="cafard admin">${Icon.logo}<span>cafard</span></a>
+      <nav class="trail" aria-label="Breadcrumb">${crumbs}</nav>
+      <button class="btn text sm" data-act="signout">Sign out</button></header>
       <div class="body"><nav class="rail" aria-label="${level.back ? 'Pages' : 'Sections'}">${rail}</nav>
-      <main class="main"><nav class="trail" aria-label="Breadcrumb">${crumbs}</nav><div class="page"></div></main></div>`;
+      <main class="main"><div class="page"></div></main></div>`;
   }
 
   protected override afterRender(): void {
