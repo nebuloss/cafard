@@ -43,6 +43,26 @@ func TestServeRefusesAnOverlappingAdminListener(t *testing.T) {
 	}
 }
 
+func TestConfigPrintsWhatIsInEffect(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	os.WriteFile(p, []byte("listen: 0.0.0.0:8790\nadmin-listen: 0.0.0.0:8791\n"), 0o600)
+	var out, errOut bytes.Buffer
+	if code := run([]string{"config", "-config", p}, &out, &errOut); code != 0 {
+		t.Fatalf("config: %d %q", code, errOut.String())
+	}
+	for _, want := range []string{"listen: 0.0.0.0:8790", "admin-listen: 0.0.0.0:8791", "state-dir: /var/lib/cafard", "level: info"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("config output lacks %q:\n%s", want, out.String())
+		}
+	}
+
+	os.WriteFile(p, []byte("listen: 0.0.0.0:8790\nadmin-listen: 0.0.0.0:8790\n"), 0o600)
+	errOut.Reset()
+	if code := run([]string{"config", "-config", p}, io.Discard, &errOut); code != 1 || !strings.Contains(errOut.String(), "overlap") {
+		t.Errorf("config with overlapping listeners: %d %q", code, errOut.String())
+	}
+}
+
 // The whole server, on two ephemeral ports: the state directory is created
 // private, both listeners answer, the public one refuses /admin, and
 // cancelling stops both.

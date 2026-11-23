@@ -1,7 +1,8 @@
 // Command cafard is the server, and the commands that look after it.
 //
-//	cafard serve [-config FILE]   run both listeners
-//	cafard version                print the build
+//	cafard serve [-config FILE]    run both listeners
+//	cafard config [-config FILE]   check the configuration, print it in full
+//	cafard version                 print the build
 package main
 
 import (
@@ -26,6 +27,8 @@ import (
 	"cafard/internal/service/access"
 	"cafard/internal/store"
 	"cafard/internal/version"
+
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -35,8 +38,9 @@ func main() {
 const usage = `cafard: a message hub for people and agents on different machines.
 
 Usage:
-  cafard serve [-config FILE]   run the public and the admin listener
-  cafard version                print the build
+  cafard serve [-config FILE]    run the public and the admin listener
+  cafard config [-config FILE]   check the configuration, print it in full
+  cafard version                 print the build
 
 The configuration is described in configs/config.example.yaml.
 `
@@ -49,6 +53,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "serve":
 		return serve(args[1:], stderr)
+	case "config":
+		return showConfig(args[1:], stdout, stderr)
 	case "version", "-version", "--version":
 		fmt.Fprintln(stdout, "cafard", version.String())
 		return 0
@@ -65,12 +71,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 // service started by the installer needs no flag.
 const defaultConfig = "/etc/cafard/config.yaml"
 
-func serve(args []string, stderr io.Writer) int {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+// loadConfig parses -config for a subcommand and loads the file it names.
+// code is the exit code to return when ok is false.
+func loadConfig(name string, args []string, stderr io.Writer) (cfg config.Config, code int, ok bool) {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	path := fs.String("config", "", "configuration file (default "+defaultConfig+" if it exists)")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return config.Config{}, 2, false
 	}
 	if *path == "" {
 		if _, err := os.Stat(defaultConfig); err == nil {
@@ -80,7 +88,33 @@ func serve(args []string, stderr io.Writer) int {
 	cfg, err := config.Load(*path)
 	if err != nil {
 		fmt.Fprintln(stderr, "cafard:", err)
+		return config.Config{}, 1, false
+	}
+	return cfg, 0, true
+}
+
+// showConfig prints the configuration in effect, defaults filled in, or why
+// it cannot be used. The init scripts run it before starting the service, so
+// a mistake is reported where the person starting it looks, rather than as a
+// service that died.
+func showConfig(args []string, stdout, stderr io.Writer) int {
+	cfg, code, ok := loadConfig("config", args, stderr)
+	if !ok {
+		return code
+	}
+	out, err := yaml.Marshal(cfg)
+	if err != nil {
+		fmt.Fprintln(stderr, "cafard:", err)
 		return 1
+	}
+	stdout.Write(out)
+	return 0
+}
+
+func serve(args []string, stderr io.Writer) int {
+	cfg, code, ok := loadConfig("serve", args, stderr)
+	if !ok {
+		return code
 	}
 	log := logging.New(cfg.Log.Level, cfg.Log.Format)
 
