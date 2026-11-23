@@ -1,4 +1,4 @@
-import { Component } from '@shared/component';
+import { Component, mayAutofocus } from '@shared/component';
 import { Bytes } from '@shared/format';
 import { Html, html } from '@shared/html';
 import { Icon } from '@shared/icons';
@@ -17,6 +17,14 @@ class Staged {
     if (this.preview) URL.revokeObjectURL(this.preview);
   }
 }
+
+/**
+ * What "File or log" offers: text and documents and archives, by type and by
+ * the extensions logs and configurations carry. No image, video or audio
+ * type, so a phone opens its files rather than offering a camera or a
+ * recorder.
+ */
+const FILE_TYPES = 'text/*,application/*,.log,.txt,.csv,.json,.yaml,.yml,.toml,.ini,.conf,.cfg,.md,.xml,.dts,.dtb,.hex,.bin,.pdf,.zip,.gz,.tgz,.tar,.xz,.bz2,.zst,.7z,.pcap,.pcapng';
 
 export interface ComposerOptions {
   /** Sends; the composer clears when it resolves, and keeps its text when it throws. */
@@ -50,7 +58,20 @@ export class Composer extends Component {
       },
       mention: (t) => this.insertMention(t.dataset['v'] ?? ''),
       send: () => this.submit(),
+      // The attach button asks what is attached, so the browser is told: a
+      // phone given a file input that takes anything offers the camera and
+      // the microphone too, and asks for their permissions.
+      'attach-menu': () => this.toggleAttach(),
+      'attach-media': () => this.pick('media'),
+      'attach-file': () => this.pick('file'),
     };
+    // pointerdown rather than click: a tap elsewhere is a touch that a
+    // browser does not always turn into a click.
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.root.isConnected) return;
+      const t = e.target as Element | null;
+      if (!t?.closest('.attach-menu, [data-act="attach-menu"]')) this.toggleAttach(false);
+    });
     this.root.addEventListener('change', (e) => {
       const t = e.target as HTMLInputElement;
       if (t.type === 'file' && t.files) {
@@ -76,9 +97,14 @@ export class Composer extends Component {
   }
 
   protected view(): Html {
-    return html`<div class="mentions absolute bottom-[calc(100%-4px)] left-[60px] z-[5] max-w-[calc(100%-80px)] min-w-60 rounded-xl border border-outline-variant bg-surface-lowest p-1 shadow-[0_8px_24px_rgba(0,0,0,.18)]" hidden></div><div class="staged flex gap-2 overflow-x-auto pb-2 empty:hidden"></div>
+    return html`<div class="attach-menu absolute bottom-[calc(100%-4px)] left-2 z-[5] min-w-52 rounded-xl border border-outline-variant bg-surface-lowest p-1 shadow-[0_8px_24px_rgba(0,0,0,.18)] min-[840px]:left-4" role="menu" hidden>
+        <button type="button" class="state-layer flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm" role="menuitem" data-act="attach-media"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>Photo or video</button>
+        <button type="button" class="state-layer flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm" role="menuitem" data-act="attach-file"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>File or log</button></div>
+      <div class="mentions absolute bottom-[calc(100%-4px)] left-[60px] z-[5] max-w-[calc(100%-80px)] min-w-60 rounded-xl border border-outline-variant bg-surface-lowest p-1 shadow-[0_8px_24px_rgba(0,0,0,.18)]" hidden></div><div class="staged flex gap-2 overflow-x-auto pb-2 empty:hidden"></div>
       <form class="flex items-end gap-1.5" novalidate>
-        <label class="${ui.iconBtn} cursor-pointer" title="Attach files" aria-label="Attach files"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9"/></svg><input type="file" multiple hidden></label>
+        <button type="button" class="${ui.iconBtn}" data-act="attach-menu" title="Attach" aria-label="Attach" aria-haspopup="menu" aria-expanded="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9"/></svg></button>
+        <input class="pick-media" type="file" multiple accept="image/*,video/*" hidden>
+        <input class="pick-file" type="file" multiple accept="${FILE_TYPES}" hidden>
         <textarea class="max-h-[140px] min-h-[42px] min-w-0 flex-1 resize-none rounded-[21px] border border-outline-variant bg-surface-lowest px-3.5 py-2.5 leading-[1.4] outline-none focus:border-primary" rows="1" placeholder="${this.opts.placeholder}" aria-label="Message"></textarea>
         <button class="send grid size-[42px] shrink-0 place-items-center rounded-full bg-primary text-on-primary disabled:cursor-default disabled:opacity-40" type="button" data-act="send" aria-label="Send" disabled><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/></svg></button>
       </form>`;
@@ -92,8 +118,24 @@ export class Composer extends Component {
     return this.$<HTMLTextAreaElement>('textarea');
   }
 
+  /** Puts focus in the message, unless on a touch screen (mayAutofocus). */
   focus(): void {
-    this.find<HTMLTextAreaElement>('textarea')?.focus();
+    if (mayAutofocus()) this.find<HTMLTextAreaElement>('textarea')?.focus();
+  }
+
+  private toggleAttach(open?: boolean): void {
+    const menu = this.find('.attach-menu');
+    const btn = this.find('[data-act="attach-menu"]');
+    if (!menu || !btn) return;
+    const show = open ?? menu.hidden;
+    menu.hidden = !show;
+    btn.setAttribute('aria-expanded', String(show));
+  }
+
+  /** Opens the browser's chooser for one kind of file: in the click, as browsers require. */
+  private pick(kind: 'media' | 'file'): void {
+    this.toggleAttach(false);
+    this.find<HTMLInputElement>(kind === 'media' ? '.pick-media' : '.pick-file')?.click();
   }
 
   /** Adds files to send with the next message. */

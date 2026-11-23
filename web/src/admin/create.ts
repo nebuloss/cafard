@@ -1,4 +1,4 @@
-import { Component } from '@shared/component';
+import { Component, mayAutofocus } from '@shared/component';
 import { time } from '@shared/format';
 import { Html, html } from '@shared/html';
 import { Icon } from '@shared/icons';
@@ -98,7 +98,7 @@ export class CreateMemberFlow extends Component {
       slot.replaceWith(this.picker.root);
       this.picker.render();
     }
-    this.find<HTMLInputElement>('#nDisplay, #nName')?.focus();
+    if (mayAutofocus()) this.find<HTMLInputElement>('#nDisplay, #nName')?.focus();
   }
 
   private value(id: string): string | undefined {
@@ -251,7 +251,7 @@ export class CreateProjectFlow extends Component {
   protected override afterRender(): void {
     this.$('.pk-slot').replaceWith(this.picker.root);
     this.picker.render();
-    this.find<HTMLInputElement>('#npName')?.focus();
+    if (mayAutofocus()) this.find<HTMLInputElement>('#npName')?.focus();
   }
 
   private async create(): Promise<void> {

@@ -1,4 +1,4 @@
-import { Component } from './component';
+import { Component, mayAutofocus } from './component';
 import { Html, html } from './html';
 import { Icon } from './icons';
 import { ui } from './ui';
@@ -149,7 +149,7 @@ export class PickerView extends Component {
   }
 
   focus(): void {
-    this.find<HTMLInputElement>('.pk-q')?.focus();
+    if (mayAutofocus()) this.find<HTMLInputElement>('.pk-q')?.focus();
   }
 
   /** Draws the list and the summary only, so the search keeps its focus. */

@@ -1,4 +1,4 @@
-import { Component } from '@shared/component';
+import { Component, mayAutofocus } from '@shared/component';
 import { Bytes, time } from '@shared/format';
 import { Html, html } from '@shared/html';
 import { Icon } from '@shared/icons';
@@ -201,7 +201,7 @@ export class SignInView extends Component {
   }
 
   focus(): void {
-    this.find<HTMLInputElement>('#p')?.focus();
+    if (mayAutofocus()) this.find<HTMLInputElement>('#p')?.focus();
   }
 
   private async submit(): Promise<void> {

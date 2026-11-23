@@ -18,6 +18,17 @@ export type Action = (target: HTMLElement, event: Event) => void | Promise<void>
  * a dialog inside a page handles its own buttons and the page never sees
  * them.
  */
+/**
+ * Whether the page may put focus in a field by itself, when it opens
+ * something. Not on a touch screen: there focus in a text field opens the
+ * keyboard over half the screen, unasked; the field takes focus when it is
+ * tapped. A mouse and a keyboard are what a pointer that is fine and can
+ * hover say.
+ */
+export function mayAutofocus(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
+
 export abstract class Component {
   readonly root: HTMLElement;
   protected actions: Record<string, Action> = {};
