@@ -1,12 +1,12 @@
-// Package install writes the setup scripts an agent's join link serves:
-// every MCP client on a machine pointed at cafard, by one pasted command.
+// Package install writes the setup scripts an agent's join link serves: an
+// MCP client on a machine pointed at cafard, by one pasted command.
 //
 // What goes where is decided elsewhere (internal/httpapi/join, which knows
 // the clients); this turns it into a script for one shell, the query of the
-// link saying which:
+// link saying which, and for which client:
 //
-//	curl -fsSL 'https://cafard.example/join/<code>?shell=sh' | sh
-//	irm 'https://cafard.example/join/<code>?shell=ps1' | iex
+//	curl -fsSL 'https://cafard.example/join/<code>?shell=sh&client=codex' | sh
+//	irm 'https://cafard.example/join/<code>?shell=ps1&client=codex' | iex
 //
 // Ported from claudication's internal/service/install, without what serves
 // its links from memory or updates a client already set up: a join link is
@@ -178,13 +178,9 @@ type Bundle struct {
 // Command is the line that runs a join link's script: curl into sh on Linux
 // and macOS, irm into iex on Windows.
 //
-// clients, if any, are the clients the script sets up, by id; none is every
-// client the machine has.
-func Command(link string, windows bool, clients ...string) string {
-	q := ""
-	if len(clients) > 0 {
-		q = "&clients=" + strings.Join(clients, ",")
-	}
+// client is the id of the MCP client the script sets up.
+func Command(link string, windows bool, client string) string {
+	q := "&client=" + client
 	if windows {
 		return "irm '" + link + "?shell=ps1" + q + "' | iex"
 	}

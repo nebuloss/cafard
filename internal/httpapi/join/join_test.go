@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"cafard/internal/install"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
 	"cafard/internal/testenv"
@@ -125,7 +126,8 @@ func TestAgentLinkInABrowserShowsTheCommands(t *testing.T) {
 			t.Fatalf("page: %d %v", code, h)
 		}
 		for _, want := range []string{"Set up dev-code", "Linux / macOS", "Windows (PowerShell)",
-			"curl -fsSL &#39;" + pub + "?shell=sh&#39; | sh", "irm &#39;" + pub + "?shell=ps1&#39; | iex"} {
+			"curl -fsSL &#39;" + pub + "?shell=sh&amp;client=claude-code&#39; | sh", "irm &#39;" + pub + "?shell=ps1&amp;client=claude-code&#39; | iex",
+			`<a href="?client=claude-code" aria-current="true">Claude Code</a>`, `<a href="?client=opencode">opencode</a>`} {
 			if !strings.Contains(body, want) {
 				t.Errorf("page lacks %q:\n%s", want, body)
 			}
@@ -133,6 +135,11 @@ func TestAgentLinkInABrowserShowsTheCommands(t *testing.T) {
 		if tokenRE.MatchString(body) {
 			t.Error("the page carries a token")
 		}
+	}
+	// Another client is a link to the same page.
+	if _, body, _ := get(t, u+"?client=crush", "Mozilla/5.0 (iPhone)"); !strings.Contains(body, "?shell=sh&amp;client=crush&#39;") ||
+		!strings.Contains(body, `<a href="?client=crush" aria-current="true">crush</a>`) {
+		t.Errorf("crush chosen:\n%s", body)
 	}
 	if code, body, _ := get(t, u+"?shell=sh", "curl/8.5.0"); code != 200 || !tokenRE.MatchString(body) {
 		t.Errorf("after the page, the link no longer worked: %d\n%s", code, body)
@@ -159,7 +166,7 @@ func TestAgentLinkInAShellIsTheScript(t *testing.T) {
 		if who, err := r.acc.Authenticate(ctx, tok, "x"); err != nil || who.Name != "dev-code" {
 			t.Errorf("%s: the script's token: %v", c.ua, err)
 		}
-		for _, want := range []string{"the agent 'dev-code'", ".config/cafard/token", "codex", "crush", "opencode",
+		for _, want := range []string{"the agent 'dev-code'", ".config/cafard/token",
 			"'mcp' 'add' '--scope' 'user' '--transport' 'http' 'cafard' 'https://cafard.example/mcp' '--header' 'Authorization: Bearer " + tok + "'"} {
 			if strings.HasPrefix(c.first, "#!") && !strings.Contains(body, want) {
 				t.Errorf("%s: script lacks %q:\n%s", c.ua, want, body)
@@ -221,9 +228,13 @@ func TestAgentScriptRuns(t *testing.T) {
 // What each client is given: cafard's entry alone, in the shape its docs
 // and claudication's measurements say.
 func TestAgentBundle(t *testing.T) {
-	b := agentBundle("https://c", "dev-code", "cfd_ag_x")
-	if err := b.Validate(); err != nil {
-		t.Fatal(err)
+	var b install.Bundle
+	for _, c := range Clients {
+		one := agentBundle("https://c", "dev-code", "cfd_ag_x", c)
+		if err := one.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		b.Files = append(b.Files, one.Files...)
 	}
 	want := map[string]string{
 		".codex/config.toml":              "[mcp_servers.cafard]\nurl = \"https://c/mcp\"\nbearer_token_env_var = \"CAFARD_TOKEN\"\n",

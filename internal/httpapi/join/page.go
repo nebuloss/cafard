@@ -14,9 +14,17 @@ type pageData struct {
 	Error    string
 	Spent    bool
 	// Agent is an agent's link opened in a browser: the commands that run
-	// it, by shell.
+	// it, by shell, for the client chosen among Clients.
 	Agent   bool
 	Sh, PS1 string
+	Clients []pageClient
+}
+
+// pageClient is a client the page can show the commands for: a link to the
+// page with it chosen.
+type pageClient struct {
+	Name, Href string
+	On         bool
 }
 
 func page(w http.ResponseWriter, status int, d pageData) {
@@ -57,6 +65,10 @@ button { width:100%; font:inherit; font-weight:600; min-height:46px; border:0; b
 .err { padding:10px 14px; border-radius:12px; background:var(--error-container); color:var(--on-surface); }
 .user { font-weight:700; color:var(--on-surface); }
 small { color:var(--on-surface-variant); }
+.clients { display:flex; flex-wrap:wrap; gap:8px; }
+.clients a { padding:5px 12px; border-radius:8px; border:1px solid var(--outline-variant); color:var(--on-surface-variant);
+  text-decoration:none; font-size:13px; font-weight:600; }
+.clients a[aria-current] { border-color:transparent; background:var(--primary); color:var(--on-primary); }
 .cmd { display:flex; flex-direction:column; gap:6px; }
 .cmd span { font-weight:600; font-size:13px; }
 pre { margin:0; padding:10px 12px; border-radius:12px; border:1px solid var(--outline-variant); background:var(--surface-lowest);
@@ -71,6 +83,7 @@ pre { margin:0; padding:10px 12px; border-radius:12px; border:1px solid var(--ou
   <div class="err">{{.Error}}</div>
 {{- else if .Agent}}
   <h1>Set up {{.Name}}</h1>
+  <nav class="clients">{{range .Clients}}<a href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}</nav>
   <p>Run on its machine, as the user its agents run as.</p>
   <div class="cmd"><span>Linux / macOS</span><pre>{{.Sh}}</pre></div>
   <div class="cmd"><span>Windows (PowerShell)</span><pre>{{.PS1}}</pre></div>

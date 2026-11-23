@@ -108,9 +108,19 @@ func (j *Join) open(w http.ResponseWriter, r *http.Request) {
 	shell := shellOf(r)
 	if l.Kind == store.AgentLink {
 		if shell == "" {
+			// The client is chosen by following a link to this page with
+			// ?client=: the page has no script.
+			c, err := ParseClient(r.URL.Query().Get("client"))
+			if err != nil {
+				c = Clients[0]
+			}
 			link := j.publicURL + "/join/" + code
-			page(w, http.StatusOK, pageData{Title: "Set up " + id.Name, Name: id.Name, Expires: l.ExpiresAt, Agent: true,
-				Sh: install.Command(link, false), PS1: install.Command(link, true)})
+			d := pageData{Title: "Set up " + id.Name, Name: id.Name, Expires: l.ExpiresAt, Agent: true,
+				Sh: install.Command(link, false, c.ID), PS1: install.Command(link, true, c.ID)}
+			for _, o := range Clients {
+				d.Clients = append(d.Clients, pageClient{Name: o.Name, Href: "?client=" + o.ID, On: o == c})
+			}
+			page(w, http.StatusOK, d)
 			return
 		}
 		j.script(w, r, code, shell)
@@ -174,9 +184,9 @@ func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string
 		shellError(w, "sh", "shell="+shell+" is not one cafard writes for: use sh or ps1.")
 		return
 	}
-	// The clients are read before the link is spent: a mistyped one costs
+	// The client is read before the link is spent: a mistyped one costs
 	// nothing but running the command again.
-	clients, err := ParseClients(r.URL.Query().Get("clients"))
+	client, err := ParseClient(r.URL.Query().Get("client"))
 	if err != nil {
 		shellError(w, shell, err.Error())
 		return
@@ -186,8 +196,8 @@ func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string
 		j.refused(w, r, err)
 		return
 	}
-	j.log.Info("agent link redeemed", "agent", id.Name, "from", clientIP(r), "shell", shell, "clients", clients)
-	b := agentBundle(j.publicURL, id.Name, token, clients...)
+	j.log.Info("agent link redeemed", "agent", id.Name, "from", clientIP(r), "shell", shell, "client", client.ID)
+	b := agentBundle(j.publicURL, id.Name, token, client)
 	if err := b.Validate(); err != nil {
 		// What agentBundle writes is fixed, so this is a bug; the link is
 		// spent, and an admin makes another once it is fixed.

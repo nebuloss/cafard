@@ -56,7 +56,6 @@ import (
 	"rsc.io/qr"
 
 	"cafard/internal/httpapi/httpx"
-	"cafard/internal/install"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -271,12 +270,10 @@ type linkJSON struct {
 	UsedAt    *time.Time `json:"used_at,omitempty"`
 	UsedFrom  string     `json:"used_from,omitempty"`
 	// URL and QR only when the link was just made: the code is not kept.
+	// An agent's commands are built from URL by the page, for the client
+	// chosen there.
 	URL string `json:"url,omitempty"`
 	QR  string `json:"qr,omitempty"`
-	// Command and CommandWindows run an agent's link: curl into sh, irm
-	// into iex.
-	Command        string `json:"command,omitempty"`
-	CommandWindows string `json:"command_windows,omitempty"`
 }
 
 func linkOf(l store.Link) linkJSON {
@@ -409,9 +406,6 @@ func (a *Admin) newLink(r *http.Request, who access.Who, i store.Identity, hours
 	}
 	lj := linkOf(l)
 	lj.URL = strings.TrimSuffix(a.cfg.PublicURL, "/") + "/join/" + code
-	if l.Kind == store.AgentLink {
-		lj.Command, lj.CommandWindows = install.Command(lj.URL, false), install.Command(lj.URL, true)
-	}
 	if q, err := qr.Encode(lj.URL, qr.M); err == nil {
 		lj.QR = "data:image/png;base64," + base64.StdEncoding.EncodeToString(q.PNG())
 	}

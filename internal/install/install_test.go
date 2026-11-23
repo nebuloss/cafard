@@ -217,10 +217,10 @@ func TestFailure(t *testing.T) {
 }
 
 func TestCommand(t *testing.T) {
-	if got := Command("https://c/join/x", false); got != "curl -fsSL 'https://c/join/x?shell=sh' | sh" {
+	if got := Command("https://c/join/x", false, "codex"); got != "curl -fsSL 'https://c/join/x?shell=sh&client=codex' | sh" {
 		t.Errorf("sh: %s", got)
 	}
-	if got := Command("https://c/join/x", true); got != "irm 'https://c/join/x?shell=ps1' | iex" {
+	if got := Command("https://c/join/x", true, "codex"); got != "irm 'https://c/join/x?shell=ps1&client=codex' | iex" {
 		t.Errorf("ps1: %s", got)
 	}
 }

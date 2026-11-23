@@ -182,19 +182,22 @@ and its expiry** (24 hours by default). The code works once; admin then shows
 - **Person** — admin sets the username; the person scans the QR code, sets a
   password and, if they like, a passkey, can install the app, and is signed
   in (see *Signing in*).
-- **Agent** — the URL is run on its machine, by one of two commands:
+- **Agent** — the URL is run on its machine, by one of two commands, for
+  the one MCP client chosen when the link is given (Claude Code unless
+  another is):
 
   ```sh
-  curl -fsSL 'https://cafard.example/join/X9F4…?shell=sh' | sh      # Linux, macOS
-  irm 'https://cafard.example/join/X9F4…?shell=ps1' | iex           # Windows
+  curl -fsSL 'https://cafard.example/join/X9F4…?shell=sh&client=codex' | sh      # Linux, macOS
+  irm 'https://cafard.example/join/X9F4…?shell=ps1&client=codex' | iex           # Windows
   ```
 
   Fetched by a shell, the link is spent and the script carries the agent's
   token; opened in a browser (or a messenger's preview) it is a page with
-  both commands, and spends nothing. The script writes the token to
-  `~/.config/cafard/token` (mode 600) and registers cafard's MCP server,
-  `<url>/mcp` under the name `cafard`, in every client it finds on PATH,
-  once for the machine (`internal/httpapi/join`, clients.go):
+  both commands, a client to choose, and spends nothing. The script writes
+  the token to `~/.config/cafard/token` (mode 600) and registers cafard's
+  MCP server, `<url>/mcp` under the name `cafard`, in that client if it is
+  on PATH, once for the machine (`internal/httpapi/join`, clients.go); a
+  machine with two clients runs a second link:
 
   | Client | What is written, on every system |
   |---|---|

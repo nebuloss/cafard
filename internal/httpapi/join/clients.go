@@ -37,13 +37,13 @@ const (
 )
 
 // Client is an MCP client an agent's link can set up, as the admin UI and
-// the command name it: its id in ?clients=, and its name.
+// the command name it: its id in ?client=, and its name.
 type Client struct {
 	ID, Name string
 }
 
-// Clients are the clients a link sets up, in the order the admin UI lists
-// them.
+// Clients are the clients a link can set up, in the order the admin UI lists
+// them; the first is the one set up when the command names none.
 var Clients = []Client{
 	{"claude-code", "Claude Code"},
 	{"codex", "Codex"},
@@ -51,46 +51,31 @@ var Clients = []Client{
 	{"opencode", "opencode"},
 }
 
-// ParseClients reads ?clients=: ids separated by commas, each one of
-// Clients. Empty is every client.
-func ParseClients(q string) ([]string, error) {
-	if q == "" {
-		return nil, nil
+// ParseClient reads ?client=: one of Clients, by id, or the first of them
+// when it is empty. One command sets up one client, as claudication's do: a
+// machine with two runs a second link.
+func ParseClient(id string) (Client, error) {
+	if id == "" {
+		return Clients[0], nil
 	}
-	var out []string
-	for _, id := range strings.Split(q, ",") {
-		id = strings.TrimSpace(id)
-		if !slices.ContainsFunc(Clients, func(c Client) bool { return c.ID == id }) {
-			var ids []string
-			for _, c := range Clients {
-				ids = append(ids, c.ID)
-			}
-			return nil, fmt.Errorf("no client %q: the clients are %s", id, strings.Join(ids, ", "))
-		}
-		if !slices.Contains(out, id) {
-			out = append(out, id)
+	for _, c := range Clients {
+		if c.ID == id {
+			return c, nil
 		}
 	}
-	return out, nil
+	var ids []string
+	for _, c := range Clients {
+		ids = append(ids, c.ID)
+	}
+	return Client{}, fmt.Errorf("no client %q: the clients are %s", id, strings.Join(ids, ", "))
 }
 
 // agentBundle is what an agent's link installs on its machine: the token, in
 // ~/.config/cafard/token for anything else on the machine that wants it, and
-// the MCP clients chosen (every one there is, when none is), each only if
-// the machine has it.
-func agentBundle(base, name, token string, chosen ...string) install.Bundle {
+// the one MCP client chosen, if the machine has it.
+func agentBundle(base, name, token string, c Client) install.Bundle {
 	b := everyClient(base, name, token)
-	if len(chosen) == 0 {
-		return b
-	}
-	byName := map[string]string{}
-	for _, c := range Clients {
-		byName[c.Name] = c.ID
-	}
-	keep := func(client string) bool {
-		id, isClient := byName[client]
-		return !isClient || slices.Contains(chosen, id)
-	}
+	keep := func(client string) bool { return client == "cafard" || client == c.Name }
 	b.Files = slices.DeleteFunc(b.Files, func(f install.File) bool { return !keep(f.Client) })
 	b.Runs = slices.DeleteFunc(b.Runs, func(r install.Run) bool { return !keep(r.Client) })
 	return b

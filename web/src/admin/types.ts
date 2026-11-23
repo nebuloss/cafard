@@ -23,9 +23,6 @@ export interface Link {
   /** Only when the link was just made: its code is not kept. */
   url?: string;
   qr?: string;
-  /** For an agent: the command that runs the link on Linux and macOS, and on Windows. */
-  command?: string;
-  command_windows?: string;
 }
 
 export interface Member extends MemberRef {

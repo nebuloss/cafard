@@ -204,11 +204,8 @@ func TestCreatePeopleAgentsAndDevices(t *testing.T) {
 		t.Fatalf("create agent: %d %v", code, out)
 	}
 	agentLink := out["link"].(map[string]any)
-	if cmd := agentLink["command"].(string); cmd != "curl -fsSL '"+agentLink["url"].(string)+"?shell=sh' | sh" {
-		t.Errorf("agent command: %q", cmd)
-	}
-	if cmd := agentLink["command_windows"].(string); cmd != "irm '"+agentLink["url"].(string)+"?shell=ps1' | iex" {
-		t.Errorf("agent command for Windows: %q", cmd)
+	if !strings.Contains(agentLink["url"].(string), "/join/") {
+		t.Errorf("agent link: %v", agentLink)
 	}
 
 	code, out = r.call("POST", "/admin/api/members", map[string]any{"kind": "device", "name": "dev-build", "projects": []string{"be98"}})

@@ -4,40 +4,42 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-
-	"cafard/internal/install"
 )
 
-func TestParseClients(t *testing.T) {
-	if got, err := ParseClients(""); err != nil || got != nil {
-		t.Errorf("none: %v %v", got, err)
+func TestParseClient(t *testing.T) {
+	if c, err := ParseClient(""); err != nil || c.ID != "claude-code" {
+		t.Errorf("none: %v %v", c, err)
 	}
-	if got, err := ParseClients("codex, crush,codex"); err != nil || strings.Join(got, ",") != "codex,crush" {
-		t.Errorf("two: %v %v", got, err)
+	if c, err := ParseClient("codex"); err != nil || c.Name != "Codex" {
+		t.Errorf("codex: %v %v", c, err)
 	}
-	if _, err := ParseClients("codex,emacs"); err == nil || !strings.Contains(err.Error(), "claude-code, codex, crush, opencode") {
-		t.Errorf("an unknown client: %v", err)
+	for _, q := range []string{"emacs", "codex,crush"} {
+		if _, err := ParseClient(q); err == nil || !strings.Contains(err.Error(), "claude-code, codex, crush, opencode") {
+			t.Errorf("%s: %v", q, err)
+		}
 	}
 }
 
-// Chosen clients are the only ones set up; cafard's own files always are.
-func TestAgentBundleOfChosenClients(t *testing.T) {
-	b := agentBundle("https://c", "dev-code", "cfd_ag_x", "crush")
-	var clients []string
-	for _, f := range b.Files {
-		clients = append(clients, f.Client)
-	}
-	if got := strings.Join(clients, ","); got != "cafard,cafard,crush" || len(b.Runs) != 0 {
-		t.Errorf("crush alone: files of %s, %d runs", got, len(b.Runs))
-	}
-	if b := agentBundle("https://c", "dev-code", "cfd_ag_x", "claude-code"); len(b.Runs) != 1 || len(b.Files) != 2 {
-		t.Errorf("Claude Code alone: %d files, %d runs", len(b.Files), len(b.Runs))
-	}
-	if all := agentBundle("https://c", "dev-code", "cfd_ag_x"); len(all.Files) != 6 || len(all.Runs) != 1 {
-		t.Errorf("every client: %d files, %d runs", len(all.Files), len(all.Runs))
-	}
-	if got := install.Command("https://c/join/x", false, "codex", "crush"); got != "curl -fsSL 'https://c/join/x?shell=sh&clients=codex,crush' | sh" {
-		t.Errorf("command: %s", got)
+// The chosen client is the only one set up; cafard's own files always are.
+func TestAgentBundleOfOneClient(t *testing.T) {
+	for _, c := range []struct {
+		id, files string
+		runs      int
+	}{
+		{"claude-code", "cafard,cafard", 1},
+		{"codex", "cafard,cafard,Codex,Codex", 0},
+		{"crush", "cafard,cafard,crush", 0},
+		{"opencode", "cafard,cafard,opencode", 0},
+	} {
+		client, _ := ParseClient(c.id)
+		b := agentBundle("https://c", "dev-code", "cfd_ag_x", client)
+		var files []string
+		for _, f := range b.Files {
+			files = append(files, f.Client)
+		}
+		if got := strings.Join(files, ","); got != c.files || len(b.Runs) != c.runs {
+			t.Errorf("%s: files of %s, %d runs", c.id, got, len(b.Runs))
+		}
 	}
 }
 
@@ -45,11 +47,11 @@ func TestAgentBundleOfChosenClients(t *testing.T) {
 func TestAnUnknownClientSpendsNothing(t *testing.T) {
 	r := newRig(t)
 	u := r.link(t, r.devCode)
-	code, body, _ := get(t, u+"?shell=sh&clients=emacs", "curl/8.5.0")
-	if code != http.StatusOK || !strings.Contains(body, "no client \\\"emacs\\\"") && !strings.Contains(body, `no client "emacs"`) || !strings.Contains(body, "exit 1") {
+	code, body, _ := get(t, u+"?shell=sh&client=emacs", "curl/8.5.0")
+	if code != http.StatusOK || !strings.Contains(body, "emacs") || !strings.Contains(body, "exit 1") || tokenRE.MatchString(body) {
 		t.Fatalf("refusal: %d\n%s", code, body)
 	}
-	if code, body, _ := get(t, u+"?shell=sh&clients=crush", "curl/8.5.0"); code != http.StatusOK || !strings.Contains(body, "crush") || strings.Contains(body, "codex") {
+	if code, body, _ := get(t, u+"?shell=sh&client=crush", "curl/8.5.0"); code != http.StatusOK || !strings.Contains(body, "crush") || strings.Contains(body, "codex") {
 		t.Errorf("the link after the refusal: %d\n%s", code, body)
 	}
 }

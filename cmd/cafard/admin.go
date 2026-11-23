@@ -27,12 +27,12 @@ Usage:
 
 Commands:
   create person NAME [-name "Display Name"]       prints their join link
-  create agent  NAME [-description TEXT] [-project P]...   prints its install link
+  create agent  NAME [-description TEXT] [-project P]... [-client ID]   prints its install link
   create device NAME [-description TEXT] [-project P]...   prints its token
   create project NAME [-retention DAYS] [-quota SIZE] [-member NAME]...
   add    PROJECT NAME...         put members in a project
   remove PROJECT NAME...         take them out
-  link   NAME [-hours N] [-clients claude-code,codex,crush,opencode]
+  link   NAME [-hours N] [-client claude-code|codex|crush|opencode]
                                  a new one-time link: a person's sign-in link, an
                                  agent's install link; the old one stops working
   token  NAME                    a new token for a device; the old one stops working
@@ -160,9 +160,8 @@ type adminCmd struct {
 // printLink makes a one-time link for i and prints it, with a QR code to
 // scan from a phone and what to do with it.
 //
-// clients are the MCP clients an agent's commands set up, by id; none is
-// every client its machine has.
-func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Duration, clients ...string) error {
+// client is the MCP client an agent's commands set up.
+func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Duration, client join.Client) error {
 	code, l, err := a.acc.IssueLink(ctx, a.who, i, life)
 	if err != nil {
 		return err
@@ -171,9 +170,9 @@ func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Du
 	until := l.ExpiresAt.Local().Format("2 Jan 15:04")
 	switch l.Kind {
 	case store.AgentLink:
-		fmt.Fprintf(a.out, "Run this once on %s's machine, as the user its agents run as (works once, until %s):\n\n", i.Name, until)
-		fmt.Fprintf(a.out, "  Linux / macOS:         %s\n", install.Command(url, false, clients...))
-		fmt.Fprintf(a.out, "  Windows (PowerShell):  %s\n", install.Command(url, true, clients...))
+		fmt.Fprintf(a.out, "Run this once on %s's machine, as the user its agents run as, to set up %s (works once, until %s):\n\n", i.Name, client.Name, until)
+		fmt.Fprintf(a.out, "  Linux / macOS:         %s\n", install.Command(url, false, client.ID))
+		fmt.Fprintf(a.out, "  Windows (PowerShell):  %s\n", install.Command(url, true, client.ID))
 		return nil
 	default:
 		fmt.Fprintf(a.out, "%s opens this to sign in, on the device they will use (works once, until %s):\n\n", i.Name, until)
@@ -189,12 +188,12 @@ func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Du
 func (a *adminCmd) link(ctx context.Context, name string, args []string) error {
 	fs := flag.NewFlagSet("link", flag.ContinueOnError)
 	hours := fs.Int("hours", 24, "how long the link waits, 168 at most")
-	only := fs.String("clients", "", "an agent's MCP clients to set up, by id; every one it has by default")
+	only := fs.String("client", join.Clients[0].ID, "the MCP client an agent's link sets up, by id")
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
 		return usageError(err.Error())
 	}
-	clients, err := join.ParseClients(*only)
+	client, err := join.ParseClient(*only)
 	if err != nil {
 		return usageError(err.Error())
 	}
@@ -202,7 +201,7 @@ func (a *adminCmd) link(ctx context.Context, name string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("no member %q", name)
 	}
-	return a.printLink(ctx, i, time.Duration(*hours)*time.Hour, clients...)
+	return a.printLink(ctx, i, time.Duration(*hours)*time.Hour, client)
 }
 
 func (a *adminCmd) createPerson(ctx context.Context, name string, args []string) error {
@@ -217,7 +216,7 @@ func (a *adminCmd) createPerson(ctx context.Context, name string, args []string)
 		return err
 	}
 	fmt.Fprintf(a.out, "created person %s\n\n", i.Name)
-	return a.printLink(ctx, i, 0)
+	return a.printLink(ctx, i, 0, join.Client{})
 }
 
 type listFlag []string
@@ -252,8 +251,13 @@ func (a *adminCmd) createMachine(ctx context.Context, kind store.Kind, name stri
 	desc := fs.String("description", "", "what the machine can do")
 	var projects listFlag
 	fs.Var(&projects, "project", "a project to put it in (repeat, or comma-separated)")
+	only := fs.String("client", join.Clients[0].ID, "the MCP client an agent's link sets up, by id")
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
+		return usageError(err.Error())
+	}
+	client, err := join.ParseClient(*only)
+	if err != nil {
 		return usageError(err.Error())
 	}
 	ps, err := a.projects(ctx, projects)
@@ -275,7 +279,7 @@ func (a *adminCmd) createMachine(ctx context.Context, kind store.Kind, name stri
 	}
 	fmt.Fprintf(a.out, "created %s %s, %s\n\n", kind, i.Name, where)
 	if kind == store.Agent {
-		return a.printLink(ctx, i, 0)
+		return a.printLink(ctx, i, 0, client)
 	}
 	tok, err := a.acc.IssueToken(ctx, a.who, i)
 	if err != nil {
