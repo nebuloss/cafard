@@ -8,6 +8,26 @@ import (
 	"syscall"
 )
 
+// sameOwner gives the file at path the owner and group of the file at like,
+// when this process runs as root: `cafard passwd`, run as root, replaces the
+// configuration with a new file, which would otherwise be root's, and the
+// service, running as its own user, could no longer read it. Measured on the
+// test box: the service stopped at its next start, "permission denied".
+func sameOwner(path, like string) error {
+	if os.Geteuid() != 0 {
+		return nil
+	}
+	st, err := os.Stat(like)
+	if err != nil {
+		return err
+	}
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil
+	}
+	return os.Chown(path, int(sys.Uid), int(sys.Gid))
+}
+
 // giveBack hands the database files to the owner of the state directory
 // when this process runs as root.
 //

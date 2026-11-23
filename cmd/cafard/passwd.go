@@ -89,7 +89,7 @@ var hashLine = regexp.MustCompile(`(?m)^#?\s*admin-password-hash:.*$`)
 // writeHash puts admin-password-hash in the file, in place of the line that
 // was there (the example's comment included), or at the end; the rest of the
 // file, comments and all, is left as it is. The new file replaces the old in
-// one rename, with its mode.
+// one rename, with its mode, owner and group.
 func writeHash(path, hash string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -123,6 +123,9 @@ func writeHash(path, hash string) error {
 		return err
 	}
 	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := sameOwner(tmp.Name(), path); err != nil {
 		return err
 	}
 	if _, err := config.Load(tmp.Name()); err != nil {
