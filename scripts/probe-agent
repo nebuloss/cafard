@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""Check that a real model uses cafard's MCP tools in the right order.
+
+Run by hand, against a live server, when a tool's description or the
+server's instructions change (CLAUDE.md, rule 7). It needs a real model and
+the network, so it is not in CI.
+
+    CAFARD_URL=http://10.0.50.112:8790 CAFARD_TOKEN=cfd_ag_… scripts/probe-agent [prompt …]
+
+For each prompt it runs `claude -p` with cafard as its only MCP server and
+records the order of cafard calls, then checks what docs/design.md
+("Measured, not assumed") asks of an agent:
+
+  - select_project is its first cafard call (or the session was in one
+    project, selected at connection, and nothing was refused for it);
+  - a conversation is read only after inbox or select_project said what is
+    waiting;
+  - no log is asked for whole: no read_file refused with page_too_large is
+    left unfollowed, and nothing calls a tool that refused twice the same way.
+
+The agent should be a member of two projects or more, with something
+addressed to it in one, so that choosing is a real choice. What it measured
+goes in internal/httpapi/agent's package comment.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+PROMPTS = [
+    "check cafard",
+    "check cafard, project {project}",
+    "look at the photo I sent you on cafard",
+]
+
+
+def run(prompt, cfg_path, model):
+    cmd = [
+        "claude", "-p", prompt,
+        "--output-format", "stream-json", "--verbose",
+        "--mcp-config", cfg_path, "--strict-mcp-config",
+        "--allowedTools", "mcp__cafard__select_project,mcp__cafard__inbox,mcp__cafard__read_conversation,"
+                          "mcp__cafard__read_file,mcp__cafard__members",
+        "--max-turns", "12",
+    ]
+    if model:
+        cmd += ["--model", model]
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    calls, results = [], {}
+    for line in out.stdout.splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        msg = ev.get("message") or {}
+        for block in msg.get("content") or []:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use" and block.get("name", "").startswith("mcp__cafard__"):
+                calls.append({"id": block["id"], "tool": block["name"][len("mcp__cafard__"):],
+                              "input": block.get("input") or {}})
+            elif block.get("type") == "tool_result":
+                content = block.get("content")
+                text = content if isinstance(content, str) else " ".join(
+                    c.get("text", "") for c in content or [] if isinstance(c, dict))
+                results[block.get("tool_use_id")] = (bool(block.get("is_error")), text)
+    for c in calls:
+        c["error"], c["text"] = results.get(c["id"], (False, ""))
+    return calls, out.returncode
+
+
+def judge(calls):
+    problems = []
+    if not calls:
+        return ["no cafard call at all"]
+    first = calls[0]
+    if first["tool"] != "select_project" and "no_project_selected" in first["text"]:
+        problems.append(f"first call was {first['tool']}, refused: select_project was not first")
+    oriented = False
+    for i, c in enumerate(calls):
+        if c["tool"] in ("select_project", "inbox") and not c["error"]:
+            oriented = True
+        if c["tool"] == "read_conversation" and not oriented:
+            problems.append(f"call {i + 1}: read_conversation before inbox or select_project")
+        if c["error"] and "page_too_large" in c["text"]:
+            if not any(n["tool"] == "read_file" and n["input"].get("file") == c["input"].get("file")
+                       for n in calls[i + 1:]):
+                problems.append(f"call {i + 1}: a whole log was refused and not read by page after")
+        if c["error"] and i + 1 < len(calls) and calls[i + 1]["tool"] == c["tool"] \
+                and calls[i + 1]["input"] == c["input"]:
+            problems.append(f"call {i + 2}: repeated a refused call unchanged")
+    return problems
+
+
+def main():
+    url, token = os.environ.get("CAFARD_URL"), os.environ.get("CAFARD_TOKEN")
+    if not url or not token:
+        sys.exit(__doc__)
+    project = os.environ.get("CAFARD_PROJECT", "be98")
+    model = os.environ.get("CAFARD_MODEL")
+    prompts = sys.argv[1:] or [p.format(project=project) for p in PROMPTS]
+    cfg = {"mcpServers": {"cafard": {"type": "http", "url": url.rstrip("/") + "/mcp",
+                                     "headers": {"Authorization": "Bearer " + token}}}}
+    failed = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg_path = os.path.join(tmp, "mcp.json")
+        fd = os.open(cfg_path, os.O_WRONLY | os.O_CREAT, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(cfg, f)
+        for prompt in prompts:
+            calls, code = run(prompt, cfg_path, model)
+            problems = judge(calls)
+            order = " → ".join(c["tool"] + ("✗" if c["error"] else "") for c in calls) or "(none)"
+            mark = "ok  " if not problems else "FAIL"
+            print(f"{mark} {prompt!r}\n     {order}")
+            for p in problems:
+                print(f"     - {p}")
+            if code != 0:
+                print(f"     (claude exited {code})")
+            failed += bool(problems)
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()

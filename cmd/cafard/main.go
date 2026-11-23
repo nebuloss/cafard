@@ -29,6 +29,7 @@ import (
 	"cafard/internal/live"
 	"cafard/internal/logging"
 	"cafard/internal/service/access"
+	"cafard/internal/service/attention"
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
 	"cafard/internal/version"
@@ -164,7 +165,7 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	} else if cut > 0 {
 		log.Warn("uploads cut off by the last stop", "files", cut)
 	}
-	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Hub: hub, Admin: admin.Config{
+	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Attention: attention.New(st, acc), Hub: hub, Admin: admin.Config{
 		Listen: cfg.Listen, AdminListen: cfg.AdminListen, PublicURL: cfg.URL(), StateDir: cfg.StateDir, MaxUpload: api.MaxUpload,
 	}})
 

@@ -4,8 +4,8 @@
 //
 // There are two surfaces, on two listeners (internal/config):
 //
-//   - Public, published in the DMZ: the chat app, /api/v1, /mcp and join
-//     links, as they land. It answers 404 to every /admin path, whatever the
+//   - Public, published in the DMZ: the chat app, /api/v1, /mcp with its
+//     upload links, and join links. It answers 404 to every /admin path, whatever the
 //     proxy in front does, so the DMZ can never reach a route that creates a
 //     person, an agent, a device or a project.
 //   - Admin, on the internal network: the admin UI and /admin/api.
@@ -20,11 +20,13 @@ import (
 	"strings"
 
 	"cafard/internal/httpapi/admin"
+	"cafard/internal/httpapi/agent"
 	"cafard/internal/httpapi/api"
 	"cafard/internal/httpapi/httpx"
 	"cafard/internal/httpapi/join"
 	"cafard/internal/live"
 	"cafard/internal/service/access"
+	"cafard/internal/service/attention"
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
 	"cafard/internal/version"
@@ -39,6 +41,8 @@ type Deps struct {
 	Store  *store.Store
 	Access *access.Service
 	Chat   *chat.Service
+	// Attention decides what /mcp offers an agent.
+	Attention *attention.Service
 	// Hub is where /api/v1/events hears what changed.
 	Hub *live.Hub
 	// Admin is what the admin UI shows of the configuration; its PublicURL
@@ -65,6 +69,9 @@ func publicMux(d Deps) http.Handler {
 	mux.HandleFunc("GET /healthz", healthz)
 	if d.Access != nil && d.Chat != nil {
 		api.New(d.Log, d.Access, d.Chat, d.Hub, d.Admin.PublicURL).Register(mux)
+	}
+	if d.Access != nil && d.Chat != nil && d.Attention != nil {
+		agent.New(d.Log, d.Access, d.Chat, d.Attention, d.Admin.PublicURL).Register(mux)
 	}
 	if d.Access != nil {
 		join.New(d.Log, d.Access, d.Admin.PublicURL).Register(mux)

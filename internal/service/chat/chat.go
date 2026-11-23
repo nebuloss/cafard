@@ -47,6 +47,10 @@ const (
 	// MaxText is the longest message text. A message is something a person
 	// reads; a log belongs in a file, where it can be paged.
 	MaxText = 64 << 10
+	// MaxUpload is the most one request may send, by curl or by an agent's
+	// upload link. A live log that reaches it is stored up to there, and the
+	// sender told why it stopped.
+	MaxUpload = 256 << 20
 	// growEvery is how often a live file's size is written while it
 	// arrives, so a reader's view of it is never more than this stale.
 	growEvery = time.Second

@@ -22,18 +22,23 @@ var layers = map[string]int{
 	"internal/ratelimit": 0,
 	"internal/webui":     0,
 	"internal/live":      0,
+	"internal/mcp":       0,
+	"internal/imagefit":  0,
+	"internal/uploads":   0,
 
 	"internal/store": 1,
 
 	"internal/service/access": 2,
 
-	"internal/service/chat": 3,
+	"internal/service/chat":      3,
+	"internal/service/attention": 3,
 
 	"internal/httpapi/httpx": 4,
 
 	"internal/httpapi/api":   5,
 	"internal/httpapi/admin": 5,
 	"internal/httpapi/join":  5,
+	"internal/httpapi/agent": 5,
 
 	"internal/httpapi": 6,
 
@@ -46,7 +51,7 @@ var onlyImportedBy = map[string][]string{}
 
 // The HTTP surfaces do not import one another: what one needs from another
 // is handed across by the composition root, as in claudication.
-var surfaces = []string{"internal/httpapi/api", "internal/httpapi/admin", "internal/httpapi/join"}
+var surfaces = []string{"internal/httpapi/api", "internal/httpapi/admin", "internal/httpapi/join", "internal/httpapi/agent"}
 
 func TestSurfacesDoNotImportEachOther(t *testing.T) {
 	root, module := moduleRoot(t)

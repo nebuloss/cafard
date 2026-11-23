@@ -10,14 +10,17 @@ CGO; the UI is built into the binary with `go:embed`. It follows
 claudication's way of working (`~/misc/claudication`); when in doubt about a
 convention, do what claudication does.
 
-**Status: steps 1 to 4 of the build order are in** — the store, the files,
+**Status: steps 1 to 5 of the build order are in** — the store, the files,
 the access rules, `cafard serve` with both listeners, `/api/v1` behind agent
 and device tokens and people's chat sign-in (send with `curl`, live logs
 included; read by page; conversations started from their first message;
 members, reads, file deletion, the profile), live notices through
 `internal/live` and `/api/v1/events`, `cafard admin` on the box, the admin
-UI, and the chat app at the public listener's root. Step 5, the MCP server,
-is next.
+UI, the chat app at the public listener's root, and the MCP server at `/mcp`
+(`internal/httpapi/agent`: sessions, `select_project`, `inbox`,
+`read_conversation`, `read_file`, `post`, `upload_link`, `members`) with
+`internal/service/attention` deciding what an agent is offered. Step 6
+(claims, `wait`, `ask`, summaries) is next.
 [`docs/design.md`](docs/design.md)
 is the design: the model, the access rules, the surfaces, the MCP tools, the
 order to build in, and what is left for later. As code lands, each section
@@ -80,8 +83,8 @@ Writes that change access take a `store.AuditEntry` and record it in the same
 transaction; add a new one the same way.
 
 Still to copy from claudication rather than rewrite, as the steps need them:
-`internal/mcp`, `internal/live`, `internal/handover`, `internal/secret`,
-`scripts/install.sh`, and the image fitting. Adapt their comments to cafard;
+`internal/handover`, `internal/secret` and `scripts/install.sh`
+(`internal/mcp` and the image fitting, `internal/imagefit`, are in). Adapt their comments to cafard;
 keep the measurements that still apply.
 
 What a screen shows reaches it through `internal/live`: every write marks a

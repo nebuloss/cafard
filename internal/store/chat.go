@@ -238,20 +238,26 @@ func scanFile(r scanner) (File, error) {
 }
 
 // FileWhere is a file with the conversation and project it belongs to, which
-// is what deciding who may read it needs.
+// is what deciding who may read it needs, and who sent it and where, which
+// is what an agent shown it needs to weigh it.
 type FileWhere struct {
 	File
-	ConversationID int64
-	ProjectID      int64
+	ConversationID   int64
+	ProjectID        int64
+	ConversationName string
+	AuthorName       string
+	AuthorKind       Kind
 }
 
 func (s *Store) File(ctx context.Context, id int64) (FileWhere, error) {
 	var fw FileWhere
 	var sum sql.NullString
 	var created int64
-	err := s.db.QueryRowContext(ctx, `SELECT `+prefixed("f", fileCols)+`, c.id, c.project_id FROM files f
-		JOIN messages m ON m.id = f.message_id JOIN conversations c ON c.id = m.conversation_id WHERE f.id = ?`, id).
-		Scan(&fw.ID, &fw.MessageID, &fw.Name, &fw.ContentType, &fw.Size, &sum, &fw.State, &created, &fw.ConversationID, &fw.ProjectID)
+	err := s.db.QueryRowContext(ctx, `SELECT `+prefixed("f", fileCols)+`, c.id, c.project_id, c.name, i.name, i.kind FROM files f
+		JOIN messages m ON m.id = f.message_id JOIN conversations c ON c.id = m.conversation_id
+		JOIN identities i ON i.id = m.author_id WHERE f.id = ?`, id).
+		Scan(&fw.ID, &fw.MessageID, &fw.Name, &fw.ContentType, &fw.Size, &sum, &fw.State, &created, &fw.ConversationID, &fw.ProjectID,
+			&fw.ConversationName, &fw.AuthorName, &fw.AuthorKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return FileWhere{}, ErrNotFound
 	}

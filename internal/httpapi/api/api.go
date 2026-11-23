@@ -56,9 +56,8 @@ import (
 	"cafard/internal/store"
 )
 
-// MaxUpload is the most one request may send. A live log that reaches it is
-// stored up to there, and the sender told why it stopped.
-const MaxUpload = 256 << 20
+// MaxUpload is the most one request may send (chat.MaxUpload).
+const MaxUpload = chat.MaxUpload
 
 type API struct {
 	log       *slog.Logger

@@ -114,7 +114,8 @@ func TestAgentLinkIsAScript(t *testing.T) {
 	if code != 200 || !strings.HasPrefix(h.Get("Content-Type"), "text/x-shellscript") {
 		t.Fatalf("script: %d %v", code, h)
 	}
-	for _, want := range []string{"#!/bin/sh", "url='https://cafard.example'", "/token", "the agent dev-code", "umask 077"} {
+	for _, want := range []string{"#!/bin/sh", "url='https://cafard.example'", "/token", "the agent dev-code", "umask 077",
+		"claude mcp add --scope user --transport http cafard \"$url/mcp\"", "claude mcp remove --scope user cafard"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("script lacks %q:\n%s", want, body)
 		}

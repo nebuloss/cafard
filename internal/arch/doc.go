@@ -5,11 +5,12 @@
 // Lowest first:
 //
 //	0  leaves         version logging testenv arch config blobs ratelimit webui live
+//	                  mcp imagefit uploads
 //	1  records        store
 //	2  rules          service/access
-//	3  services       service/chat
+//	3  services       service/chat service/attention
 //	4  HTTP plumbing  httpapi/httpx
-//	5  HTTP surfaces  httpapi/api httpapi/admin httpapi/join
+//	5  HTTP surfaces  httpapi/api httpapi/admin httpapi/join httpapi/agent
 //	6  composition    httpapi
 //	7  binary         cmd/cafard
 //
@@ -25,9 +26,9 @@
 // service/access whether the caller may, then reads and writes through the
 // store and the blob store.
 //
-// The map grows with the code. docs/design.md has where it is going:
-// service/files and service/attention beside chat, and the MCP server and
-// the admin API as surfaces of their own under httpapi.
+// The MCP server (httpapi/agent) is a surface like /api/v1: its tools call
+// service/chat, and service/attention decides what an agent is offered.
+// mcp is the protocol alone and knows nothing of cafard.
 //
 // Two rules that layering alone does not say:
 //

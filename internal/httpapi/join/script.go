@@ -10,10 +10,15 @@ import (
 // installScript connects a machine as an agent: `curl -fsSL …/join/{code} | sh`.
 //
 // It exchanges the code for the token, keeps the token in a file only its
-// user can read, and prints what to run in each MCP client. It does not yet
-// register cafard in those clients itself: the MCP server is step 5 of the
-// build order, and a client told about a server that answers 404 would show
-// it as broken. Step 5 makes the script run `claude mcp add` itself.
+// user can read, and registers cafard's MCP server in Claude Code when it is
+// installed, once per machine, at user scope: every session on the machine
+// then has it, and select_project says which project each works in
+// (docs/design.md, "One agent per machine"). A registration left by an
+// earlier link is replaced, so running a new link is how a token is changed.
+// Other MCP clients get the URL and the header to set.
+//
+// Claude Code keeps the header in its own configuration, ~/.claude.json,
+// which is its user's alone like the token file.
 //
 // POSIX sh, curl only, and no secret in the script: the token exists from
 // the moment the script posts the code.
@@ -39,12 +44,25 @@ printf 'url=%s\nagent=%s\n' "$url" {{.Name | q}} > "$dir/config"
 echo "cafard: this machine is now the agent {{.Name}}."
 echo "        token saved in $dir/token (readable by $(id -un) only)"
 echo
-echo "Check it works:"
-echo "  curl -H \"Authorization: Bearer \$(cat $dir/token)\" $url/api/v1/me"
+if command -v claude >/dev/null 2>&1; then
+	claude mcp remove --scope user cafard >/dev/null 2>&1 || true
+	if claude mcp add --scope user --transport http cafard "$url/mcp" \
+		--header "Authorization: Bearer $token" >/dev/null; then
+		echo "Claude Code: cafard is registered for every session of $(id -un)."
+		echo "  Start a session and say \"check cafard\", or name the project: \"check cafard, project <name>\"."
+	else
+		echo "Claude Code: registering cafard failed. Run:"
+		echo "  claude mcp add --scope user --transport http cafard $url/mcp \\"
+		echo "    --header \"Authorization: Bearer \$(cat $dir/token)\""
+	fi
+else
+	echo "Claude Code is not installed here. Once it is, run:"
+	echo "  claude mcp add --scope user --transport http cafard $url/mcp \\"
+	echo "    --header \"Authorization: Bearer \$(cat $dir/token)\""
+fi
 echo
-echo "When cafard's MCP server is in place, connect Claude Code with:"
-echo "  claude mcp add --scope user --transport http cafard $url/mcp \\"
-echo "    --header \"Authorization: Bearer \$(cat $dir/token)\""
+echo "Other MCP clients: Streamable HTTP at $url/mcp, with the header"
+echo "  Authorization: Bearer <the token in $dir/token>"
 `))
 
 type scriptData struct {

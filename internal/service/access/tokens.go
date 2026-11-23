@@ -7,6 +7,7 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 
 	"cafard/internal/store"
@@ -114,4 +115,15 @@ func (s *Service) CreateFirstAdmin(ctx context.Context, name, displayName, origi
 		return store.Identity{}, refuse(Exists, "%s already exists.", name)
 	}
 	return id, err
+}
+
+// Active is an identity by id, if it may still act. What was granted ahead
+// of time, like an agent's upload link, is checked again with it when it is
+// used: the agent may have been paused or removed since.
+func (s *Service) Active(ctx context.Context, id int64) (store.Identity, error) {
+	i, err := s.st.Identity(ctx, id)
+	if err != nil {
+		return i, notFound(err, fmt.Sprintf("Member %d", id))
+	}
+	return i, active(i)
 }

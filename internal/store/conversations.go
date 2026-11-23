@@ -209,3 +209,67 @@ func (s *Store) ConversationsByID(ctx context.Context, projectID int64) (map[int
 	}
 	return out, nil
 }
+
+// Unseen is a message a member has not been shown, as service/attention
+// needs it to decide whether it is addressed to them: who wrote it, its
+// text, and what it carries.
+type Unseen struct {
+	ID             int64
+	ConversationID int64
+	AuthorName     string
+	AuthorDisplay  string
+	AuthorKind     Kind
+	Text           string
+	Files, Images  int
+	CreatedAt      time.Time
+}
+
+// Unseen lists, oldest first, the messages in a project's open conversations
+// that a member has not been shown, leaving out their own: at most limit,
+// the newest ones if there are more.
+func (s *Store) Unseen(ctx context.Context, identityID, projectID int64, limit int) ([]Unseen, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT * FROM (SELECT m.id, m.conversation_id, i.name, i.display_name, i.kind, m.text, m.created_at,
+		(SELECT COUNT(*) FROM files f WHERE f.message_id = m.id AND f.state <> 'deleted'),
+		(SELECT COUNT(*) FROM files f WHERE f.message_id = m.id AND f.state <> 'deleted' AND f.content_type LIKE 'image/%')
+		FROM messages m
+		JOIN conversations c ON c.id = m.conversation_id
+		JOIN identities i ON i.id = m.author_id
+		LEFT JOIN reads r ON r.conversation_id = m.conversation_id AND r.identity_id = ?
+		WHERE c.project_id = ? AND c.closed_at IS NULL AND m.author_id <> ? AND m.id > COALESCE(r.message_id, 0)
+		ORDER BY m.id DESC LIMIT ?) ORDER BY 1`, identityID, projectID, identityID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Unseen
+	for rows.Next() {
+		var u Unseen
+		var at int64
+		if err := rows.Scan(&u.ID, &u.ConversationID, &u.AuthorName, &u.AuthorDisplay, &u.AuthorKind, &u.Text, &at, &u.Files, &u.Images); err != nil {
+			return nil, err
+		}
+		u.CreatedAt = time.UnixMilli(at)
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// PostedIn is the set of a project's conversations a member has posted in.
+func (s *Store) PostedIn(ctx context.Context, identityID, projectID int64) (map[int64]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT m.conversation_id FROM messages m
+		JOIN conversations c ON c.id = m.conversation_id
+		WHERE c.project_id = ? AND m.author_id = ?`, projectID, identityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
