@@ -113,7 +113,10 @@ export interface NavLevel {
 export function navLevel(pathname: string): NavLevel {
   const p = placeOf(pathname);
   return {
-    items: TABS.map((t) => ({ href: t.id === 'overview' ? '/' : pathOf(t.id), label: t.label, icon: t.icon })),
+    // The overview is the root itself, reached by the trail's home step and
+    // the name in the top bar, so it is not one of the rail's entries (as in
+    // claudication); on it, no entry is marked.
+    items: TABS.filter((t) => t.id !== 'overview').map((t) => ({ href: pathOf(t.id), label: t.label, icon: t.icon })),
     current: p.tab === 'overview' ? '/' : pathOf(p.tab),
   };
 }

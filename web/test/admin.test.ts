@@ -30,7 +30,8 @@ describe('navLevel', () => {
   it('lists the sections at the root, the page marked', () => {
     const l = navLevel('/projects');
     expect(l.back).toBeUndefined();
-    expect(l.items.map((i) => i.href)).toEqual(['/', '/members', '/projects', '/audit', '/settings']);
+    expect(l.items.map((i) => i.href)).toEqual(['/members', '/projects', '/audit', '/settings']);
+    expect(navLevel('/').items.some((i) => i.href === navLevel('/').current)).toBe(false);
     expect(l.current).toBe('/projects');
   });
 
