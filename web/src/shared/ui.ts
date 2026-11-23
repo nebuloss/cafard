@@ -81,8 +81,26 @@ export const ui = {
     person: '',
   } as Record<string, string>,
 
-  /** Term and value pairs. */
-  kv: 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 text-sm [&_dd]:m-0 [&_dd]:text-right [&_dd]:tabular-nums [&_dt]:text-on-surface-variant',
+  /**
+   * Term and value pairs, claudication's KeyValue: the term a small capital
+   * label, the value beside it, on one baseline.
+   */
+  kv: 'm-0 grid grid-cols-[max-content_1fr] items-baseline gap-x-6 gap-y-2 text-sm [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:break-words [&_dt]:text-[11px] [&_dt]:font-semibold [&_dt]:tracking-wider [&_dt]:text-on-surface-variant [&_dt]:uppercase',
+  /** A small capital label over a value. */
+  overline: 'text-[11px] font-semibold tracking-wider text-on-surface-variant uppercase',
+
+  /** A screen's body: one column of full-width cards, a step apart (claudication's Page). */
+  page: 'flex flex-col gap-5',
+  /** A figure on a tile (claudication's Stat): its label, the value, a hint. */
+  stat: 'flex min-w-0 flex-col rounded-md3-l bg-surface-container px-4 py-3 text-inherit no-underline',
+  statValue: 'mt-1 truncate text-2xl leading-8 font-normal tabular-nums',
+  statHint: 'mt-0.5 truncate text-xs text-on-surface-variant',
+  /** Stats side by side, two to a row on a phone; one layout per count. */
+  statGrid: {
+    3: 'grid gap-3 sm:grid-cols-3',
+    4: 'grid grid-cols-2 gap-3 sm:grid-cols-4',
+    5: 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5',
+  } as Record<number, string>,
   /** A line: a thing on the left, its action on the right. */
   line: 'flex items-center gap-3 [&_.m]:min-w-0 [&_.m]:flex-1 [&_.m_b]:block [&_.m_b]:truncate [&_.m_b]:font-semibold [&_.m_span]:text-[12.5px] [&_.m_span]:text-on-surface-variant',
   /** A link in running text. */

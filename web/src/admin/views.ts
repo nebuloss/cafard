@@ -170,24 +170,25 @@ export class OverviewView extends View {
     const n = (k: string) => ms.filter((m) => m.kind === k).length;
     const total = ps.reduce((s, p) => s + p.bytes, 0);
     const files = ps.reduce((s, p) => s + p.files, 0);
-    const tile = (href: string, label: string, value: string | number, sub: string) =>
-      html`<a class="state-layer flex flex-col gap-0.5 rounded-md3-xl bg-surface-container px-4 py-3.5 text-inherit no-underline" href="${href}"><span class="text-[13px] font-semibold text-on-surface-variant">${label}</span><span class="text-[28px] font-bold tabular-nums">${value}</span><span class="text-[12.5px] text-on-surface-variant">${sub}</span></a>`;
     const waiting = this.store.links.filter((l) => l.state === 'waiting').map((l) => {
       const what = l.kind === 'agent' ? 'install' : l.kind === 'password' ? 'password' : 'join';
       return html`<tr class="${ui.tr}"><td class="${TD}"><a class="${ui.link}" href="${pathOf('members', l.member)}">${l.member}</a></td><td class="${TD}">${what}</td><td class="${TD} text-[13px]">${time.until(l.expires_at)}</td><td class="${TD} text-right"><button class="${ui.btn('danger-text', 'sm')}" data-act="cancel-link" data-v="${String(l.id)}">Cancel</button></td></tr>`;
     });
     const storage = ps.map((p) => html`<tr class="${ui.trLink}" role="button" tabindex="0" data-act="open" data-v="${p.name}"><td class="${TD}"><span class="${WHO}">${Avatar.project(p.name, 'sm')}<span class="nm">${p.name}</span>${p.archived ? html`<span class="${ui.pill.muted}">archived</span>` : ''}</span></td><td class="${TD} ${NUM}">${p.files}</td><td class="${TD} min-w-56">${Meter.of(p)}</td></tr>`);
-    return html`<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-        ${tile('/members', 'People', n('person'), `${ms.filter((m) => m.kind === 'person' && !m.joined).length} not joined`)}
-        ${tile('/members', 'Agents', n('agent'), `${ms.filter((m) => m.kind === 'agent' && m.enabled).length} active`)}
-        ${tile('/members', 'Devices', n('device'), `${ms.filter((m) => m.kind === 'device' && m.enabled).length} active`)}
-        ${tile('/projects', 'Projects', ps.length, `${ps.filter((p) => p.archived).length} archived`)}
-        ${tile('/projects', 'Files', Bytes.format(total), `${files} files`)}
-      </div>
-      ${this.layout({
-        side: [this.card('Links waiting', waiting.length ? html`<div class="${ui.tableWrap}"><table class="w-full border-collapse text-sm"><thead><tr class="${ui.tr}">${TH('For')}${TH('Link')}${TH('Expires')}${TH('')}</tr></thead><tbody>${waiting}</tbody></table></div>` : html`<p class="${ui.dim}">None.</p>`)],
-        main: [this.card('Storage', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Project')}${TH('Files', 'text-right')}${TH('Used')}</tr></thead><tbody>${storage.length ? storage : html`<tr><td colspan="3" class="${ui.empty}">No project yet.</td></tr>`}</tbody></table></div>`)],
-      })}`;
+    const stats = this.stats([
+      { label: 'People', value: n('person'), hint: `${ms.filter((m) => m.kind === 'person' && !m.joined).length} not joined`, href: '/members' },
+      { label: 'Agents', value: n('agent'), hint: `${ms.filter((m) => m.kind === 'agent' && m.enabled).length} active`, href: '/members' },
+      { label: 'Devices', value: n('device'), hint: `${ms.filter((m) => m.kind === 'device' && m.enabled).length} active`, href: '/members' },
+      { label: 'Projects', value: ps.length, hint: `${ps.filter((p) => p.archived).length} archived`, href: '/projects' },
+      { label: 'Files', value: Bytes.format(total), hint: `${files} files` },
+    ]);
+    // Links waiting only while there are some: an empty card is a card to
+    // read for nothing.
+    const links = waiting.length
+      ? this.card('Links waiting', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('For')}${TH('Link')}${TH('Expires')}${TH('')}</tr></thead><tbody>${waiting}</tbody></table></div>`)
+      : Html.empty;
+    return html`${stats}${links}
+      ${this.card('Storage', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Project')}${TH('Files', 'text-right')}${TH('Used')}</tr></thead><tbody>${storage.length ? storage : html`<tr><td colspan="3" class="${ui.empty}">No project yet.</td></tr>`}</tbody></table></div>`)}`;
   }
 }
 
@@ -196,8 +197,7 @@ export class SettingsView extends View {
   protected view(): Html {
     const c = this.store.config;
     if (!c) return html`<p class="${ui.empty}">Loading…</p>`;
-    return html`<div class="grid items-start gap-4 lg:grid-cols-2">
-      ${this.card('Listeners', html`<dl class="${ui.kv}">
+    return html`${this.card('Listeners', html`<dl class="${ui.kv}">
         <dt>listen</dt><dd><code>${c.listen}</code></dd>
         <dt>public-url</dt><dd><code>${c.public_url}</code></dd>
         <dt>admin-listen</dt><dd><code>${c.admin_listen}</code></dd>
@@ -207,8 +207,7 @@ export class SettingsView extends View {
         <dt>Largest upload</dt><dd>${Bytes.format(c.max_upload)}</dd>
         <dt>Link life</dt><dd>${c.link_hours} h, at most ${c.link_max_hours / 24} days</dd>
         <dt>Admin sign-in</dt><dd>${c.admin_signin_hours} h after last use</dd>
-        <dt>Chat sign-in</dt><dd>${c.chat_signin_days} days after last use</dd></dl>`)}
-    </div>`;
+        <dt>Chat sign-in</dt><dd>${c.chat_signin_days} days after last use</dd></dl>`)}`;
   }
 }
 
