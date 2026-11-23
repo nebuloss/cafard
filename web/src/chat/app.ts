@@ -7,14 +7,15 @@ import { ConversationList } from './list';
 import { look } from './look';
 import { LiveFeed } from './live';
 import { LogViewer, ProfileSheet, SignInView } from './sheets';
+import { fromHash, pathOf, placeOf } from './route';
 import { Address, ChatStore } from './store';
 import type { Changed, FileInfo } from './types';
 
 /**
  * ChatApp runs the chat app: it signs in, keeps the store current from the
- * event stream, and shows the conversation the URL's hash names
- * (#c/be98/wifi-drops), or a new one (#new). On a phone one pane shows at a
- * time, the list or the conversation; on a desktop both.
+ * event stream, and shows the conversation the URL's path names
+ * (/be98/wifi-drops), or a new one (/new; route.ts). On a phone one pane
+ * shows at a time, the list or the conversation; on a desktop both.
  */
 export class ChatApp {
   readonly api: ApiClient;
@@ -37,7 +38,7 @@ export class ChatApp {
     this.layer2 = new Layer(document.getElementById('overlay2') as HTMLElement);
     this.list = new ConversationList(this);
     this.live = new LiveFeed((c) => void this.changed(c));
-    window.addEventListener('hashchange', () => void this.route());
+    window.addEventListener('popstate', () => void this.route());
   }
 
   /** The conversation open now, if one is. */
@@ -46,6 +47,9 @@ export class ChatApp {
   }
 
   async start(): Promise<void> {
+    // A link from before paths (#c/be98/x) lands where it meant.
+    const old = fromHash(location.hash);
+    if (old) history.replaceState(null, '', old);
     try {
       if (await this.store.whoAmI()) await this.showApp();
       else this.showSignIn();
@@ -80,23 +84,20 @@ export class ChatApp {
     await this.route();
   }
 
-  go(hash: string): void {
-    if (location.hash === hash || (hash === '#' && !location.hash)) void this.route();
-    else location.hash = hash;
+  /** Goes to a path of the app: a new entry in the history, then what it shows. */
+  go(path: string): void {
+    if (location.pathname !== path) history.pushState(null, '', path);
+    void this.route();
   }
 
-  /** Shows what the hash names. */
+  /** Shows what the path names. */
   private async route(): Promise<void> {
     if (!this.frame) return;
     this.layer.close();
-    const h = decodeURIComponent(location.hash.slice(1));
+    const place = placeOf(location.pathname);
     let view: ConversationView | null = null;
-    if (h.startsWith('c/')) {
-      const a = Address.parse(h.slice(2));
-      if (a) view = new ConversationView(this, a);
-    } else if (h === 'new' || h.startsWith('new/')) {
-      view = new ConversationView(this, null, h.slice(4) || undefined);
-    }
+    if (place.kind === 'conversation') view = new ConversationView(this, new Address(place.project, place.name));
+    else if (place.kind === 'new') view = new ConversationView(this, null, place.project);
     this.view = view;
     this.frame.dataset['pane'] = view ? 'chat' : 'list';
     this.frame.querySelector('main')?.remove();
@@ -118,7 +119,7 @@ export class ChatApp {
       await this.attempt(() => this.store.loadAll());
       this.list.render();
       if (this.view?.address && !this.store.projects.some((p) => p.name === this.view?.address?.project)) {
-        this.go('#');
+        this.go(pathOf({ kind: 'list' }));
         return;
       }
       await this.view?.refresh();

@@ -5,6 +5,8 @@ import { Icon } from '@shared/icons';
 import { ui } from '@shared/ui';
 import { Avatar } from '@shared/widgets';
 import type { ChatApp } from './app';
+import { pathOf } from './route';
+import { Address } from './store';
 import { look } from './look';
 import type { Conversation } from './types';
 
@@ -31,9 +33,12 @@ export class ConversationList extends Component {
   constructor(private readonly app: ChatApp) {
     super('aside', 'flex min-h-0 min-w-0 flex-col border-r border-outline-variant bg-surface-low max-[840px]:group-data-[pane=chat]/app:hidden');
     this.actions = {
-      new: () => this.app.go(`#new`),
+      new: () => this.app.go('/new'),
       profile: () => this.app.openProfile(),
-      open: (t) => this.app.go(`#c/${t.dataset['v'] ?? ''}`),
+      open: (t) => {
+        const a = Address.parse(t.dataset['v'] ?? '');
+        if (a) this.app.go(pathOf({ kind: 'conversation', project: a.project, name: a.name }));
+      },
     };
     this.root.addEventListener('input', (e) => {
       const t = e.target as HTMLInputElement;

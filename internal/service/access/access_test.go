@@ -250,6 +250,10 @@ func TestNamesAndValues(t *testing.T) {
 	}
 	_, err := w.svc.CreateProject(ctx, w.admin, "Speed Test", 30, 5e9)
 	wantCode(t, "project with spaces", err, BadName)
+	for _, reserved := range []string{"api", "new", "join", "mcp"} {
+		_, err = w.svc.CreateProject(ctx, w.admin, reserved, 30, 5e9)
+		wantCode(t, "a project called "+reserved, err, BadName)
+	}
 	_, err = w.svc.CreateProject(ctx, w.admin, "speedtest", 0, 5e9)
 	wantCode(t, "project with no retention", err, BadValue)
 	_, err = w.svc.CreateProject(ctx, w.admin, "be98", 30, 5e9)

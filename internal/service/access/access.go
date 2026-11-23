@@ -112,7 +112,19 @@ func validProjectName(name string) error {
 	if !slugName.MatchString(name) {
 		return refuse(BadName, "%q is not a project name cafard accepts: use 2 to 32 lowercase letters, digits and hyphens, like speedtest.", name)
 	}
+	if reservedProject[name] {
+		return refuse(BadName, "%q is a word cafard's addresses use: choose another project name.", name)
+	}
 	return nil
+}
+
+// reservedProject are the names a project cannot take: the chat app's paths
+// start with a project's name (/be98/wifi-drops), so a project called api or
+// new would be a conversation's address and one of the public listener's own
+// paths at once.
+var reservedProject = map[string]bool{
+	"api": true, "join": true, "mcp": true, "u": true, "healthz": true, "assets": true,
+	"new": true, "admin": true,
 }
 
 // active refuses an identity that cannot act at all.

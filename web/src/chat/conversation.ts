@@ -6,6 +6,7 @@ import { Toaster } from '@shared/toast';
 import { ui } from '@shared/ui';
 import { Avatar } from '@shared/widgets';
 import type { ChatApp } from './app';
+import { pathOf } from './route';
 import { Composer } from './composer';
 import { look } from './look';
 import { DetailsSheet, ImageViewer } from './sheets';
@@ -334,7 +335,7 @@ export class ConversationView extends Component {
       const address = await this.app.store.sender.send(this.project, this.address?.name ?? null, text, files);
       if (!this.address) {
         await this.app.store.loadConversations(this.project);
-        this.app.go(`#c/${address}`);
+        this.app.go(pathOf({ kind: 'conversation', project: address.project, name: address.name }));
         return;
       }
       await this.refresh();

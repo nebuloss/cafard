@@ -409,6 +409,32 @@ export class ProfileSheet extends Component {
       this.error = e instanceof Refused ? e.message : reason(e);
     }
     this.render();
+    if (this.phone) this.watchPhone(this.phone.expires_at);
+  }
+
+  /**
+   * Watches for the phone that scans the code: once a sign-in more than
+   * there were appears, the code is used and goes, and the phone is in the
+   * list below. The code goes at its expiry too, since it no longer works.
+   */
+  private watchPhone(expires: string): void {
+    const before = this.signins?.length ?? 0;
+    const timer = setInterval(async () => {
+      if (!this.root.isConnected || !this.phone) return clearInterval(timer);
+      if (Date.now() > Date.parse(expires)) {
+        clearInterval(timer);
+        this.phone = null;
+        this.render();
+        return;
+      }
+      const r = await this.app.store.api.get<{ signins: Signin[] }>('/me/signins').catch(() => null);
+      if (!r || r.signins.length <= before) return;
+      clearInterval(timer);
+      this.phone = null;
+      this.signins = r.signins;
+      this.render();
+      Toaster.show('The phone is signed in.');
+    }, 2500);
   }
 }
 

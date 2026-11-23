@@ -198,6 +198,16 @@ export class GiveScreen extends Component {
       const l = members.find((x) => x.name === this.member.name)?.link;
       if (!l || l.id !== id || l.state === 'waiting') return;
       this.stop();
+      // Used: there is nothing left to hand over, so the dialog goes, and
+      // says so. Expired or cancelled, it stays to say that.
+      if (l.state === 'used') {
+        this.app.layer.close();
+        await this.app.refresh();
+        Toaster.show(this.member.kind === 'agent'
+          ? `${this.member.name} is connected${l.used_from ? ` from ${l.used_from}` : ''}.`
+          : `${this.member.display_name || this.member.name} is signed in${l.used_from ? ` from ${l.used_from}` : ''}.`);
+        return;
+      }
       this.state = l.state;
       this.usedAt = l.used_at ?? '';
       this.usedFrom = l.used_from ?? '';
