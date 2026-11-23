@@ -156,7 +156,7 @@ export class OverviewView extends View {
       'cancel-link': async (t) => {
         await this.app.change(() => this.store.api.delete(`/links/${t.dataset['v']}`), 'The link no longer works.');
       },
-      open: (t) => this.app.go(pathOf('projects', t.dataset['v'] ?? '', 'files')),
+      open: (t) => this.app.go(pathOf('projects', t.dataset['v'] ?? '')),
     };
   }
 

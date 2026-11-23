@@ -3,7 +3,7 @@ import { canonical, fromHash, navLevel, placeOf, trailOf } from '../src/admin/ro
 
 describe('canonical', () => {
   it('keeps the paths that name a page', () => {
-    for (const p of ['/', '/members', '/members/dev-code', '/members/dev-code/access', '/projects/be98/files', '/audit', '/settings']) {
+    for (const p of ['/', '/members', '/members/dev-code', '/projects/be98', '/audit', '/settings']) {
       expect(canonical(p)).toBe(p);
     }
   });
@@ -12,8 +12,8 @@ describe('canonical', () => {
     expect(canonical('')).toBe('/');
     expect(canonical('/overview')).toBe('/');
     expect(canonical('/members/')).toBe('/members');
-    expect(canonical('/members/dev-code/nope')).toBe('/members/dev-code');
-    expect(canonical('/projects/be98/access')).toBe('/projects/be98');
+    expect(canonical('/members/dev-code/access')).toBe('/members/dev-code');
+    expect(canonical('/projects/be98/files')).toBe('/projects/be98');
     expect(canonical('/audit/old')).toBe('/audit');
     expect(canonical('/storage')).toBe('/');
   });
@@ -21,8 +21,8 @@ describe('canonical', () => {
   it('encodes a name once, and reads it back decoded', () => {
     expect(canonical('/members/ines.d')).toBe('/members/ines.d');
     expect(canonical('/members/a%20b')).toBe('/members/a%20b');
-    expect(placeOf('/members/a%20b/projects')).toEqual({ tab: 'members', name: 'a b', page: 'projects' });
-    expect(placeOf('/members/%E0')).toEqual({ tab: 'members', name: '%E0', page: '' });
+    expect(placeOf('/members/a%20b')).toEqual({ tab: 'members', name: 'a b' });
+    expect(placeOf('/members/%E0')).toEqual({ tab: 'members', name: '%E0' });
   });
 });
 
@@ -34,12 +34,10 @@ describe('navLevel', () => {
     expect(l.current).toBe('/projects');
   });
 
-  it("lists an item's pages, with the way back to its list", () => {
-    const l = navLevel('/members/dev-code/access');
-    expect(l.back?.href).toBe('/members');
-    expect(l.items.map((i) => i.href)).toEqual(['/members/dev-code', '/members/dev-code/projects', '/members/dev-code/access', '/members/dev-code/advanced']);
-    expect(l.current).toBe('/members/dev-code/access');
-    expect(navLevel('/members/dev-code').current).toBe('/members/dev-code');
+  it("keeps the sections on an item's page, its list marked", () => {
+    const l = navLevel('/members/dev-code');
+    expect(l.back).toBeUndefined();
+    expect(l.current).toBe('/members');
   });
 });
 
@@ -48,8 +46,8 @@ describe('trailOf', () => {
   it('starts at the overview and names every level once', () => {
     expect(trailOf('/', name).map((c) => c.label)).toEqual(['Overview']);
     expect(trailOf('/audit', name).map((c) => c.label)).toEqual(['Overview', 'Audit log']);
-    expect(trailOf('/members/guillaume/projects', name).map((c) => [c.label, c.href])).toEqual([
-      ['Overview', '/'], ['Members', '/members'], ['Guillaume', '/members/guillaume'], ['Projects', '/members/guillaume/projects'],
+    expect(trailOf('/members/guillaume', name).map((c) => [c.label, c.href])).toEqual([
+      ['Overview', '/'], ['Members', '/members'], ['Guillaume', '/members/guillaume'],
     ]);
   });
 });

@@ -158,9 +158,9 @@ class Shell extends Component {
     const app = this.app;
     switch (place.tab) {
       case 'members':
-        return place.name !== undefined ? new MemberPage(app, place.name, place.page) : new MembersView(app);
+        return place.name !== undefined ? new MemberPage(app, place.name) : new MembersView(app);
       case 'projects':
-        return place.name !== undefined ? new ProjectPage(app, place.name, place.page) : new ProjectsView(app);
+        return place.name !== undefined ? new ProjectPage(app, place.name) : new ProjectsView(app);
       case 'audit':
         return new AuditView(app);
       case 'settings':

@@ -12,9 +12,8 @@ import { PickerDialog } from './pickers';
 import { View } from './view';
 
 /**
- * Base of a member's and a project's pages: the item's head, then the page
- * the path names, in sections. The item's own path is its overview; the rail
- * lists its other pages (route.ts).
+ * Base of a member's and a project's pages: the item's head, then its
+ * cards, side by side.
  */
 abstract class ItemPage extends View {
   /** A removal waiting for its confirmation. */
@@ -42,11 +41,11 @@ abstract class ItemPage extends View {
   }
 }
 
-/** A member's pages: /members/<name>, and its projects, access and advanced pages. */
+/** A member's page, /members/<name>: everything about it, in cards. */
 export class MemberPage extends ItemPage {
   private signins: Signin[] | null = null;
 
-  constructor(app: AdminApp, private readonly name: string, private readonly page: string) {
+  constructor(app: AdminApp, private readonly name: string) {
     super(app);
     const path = () => `/members/${AdminStore.path(this.name)}`;
     this.actions = {
@@ -100,22 +99,7 @@ export class MemberPage extends ItemPage {
     if (!m) return this.gone('member', this.name, '/members');
     const kindTxt = m.kind === 'person' ? 'Person' : m.kind === 'agent' ? 'Agent · connects with its token' : 'Device · sends only';
     const head = this.itemHead(Avatar.of(m), html`${m.display_name || m.name}${!m.enabled ? html`<span class="${ui.pill.muted}">paused</span>` : ''}`, `${kindTxt} · @${m.name}`);
-    let body: Html[];
-    switch (this.page) {
-      case 'projects':
-        body = [this.projectsSection(m)];
-        break;
-      case 'access':
-        body = [this.accessSection(m)];
-        break;
-      case 'advanced':
-        body = this.advancedSections(m);
-        break;
-      default:
-        // The overview shows every part of the member at once; the pages
-        // beside it are each part on its own, for a link to land on.
-        body = [...this.overviewSections(m), this.projectsSection(m), this.accessSection(m)];
-    }
+    const body = [...this.overviewSections(m), this.projectsSection(m), this.accessSection(m), ...this.advancedSections(m)];
     return html`${head}<div class="${ui.cards}">${body}</div>`;
   }
 
@@ -147,8 +131,7 @@ export class MemberPage extends ItemPage {
 
   private advancedSections(m: Member): Html[] {
     return [
-      html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Pause</h2><div class="${ui.line}"><div class="m"><b>Paused</b><span>Nothing is lost.</span></div>${Switch.of(!m.enabled, 'pause', m.name, 'Paused')}</div></div>`,
-      html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Remove</h2>${this.confirming
+      html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Pause or remove</h2><div class="${ui.line}"><div class="m"><b>Paused</b><span>Nothing is lost.</span></div>${Switch.of(!m.enabled, 'pause', m.name, 'Paused')}</div>${this.confirming
         ? html`<div class="${ui.confirm}"><p><b>Remove ${m.name} from cafard?</b></p><ul>
             <li>${m.kind === 'person' ? 'Every sign-in ends now.' : 'Its token stops working on the next request.'}</li>
             <li>It leaves its ${m.projects.length} project${m.projects.length === 1 ? '' : 's'}.</li>
@@ -177,7 +160,7 @@ export class MemberPage extends ItemPage {
   protected override afterRender(): void {
     super.afterRender();
     const m = this.member();
-    if ((this.page === 'access' || this.page === '') && m?.kind === 'person' && m.joined && this.signins === null) {
+    if (m?.kind === 'person' && m.joined && this.signins === null) {
       void this.app.attempt(() => this.store.api.get<{ signins: Signin[] }>(`/members/${AdminStore.path(m.name)}/signins`)).then((r) => {
         this.signins = r?.signins ?? [];
         const box = this.find('.signins');
@@ -187,9 +170,9 @@ export class MemberPage extends ItemPage {
   }
 }
 
-/** A project's pages: /projects/<name>, and its members, files and advanced pages. */
+/** A project's page, /projects/<name>: everything about it, in cards. */
 export class ProjectPage extends ItemPage {
-  constructor(app: AdminApp, private readonly name: string, private readonly page: string) {
+  constructor(app: AdminApp, private readonly name: string) {
     super(app);
     const path = () => `/projects/${AdminStore.path(this.name)}`;
     this.actions = {
@@ -227,39 +210,21 @@ export class ProjectPage extends ItemPage {
     if (!p) return this.gone('project', this.name, '/projects');
     const head = this.itemHead(Avatar.project(p.name), html`${p.name}${p.archived ? html`<span class="${ui.pill.muted}">archived · read-only</span>` : ''}`,
       `${p.conversations} conversations · ${p.files} files · ${p.members.length} members`);
-    let body: Html[];
-    switch (this.page) {
-      case 'members':
-        body = [this.membersSection(p, p.members.length)];
-        break;
-      case 'files':
-        body = [this.filesSection(p)];
-        break;
-      case 'advanced':
-        body = this.advancedSections(p);
-        break;
-      default:
-        body = [...this.overviewSections(p), this.filesSection(p)];
-    }
+    const body = [this.summarySection(p), this.membersSection(p), this.filesSection(p), ...this.advancedSections(p)];
     return html`${head}<div class="${ui.cards}">${body}</div>`;
   }
 
-  private overviewSections(p: Project): Html[] {
-    return [
-      html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Summary</h2><dl class="${ui.kv}">
+  private summarySection(p: Project): Html {
+    return html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Summary</h2><dl class="${ui.kv}">
         <dt>Conversations</dt><dd>${p.conversations}</dd>
-        <dt>Files</dt><dd>${p.files}, ${Bytes.format(p.bytes)} of ${Bytes.format(p.quota_bytes)}</dd>
-        <dt>Retention</dt><dd>${p.retention_days} days</dd>
-        <dt>State</dt><dd>${p.archived ? 'Archived, read-only' : 'Open'}</dd></dl></div>`,
-      this.membersSection(p, 6),
-    ];
+        <dt>Members</dt><dd>${p.members.length}</dd>
+        <dt>State</dt><dd>${p.archived ? 'Archived, read-only' : 'Open'}</dd></dl></div>`;
   }
 
-  private membersSection(p: Project, shown: number): Html {
+  private membersSection(p: Project): Html {
     const count = (k: string) => p.members.filter((m) => m.kind === k).length;
-    const rows = p.members.slice(0, shown).map((m) => html`<a class="${ui.line} state-layer -mx-1 rounded-md3-s p-1 text-inherit no-underline" href="${pathOf('members', m.name)}">${Avatar.of(m, 'sm')}<div class="m"><b>${m.display_name || m.name}</b><span>${m.kind === 'person' ? 'Person' : m.kind === 'agent' ? 'Agent · reads and writes' : 'Device · sends only'}</span></div><span class="ml-auto text-on-surface-variant">${Icon.of('chev')}</span></a>`);
+    const rows = p.members.map((m) => html`<a class="${ui.line} state-layer -mx-1 rounded-md3-s p-1 text-inherit no-underline" href="${pathOf('members', m.name)}">${Avatar.of(m, 'sm')}<div class="m"><b>${m.display_name || m.name}</b><span>${m.kind === 'person' ? 'Person' : m.kind === 'agent' ? 'Agent · reads and writes' : 'Device · sends only'}</span></div><span class="ml-auto text-on-surface-variant">${Icon.of('chev')}</span></a>`);
     return html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Members · ${count('person')} people, ${count('agent')} agents, ${count('device')} devices</h2>${rows.length ? rows : html`<span class="text-[12.5px] text-on-surface-variant">Nobody yet.</span>`}
-      ${p.members.length > shown ? html`<a class="${ui.link} text-[12.5px]" href="${pathOf('projects', p.name, 'members')}">and ${p.members.length - shown} more</a>` : ''}
       ${p.archived ? '' : html`<div class="flex flex-wrap items-center gap-2.5"><button class="${ui.btn('tonal', 'sm')}" data-act="manage-members">Add or remove members</button></div>`}</div>`;
   }
 
@@ -276,8 +241,7 @@ export class ProjectPage extends ItemPage {
 
   private advancedSections(p: Project): Html[] {
     return [
-      html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">${p.archived ? 'Archived' : 'Archive'}</h2><p class="${ui.dim}">${p.archived ? 'Readable; nothing can be posted.' : 'Readable; stops all posting. Can be undone.'}</p><div class="flex flex-wrap items-center gap-2.5"><button class="${ui.btn('tonal', 'sm')}" data-act="archive">${p.archived ? 'Unarchive' : 'Archive project'}</button></div></div>`,
-      html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Delete</h2>${this.confirming
+      html`<div class="${ui.card}"><h2 class="${ui.cardTitle}">Archive or delete</h2><div class="${ui.line}"><div class="m"><b>${p.archived ? 'Archived' : 'Archive'}</b><span>${p.archived ? 'Readable; nothing can be posted.' : 'Readable; stops all posting. Can be undone.'}</span></div><button class="${ui.btn('tonal', 'sm')}" data-act="archive">${p.archived ? 'Unarchive' : 'Archive'}</button></div>${this.confirming
         ? html`<div class="${ui.confirm}"><p><b>This cannot be undone.</b> Deleting ${p.name} removes, for every member:</p><ul><li>${p.conversations} conversations and their messages</li><li>${p.files} files, ${Bytes.format(p.bytes)}</li><li>${p.members.length} memberships</li></ul>
             <div class="${ui.field}"><label class="${ui.label}" for="pName">Type <b>${p.name}</b> to confirm</label><input class="${ui.input}" id="pName" autocomplete="off"></div>
             <div class="flex flex-wrap items-center gap-2.5"><button class="${ui.btn('danger', 'sm')}" id="pDel" data-act="p-delete" disabled>Delete ${p.name}</button><button class="${ui.btn('tonal', 'sm')}" data-act="no-delete">Cancel</button></div></div>`
