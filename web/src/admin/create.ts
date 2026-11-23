@@ -6,7 +6,7 @@ import { PickerState, PickerView } from '@shared/picker';
 import { Toaster } from '@shared/toast';
 import { Avatar } from '@shared/widgets';
 import type { AdminApp } from './app';
-import { closeButton, memberItems, projectItems } from './drawers';
+import { closeButton, memberItems, projectItems } from './pickers';
 import type { Kind, Link, Member, MemberRef } from './types';
 
 const DESCRIBE: Record<Kind, string> = {
@@ -108,7 +108,7 @@ export class CreateMemberFlow extends Component {
     if (this.value('#nExp') !== undefined) body['link_hours'] = Number(this.value('#nExp'));
     try {
       const r = await this.app.store.api.post<{ member: MemberRef; link?: Link; token?: string }>('/members', body);
-      await this.app.refresh();
+      await this.app.go(`/members/${encodeURIComponent(r.member.name)}`);
       const m = this.app.store.member(r.member.name);
       this.app.layer.open(new GiveScreen(this.app, m ?? ({ ...r.member, enabled: true, joined: false, projects: [] } as Member), r.link, r.token, body['projects'] as string[]), 'center');
     } catch (e) {
@@ -261,9 +261,7 @@ export class CreateProjectFlow extends Component {
       this.find('#npName')?.classList.add('err');
       return;
     }
-    this.app.layer.close();
-    this.app.go('projects');
-    await this.app.refresh();
+    await this.app.go(`/projects/${encodeURIComponent(name)}`);
     Toaster.show(`${name} is ready.`);
   }
 }

@@ -1,56 +1,64 @@
 import { ApiClient, Refused } from '@shared/api';
 import { Component } from '@shared/component';
 import { Html, html } from '@shared/html';
-import { Icon, type IconName } from '@shared/icons';
+import { Icon } from '@shared/icons';
 import { Layer } from '@shared/overlay';
 import { Toaster } from '@shared/toast';
 import { AdminStore } from './store';
-import { AuditView, ConfigView, MembersView, ProjectsView, SignInView, StorageView, type View } from './views';
-import { MemberDrawer, ProjectDrawer } from './drawers';
-
-export type ViewName = 'members' | 'projects' | 'audit' | 'storage' | 'config';
-
-const VIEWS: Record<ViewName, { label: string; icon: IconName; make: (app: AdminApp) => View }> = {
-  members: { label: 'Members', icon: 'people', make: (a) => new MembersView(a) },
-  projects: { label: 'Projects', icon: 'folder', make: (a) => new ProjectsView(a) },
-  audit: { label: 'Audit log', icon: 'list', make: (a) => new AuditView(a) },
-  storage: { label: 'Storage', icon: 'disk', make: (a) => new StorageView(a) },
-  config: { label: 'Configuration', icon: 'gear', make: (a) => new ConfigView(a) },
-};
+import { MemberPage, ProjectPage } from './pages';
+import { canonical, fromHash, navLevel, placeOf, trailOf, type Place } from './route';
+import type { View } from './view';
+import { AuditView, MembersView, OverviewView, ProjectsView, SettingsView, SignInView } from './views';
 
 /**
- * AdminApp runs the admin UI: it signs in, reads the store, draws the view
- * the URL's hash names, and opens drawers and dialogs on its two layers.
+ * AdminApp runs the admin UI: it signs in, reads the store, and draws the
+ * page the URL's path names (route.ts), in a shell with a trail across the
+ * top and a rail down the side, as claudication's admin UI does. Dialogs
+ * open on its two layers.
  */
 export class AdminApp {
   readonly api: ApiClient;
   readonly store: AdminStore;
-  /** Drawers and dialogs. */
+  /** Dialogs: making a member, a project, a link. */
   readonly layer: Layer;
-  /** What opens over a drawer: the member picker. */
+  /** What opens over a dialog. */
   readonly layer2: Layer;
-  /** What the views remember across redraws: the search and the filters. */
+  /** What the lists remember across pages: the search and the filters. */
   readonly ui = { query: '', kind: 'all', audit: 'all' };
   private shell: Shell | null = null;
-  private drawer: MemberDrawer | ProjectDrawer | null = null;
 
   constructor(private readonly root: HTMLElement) {
     this.api = new ApiClient('/admin/api', () => this.showSignIn('You were signed out. Sign in again.'));
     this.store = new AdminStore(this.api);
     this.layer = new Layer(document.getElementById('overlay') as HTMLElement);
     this.layer2 = new Layer(document.getElementById('overlay2') as HTMLElement);
-    window.addEventListener('hashchange', () => {
+    window.addEventListener('popstate', () => {
+      this.layer2.close();
       this.layer.close();
       void this.refresh();
     });
+    // Every link to a page of this UI is followed without a reload; one
+    // opened in a new tab, or with a modifier, is the browser's.
+    document.addEventListener('click', (e) => {
+      const a = (e.target as Element | null)?.closest<HTMLAnchorElement>('a[href^="/"]');
+      if (!a || a.target || a.hasAttribute('download') || e.defaultPrevented) return;
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const href = a.getAttribute('href') ?? '';
+      if (href.startsWith('/admin/')) return;
+      e.preventDefault();
+      void this.go(href);
+    });
   }
 
-  get view(): ViewName {
-    const h = location.hash.slice(1);
-    return h in VIEWS ? (h as ViewName) : 'members';
+  get place(): Place {
+    return placeOf(location.pathname);
   }
 
   async start(): Promise<void> {
+    // Links from before the paths (#members) and paths that name no page
+    // land where they meant.
+    const target = fromHash(location.hash) ?? canonical(location.pathname);
+    if (target !== location.pathname || location.hash) history.replaceState(null, '', target + location.search);
     try {
       if (await this.store.whoAmI()) await this.showShell();
       else this.showSignIn();
@@ -75,12 +83,20 @@ export class AdminApp {
     await this.refresh();
   }
 
-  /** Reads the store again and redraws the page and any open drawer. */
+  /** Reads the store again and redraws the page. */
   async refresh(): Promise<void> {
     if (!this.store.signedIn || !this.shell) return;
-    await this.attempt(() => this.store.load(this.view));
+    await this.attempt(() => this.store.load(this.place.tab));
     this.shell.render();
-    if (this.drawer && this.layer.isOpen) this.drawer.render();
+  }
+
+  /** Goes to a page of this UI: a new entry in the history, then the page. */
+  async go(path: string): Promise<void> {
+    const to = canonical(path);
+    if (to !== location.pathname) history.pushState(null, '', to);
+    this.layer2.close();
+    this.layer.close();
+    await this.refresh();
   }
 
   /**
@@ -106,26 +122,22 @@ export class AdminApp {
     return r;
   }
 
-  openMember(name: string): void {
-    this.drawer = new MemberDrawer(this, name);
-    this.layer.open(this.drawer, 'right', () => (this.drawer = null));
-  }
-
-  openProject(name: string): void {
-    this.drawer = new ProjectDrawer(this, name);
-    this.layer.open(this.drawer, 'right', () => (this.drawer = null));
-  }
-
-  closeDrawer(): void {
-    this.layer.close();
-  }
-
-  go(view: ViewName): void {
-    location.hash = view;
+  /** How the trail names an item: a member by its display name. */
+  nameOf(kind: 'members' | 'projects', name: string): string {
+    if (kind === 'members') {
+      const m = this.store.member(name);
+      return m?.display_name || name;
+    }
+    return name;
   }
 }
 
-/** Shell is the frame: the top bar, the navigation, and the current view. */
+/**
+ * Shell is the frame: the top bar, the rail of the current level down the
+ * side (a row above the page on a phone), the trail of every level above the
+ * page, and the page. The rail and the trail are plain links, read off the
+ * path, so any of them opens in a new tab.
+ */
 class Shell extends Component {
   constructor(private readonly app: AdminApp) {
     super('div', 'shell');
@@ -137,24 +149,51 @@ class Shell extends Component {
     };
   }
 
+  private pageOf(place: Place): View {
+    const app = this.app;
+    switch (place.tab) {
+      case 'members':
+        return place.name !== undefined ? new MemberPage(app, place.name, place.page) : new MembersView(app);
+      case 'projects':
+        return place.name !== undefined ? new ProjectPage(app, place.name, place.page) : new ProjectsView(app);
+      case 'audit':
+        return new AuditView(app);
+      case 'settings':
+        return new SettingsView(app);
+      default:
+        return new OverviewView(app);
+    }
+  }
+
   protected view(): Html {
-    const current = this.app.view;
-    const counts: Partial<Record<ViewName, number>> = { members: this.app.store.members.length, projects: this.app.store.projects.length };
-    const nav = (Object.keys(VIEWS) as ViewName[]).map((k) => {
-      const v = VIEWS[k];
-      const n = counts[k];
-      return html`<a href="#${k}" ${Html.raw(k === current ? 'aria-current="page"' : '')}>${Icon.of(v.icon)}${v.label}${n ? html`<span class="n">${n}</span>` : ''}</a>`;
+    const path = canonical(location.pathname);
+    const level = navLevel(path);
+    const counts: Record<string, number> = { '/members': this.app.store.members.length, '/projects': this.app.store.projects.length };
+    const current = (href: string) => Html.raw(href === level.current ? 'aria-current="page"' : '');
+    const rail = html`${level.back ? html`<a class="back" href="${level.back.href}">${Icon.of('back')}${level.back.label}</a>` : ''}
+      ${level.items.map((l) => html`<a href="${l.href}" ${current(l.href)}>${l.icon ? Icon.of(l.icon) : ''}<span class="l">${l.label}</span>${!level.back && counts[l.href] ? html`<span class="n">${counts[l.href]}</span>` : ''}</a>`)}`;
+    const trail = trailOf(path, (k, n) => this.app.nameOf(k, n));
+    const crumbs = trail.map((c, i) => {
+      const last = i === trail.length - 1;
+      return html`${i > 0 ? html`<span class="sep">${Icon.of('chev')}</span>` : ''}<a href="${c.href}" ${Html.raw(last ? 'aria-current="page"' : '')} ${Html.raw(i === 0 ? 'aria-label="Overview"' : '')}>${i === 0 ? Icon.of('home') : html`${c.icon ? Icon.of(c.icon) : ''}<span>${c.label}</span>`}</a>`;
     });
-    return html`<header class="top"><div class="brand">${Icon.logo} cafard <small>admin</small></div>
+    return html`<header class="top"><a class="brand" href="/">${Icon.logo} cafard <small>admin</small></a>
       <span class="where" title="This UI is served only on admin-listen">${Icon.of('lock')}Internal network only</span>
       <span class="grow"></span>
       <span class="me"><span>admin</span><button data-act="signout">Sign out</button></span></header>
-      <div class="body"><nav class="nav" aria-label="Admin sections">${nav}</nav><main class="main"><div class="page"></div></main></div>`;
+      <div class="body"><nav class="rail" aria-label="${level.back ? 'Pages' : 'Sections'}">${rail}</nav>
+      <main class="main"><nav class="trail" aria-label="Breadcrumb">${crumbs}</nav><div class="page"></div></main></div>`;
   }
 
   protected override afterRender(): void {
-    const view = VIEWS[this.app.view].make(this.app);
+    const view = this.pageOf(this.app.place);
     this.$('.page').replaceWith(view.root);
     view.render();
+    // On a phone the rail is a row and the trail can be wider than the
+    // screen: bring the page's own entry, and the trail's end, into view.
+    this.find('.rail [aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const trail = this.find('.trail');
+    if (trail) trail.scrollLeft = trail.scrollWidth;
+    document.title = `${trailOf(canonical(location.pathname), (k, n) => this.app.nameOf(k, n)).slice(1).map((c) => c.label).reverse().join(' · ') || 'Overview'} · cafard admin`;
   }
 }

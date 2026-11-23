@@ -39,16 +39,16 @@ export class AdminStore {
     return this.signedIn;
   }
 
-  /** Reads what every view needs, and what the view named needs besides. */
-  async load(view: string): Promise<void> {
+  /** Reads what every page needs, and what the tab's pages need besides. */
+  async load(tab: string): Promise<void> {
     const [m, p] = await Promise.all([
       this.api.get<{ members: Member[] }>('/members'),
       this.api.get<{ projects: Project[] }>('/projects'),
     ]);
     this.members = m.members;
     this.projects = p.projects;
-    if (view === 'audit') this.audit = (await this.api.get<{ entries: AuditEntry[] }>('/audit')).entries;
-    if (view === 'storage') this.links = (await this.api.get<{ links: Link[] }>('/links')).links;
+    if (tab === 'audit') this.audit = (await this.api.get<{ entries: AuditEntry[] }>('/audit')).entries;
+    if (tab === 'overview') this.links = (await this.api.get<{ links: Link[] }>('/links')).links;
     if (!this.config) this.config = await this.api.get<Config>('/config');
   }
 

@@ -1,4 +1,5 @@
 import { Component } from '@shared/component';
+import { pathOf } from './route';
 import { Bytes, time } from '@shared/format';
 import { Html, html } from '@shared/html';
 import { Icon } from '@shared/icons';
@@ -6,22 +7,8 @@ import { Avatar, Meter, Switch } from '@shared/widgets';
 import type { AdminApp } from './app';
 import { CreateMemberFlow, CreateProjectFlow } from './create';
 import { AdminStore } from './store';
+import { View } from './view';
 import type { AuditEntry, Member } from './types';
-
-/** A page of the admin UI, drawn from the store. */
-export abstract class View extends Component {
-  constructor(protected readonly app: AdminApp) {
-    super('div', 'page');
-  }
-
-  protected get store(): AdminStore {
-    return this.app.store;
-  }
-
-  protected head(title: string, text: string | Html, button?: Html): Html {
-    return html`<div class="page-head"><div class="t"><h1>${title}</h1><p>${text}</p></div>${button ?? ''}</div>`;
-  }
-}
 
 /** How a member's row describes them under their name. */
 function subOf(m: Member): string {
@@ -49,7 +36,7 @@ export class MembersView extends View {
         this.app.ui.kind = t.dataset['v'] ?? 'all';
         this.render();
       },
-      open: (t) => this.app.openMember(t.dataset['v'] ?? ''),
+      open: (t) => this.app.go(pathOf('members', t.dataset['v'] ?? '')),
       pause: async (t) => {
         const m = this.store.member(t.dataset['v'] ?? '');
         if (!m) return;
@@ -76,15 +63,10 @@ export class MembersView extends View {
   protected view(): Html {
     const members = this.store.members;
     const count = (k: string) => members.filter((m) => k === 'all' || m.kind === k).length;
-    const stale = members.filter((m) => m.last_used && time.daysSince(m.last_used) > 30);
-    const lost = members.filter((m) => !m.joined && m.link?.state === 'expired');
-    const review = [
-      ...stale.map((m) => `${m.name} unused for ${time.daysSince(m.last_used ?? '')} days`),
-      ...lost.map((m) => `the link for ${m.name} expired`),
-    ];
+    const review = this.review();
     const seg = (['all', 'person', 'agent', 'device'] as const).map((k) =>
       html`<button aria-pressed="${String(this.app.ui.kind === k)}" data-act="filter" data-v="${k}">${{ all: 'All', person: 'People', agent: 'Agents', device: 'Devices' }[k]} ${count(k)}</button>`);
-    return html`${this.head('People, agents and devices',
+    return html`${this.head('Members',
       'Everyone who can reach cafard. People sign in, agents connect with a token their install link gave them, devices only send. What each can see comes from its projects.',
       html`<button class="btn filled" data-act="new">${Icon.of('plus')}New</button>`)}
       ${review.length ? html`<div class="notice">${Icon.of('warn')}<p><b>${review.length} to review.</b> ${review.join(' · ')}.</p></div>` : ''}
@@ -116,7 +98,6 @@ export class ProjectsView extends View {
     super(app);
     this.actions = {
       'new-project': () => this.app.layer.open(new CreateProjectFlow(this.app), 'center'),
-      proj: (t) => this.app.openProject(t.dataset['v'] ?? ''),
     };
   }
 
@@ -124,10 +105,10 @@ export class ProjectsView extends View {
     const ps = [...this.store.projects].sort((a, b) => Number(!!a.archived) - Number(!!b.archived) || a.name.localeCompare(b.name));
     const rows = ps.map((p) => {
       const stack = html`${p.members.slice(0, 5).map((m) => Avatar.of(m))}${p.members.length > 5 ? html`<span class="more">+${p.members.length - 5}</span>` : ''}`;
-      return html`<button class="prow ${p.archived ? 'archived' : ''}" data-act="proj" data-v="${p.name}">${Avatar.project(p.name)}
+      return html`<a class="prow ${p.archived ? 'archived' : ''}" href="${pathOf('projects', p.name)}">${Avatar.project(p.name)}
         <span class="who"><span class="nm">${p.name}${p.archived ? html`<span class="pill muted">archived · read-only</span>` : ''}</span>
         <span class="sub">${p.conversations} conversations · ${p.files} files · ${p.members.length} members</span></span>
-        <span class="stack">${stack}</span>${Meter.of(p)}<span class="chev">${Icon.of('chev')}</span></button>`;
+        <span class="stack">${stack}</span>${Meter.of(p)}<span class="chev">${Icon.of('chev')}</span></a>`;
     });
     return html`${this.head('Projects', 'A project decides who sees what: its people and agents read and write all its conversations, devices only send to it. People already in a project can add members from the chat too.',
       html`<button class="btn filled" data-act="new-project">${Icon.of('plus')}New project</button>`)}
@@ -164,11 +145,14 @@ export class AuditView extends View {
   }
 }
 
-export class StorageView extends View {
+/**
+ * The overview, at the root: what needs looking at, the links waiting to be
+ * used, and what the projects hold.
+ */
+export class OverviewView extends View {
   constructor(app: AdminApp) {
     super(app);
     this.actions = {
-      proj: (t) => this.app.openProject(t.dataset['v'] ?? ''),
       'cancel-link': async (t) => {
         await this.app.change(() => this.store.api.delete(`/links/${t.dataset['v']}`), 'The link no longer works.');
       },
@@ -176,29 +160,36 @@ export class StorageView extends View {
   }
 
   protected view(): Html {
+    const ms = this.store.members;
     const ps = this.store.projects;
+    const n = (k: string) => ms.filter((m) => m.kind === k).length;
     const total = ps.reduce((s, p) => s + p.bytes, 0);
     const files = ps.reduce((s, p) => s + p.files, 0);
+    const review = this.review();
     const waiting = this.store.links.filter((l) => l.state === 'waiting').map((l) => {
       const what = l.kind === 'agent' ? 'install link' : l.kind === 'password' ? 'password link' : 'join link';
-      return html`<div class="line"><div class="m"><b>${l.member}</b><span>${what} · made by ${l.created_by} ${time.ago(l.created_at)} · ${time.until(l.expires_at)}</span></div><button class="btn sm danger-text" data-act="cancel-link" data-v="${String(l.id)}">Cancel</button></div>`;
+      return html`<div class="line"><div class="m"><b><a href="${pathOf('members', l.member)}">${l.member}</a></b><span>${what} · made by ${l.created_by} ${time.ago(l.created_at)} · ${time.until(l.expires_at)}</span></div><button class="btn sm danger-text" data-act="cancel-link" data-v="${String(l.id)}">Cancel</button></div>`;
     });
-    const rows = ps.map((p) => html`<button class="prow storage" data-act="proj" data-v="${p.name}">${Avatar.project(p.name)}<span class="who"><span class="nm">${p.name}${p.archived ? html`<span class="pill muted">archived</span>` : ''}</span><span class="sub">${p.files} files</span></span>${Meter.of(p)}<span class="chev">${Icon.of('chev')}</span></button>`);
-    return html`${this.head('Storage', 'Files are kept per project for its retention; messages stay when files expire.')}
-      <div class="grid2">
-        <div class="card"><h2>Files</h2><div class="big">${Bytes.format(total)} <small>in ${files} files</small></div><p>Counted per project: the same file sent to two projects counts in each, though it is stored once.</p></div>
-        <div class="card"><h2>Links waiting</h2>${waiting.length ? waiting : html`<p>No link is waiting to be used.</p>`}</div>
+    const rows = ps.map((p) => html`<a class="prow storage" href="${pathOf('projects', p.name, 'files')}">${Avatar.project(p.name)}<span class="who"><span class="nm">${p.name}${p.archived ? html`<span class="pill muted">archived</span>` : ''}</span><span class="sub">${p.files} files</span></span>${Meter.of(p)}<span class="chev">${Icon.of('chev')}</span></a>`);
+    return html`${this.head('Overview', 'Who can reach cafard, what is waiting, and what the projects hold.')}
+      ${review.length ? html`<div class="notice">${Icon.of('warn')}<p><b>${review.length} to review.</b> ${review.join(' · ')}.</p></div>` : ''}
+      <div class="grid3">
+        <a class="card stat" href="/members"><h2>Members</h2><div class="big">${ms.length}</div><p>${n('person')} people · ${n('agent')} agents · ${n('device')} devices</p></a>
+        <a class="card stat" href="/projects"><h2>Projects</h2><div class="big">${ps.length}</div><p>${ps.filter((p) => p.archived).length} archived</p></a>
+        <div class="card stat"><h2>Files</h2><div class="big">${Bytes.format(total)}</div><p>in ${files} files, counted per project</p></div>
       </div>
-      <h2 class="h2-gap">By project</h2>
+      <div class="card"><h2>Links waiting</h2>${waiting.length ? waiting : html`<p>No link is waiting to be used.</p>`}</div>
+      <h2 class="h2-gap">Storage by project</h2>
       <div class="list">${rows.length ? rows : html`<div class="empty">No project yet.</div>`}</div>`;
   }
 }
 
-export class ConfigView extends View {
+/** Settings: the configuration, which changes only in the file on the box. */
+export class SettingsView extends View {
   protected view(): Html {
     const c = this.store.config;
     if (!c) return html`<p class="loading">Loading…</p>`;
-    return html`${this.head('Configuration', html`Where cafard listens and what it allows. These come from <code>/etc/cafard/config.yaml</code> and change only there, then a restart.`)}
+    return html`${this.head('Settings', html`Where cafard listens and what it allows. These come from <code>/etc/cafard/config.yaml</code> and change only there, then a restart.`)}
       <div class="grid2">
         <div class="card"><h2>Listeners</h2>
           <div class="listen"><code>listen ${c.listen}</code><span>Published: the chat app, /api/v1, join links. People and agents reach it at <code>${c.public_url}</code>.</span></div>
