@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"cafard/internal/httpapi/admin"
 	"cafard/internal/httpapi/join"
@@ -20,6 +21,14 @@ import (
 )
 
 func TestMain(m *testing.M) { testenv.Offline(m) }
+
+// fakeUI stands in for the built admin UI, which only `make web` produces:
+// these tests are of how it is served, not of what it is.
+var fakeUI = fstest.MapFS{
+	"index.html":      {Data: []byte("<!doctype html><title>cafard admin</title><script type=module src=/assets/main.js></script>")},
+	"assets/main.js":  {Data: []byte("console.log('admin')")},
+	"assets/main.css": {Data: []byte("body{}")},
+}
 
 var ctx = context.Background()
 
@@ -51,7 +60,7 @@ func newRig(t *testing.T) *rig {
 	join.New(nil, acc, r.publicSrv.URL).Register(pub)
 
 	adm := http.NewServeMux()
-	admin.New(nil, st, acc, admin.Config{PublicURL: r.publicSrv.URL}, admin.UI()).Register(adm)
+	admin.New(nil, st, acc, admin.Config{PublicURL: r.publicSrv.URL}, fakeUI).Register(adm)
 	r.adminSrv = httptest.NewServer(adm)
 	t.Cleanup(r.adminSrv.Close)
 
@@ -319,7 +328,7 @@ func TestArchiveAndLimits(t *testing.T) {
 
 func TestUIIsServedWithItsPolicy(t *testing.T) {
 	r := newRig(t)
-	for _, p := range []string{"/", "/app.js", "/style.css", "/some/deep/link"} {
+	for _, p := range []string{"/", "/assets/main.js", "/assets/main.css", "/some/deep/link"} {
 		resp, err := http.Get(r.adminSrv.URL + p)
 		if err != nil {
 			t.Fatal(err)
@@ -332,5 +341,26 @@ func TestUIIsServedWithItsPolicy(t *testing.T) {
 		if p == "/some/deep/link" && !strings.Contains(string(body), "<title>cafard admin</title>") {
 			t.Errorf("a deep link does not get the page")
 		}
+	}
+}
+
+func TestAMissingUISaysHowToBuildIt(t *testing.T) {
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "cafard.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	mux := http.NewServeMux()
+	admin.New(nil, st, access.New(st), admin.Config{}, nil).Register(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 404 || !strings.Contains(string(body), "make build") {
+		t.Errorf("no UI: %d %s", resp.StatusCode, body)
 	}
 }

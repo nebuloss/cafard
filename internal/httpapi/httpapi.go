@@ -26,6 +26,7 @@ import (
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
 	"cafard/internal/version"
+	"cafard/internal/webui"
 )
 
 // Deps is what the surfaces are built from. A test may leave the services
@@ -79,7 +80,7 @@ func adminMux(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
 	if d.Store != nil && d.Access != nil {
-		admin.New(d.Log, d.Store, d.Access, d.Admin, admin.UI()).Register(mux)
+		admin.New(d.Log, d.Store, d.Access, d.Admin, webui.Admin()).Register(mux)
 	} else {
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/" {

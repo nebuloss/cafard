@@ -27,8 +27,16 @@ const uiPolicy = "default-src 'self'; img-src 'self' data:; style-src 'self'; sc
 	"form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 
 // static serves the admin UI's files. It is one page: every path that is not
-// a file is that page, which routes on its hash.
+// a file is that page, which routes on its hash. A binary built without the
+// UI (a bare go build) says how to get it.
 func (a *Admin) static() http.Handler {
+	if a.ui == nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("cafard admin: this binary was built without its UI. Build it with `make build`, which runs `make web` first.\nThe admin API is at /admin/api.\n"))
+		})
+	}
 	files := http.FileServerFS(a.ui)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {

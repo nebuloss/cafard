@@ -87,16 +87,23 @@ topic, and a tab's one event stream tells its panels to read again. MCP's
 
 ## Commands
 
-    make check        # fmt-check, vet, tidy-check, test with -race: what CI runs
-    make build        # static binary at dist/cafard
+    make check        # fmt-check, vet, tidy-check, typecheck, test-web, test with -race: what CI runs
+    make build        # static binary at dist/cafard, web UIs embedded (runs make web)
+    make web          # build the web UIs into internal/webui/dist, where go:embed takes them
+    make typecheck    # tsc over web/: Vite strips types without checking them
+    make test-web     # the web UIs' unit tests (vitest, under node)
     make test         # Go tests with -race (needs cgo)
     make test-norace  # the same without cgo
+
+Git holds `internal/webui/dist` empty; a bare `go build` serves the APIs and
+says the UI is missing. For UI work, `cd web && npm run dev:admin` runs Vite
+proxying `/admin/api` to a local `cafard serve`.
 
 One test: `go test ./internal/service/access -run TestName -race -count=1`.
 
 The Makefile pins `GOTOOLCHAIN` to the `go` directive in `go.mod` (1.26.0),
-so a plain `go` command may resolve a different compiler than `make` does.
-The web UI's targets (`test-web`, `typecheck`, `dev`) come with step 4.
+so a plain `go` command may resolve a different compiler than `make` does;
+`web/package-lock.json` pins the web compilers the same way.
 
 Subcommands today: `serve`, `config` (check and print the configuration),
 `admin` (people, agents, devices, projects, tokens; `cafard admin -h`) and
@@ -121,12 +128,18 @@ a live server is a script under `scripts/`, run by hand, and says so.
 - Commit messages are imperative and explain the reasoning, not the diff.
   Commits are authored by the repository owner and carry no co-author or
   generated-by trailers.
-- The admin UI (`internal/httpapi/admin/ui`) is plain HTML, CSS and
-  JavaScript with no build step, using claudication's MD3 tokens as CSS
-  variables: use the tokens, not raw colours. Its Content-Security-Policy
-  allows no inline script and no `style` attribute; set data-driven sizes
-  through `element.style` after rendering. The chat app's stack is decided
-  at step 4.
+- **The web UIs are TypeScript, written as classes** (the owner's rule):
+  `web/src/admin` and, from step 4c, `web/src/chat`, sharing
+  `web/src/shared`. No framework. A piece of page is a `Component` subclass
+  that owns one element, returns its markup from `view()`, and declares its
+  behaviour in `this.actions`, keyed by `data-act`. Logic that needs no page
+  lives in its own class (`PickerState`, `Time`) with a test under
+  `web/test`. Markup is built with the `html` tag, which escapes every value
+  it is given; `Html.raw` is for markup written in this repo only.
+- The pages' Content-Security-Policy allows no inline script and no `style`
+  attribute; set data-driven sizes through `element.style` after rendering
+  (`Component.sizeBars`). Colours are claudication's MD3 tokens as CSS
+  variables: use the tokens, not raw colours.
 - The UI's words are the ones in the design doc's glossary: person, agent,
   device, member, session, project, conversation, message, file. Not channel,
   server, workspace or topic.

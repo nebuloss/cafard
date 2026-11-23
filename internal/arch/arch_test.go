@@ -20,6 +20,7 @@ var layers = map[string]int{
 	"internal/config":    0,
 	"internal/blobs":     0,
 	"internal/ratelimit": 0,
+	"internal/webui":     0,
 
 	"internal/store": 1,
 

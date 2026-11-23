@@ -1,0 +1,23 @@
+{
+  "name": "cafard-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "cafard's web UIs, the admin UI and the chat app: TypeScript classes, compiled into the static Go binary that serves them.",
+  "type": "module",
+  "scripts": {
+    "build": "vite build --mode admin",
+    "dev:admin": "vite --mode admin",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "//engines": "The UI is compiled into the binary, so its output is part of the build. The lockfile pins the compilers; this pins the runtime they run on. Node 20 is the floor Vite 6 supports and what dev-build runs.",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.9"
+  }
+}

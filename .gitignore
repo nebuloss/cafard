@@ -1,7 +1,8 @@
 /dist/
-/internal/httpapi/webdist/*
-!/internal/httpapi/webdist/.gitkeep
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep
 /web/node_modules/
+/web/dist/
 /state/
 *.db
 *.db-wal

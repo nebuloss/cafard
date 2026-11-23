@@ -4,7 +4,7 @@
 // Every package sits on a layer, and imports only from layers below its own.
 // Lowest first:
 //
-//	0  leaves         version logging testenv arch config blobs ratelimit
+//	0  leaves         version logging testenv arch config blobs ratelimit webui
 //	1  records        store
 //	2  rules          service/access
 //	3  services       service/chat

@@ -681,11 +681,11 @@ or an iOS Shortcut that `PUT`s to `/api/v1/send` with a device token.
 
 ## The admin UI
 
-Built (step 3); `go doc ./internal/httpapi/admin` is its reference. It is
-plain HTML, CSS and JavaScript embedded in the binary with no build step: a
-few lists and forms on a network that may have no internet, where the bytes
-served are the bytes in git. QR codes are drawn on the server, so nothing is
-fetched from anywhere.
+Built (step 3); `go doc ./internal/httpapi/admin` is its API's reference.
+Like the chat app, it is TypeScript written as classes in `web/`, with no
+framework, built by Vite and embedded in the binary (`internal/webui`): it
+loads nothing from anywhere else, on a network that may have no internet.
+QR codes are drawn on the server for the same reason.
 
 One list, **People, agents and devices**: each row with its projects as
 chips, last used, a pause switch and delete; an agent's row also shows its

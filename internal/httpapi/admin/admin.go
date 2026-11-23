@@ -107,12 +107,10 @@ func (a *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "No route "+r.Method+" "+r.URL.Path+".")
 	})
-	if a.ui != nil {
-		// "/" and not "GET /": a pattern with a method and a shorter path
-		// conflicts with "/admin/api/" in ServeMux, which panics. static
-		// answers anything but GET and HEAD with 405 itself.
-		mux.Handle("/", a.static())
-	}
+	// "/" and not "GET /": a pattern with a method and a shorter path
+	// conflicts with "/admin/api/" in ServeMux, which panics. static answers
+	// anything but GET and HEAD with 405 itself.
+	mux.Handle("/", a.static())
 }
 
 func clientIP(r *http.Request) string {
