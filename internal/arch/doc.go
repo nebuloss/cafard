@@ -4,13 +4,17 @@
 // Every package sits on a layer, and imports only from layers below its own.
 // Lowest first:
 //
-//	0  leaves         version logging testenv arch config blobs
+//	0  leaves         version logging testenv arch config blobs ratelimit
 //	1  records        store
 //	2  rules          service/access
 //	3  services       service/chat
-//	4  HTTP surfaces  httpapi/api
+//	4  HTTP surfaces  httpapi/api httpapi/admin httpapi/join
 //	5  composition    httpapi
 //	6  binary         cmd/cafard
+//
+// The surfaces do not import one another; the composition root hands across
+// what one needs from another. /api/v1 and /join are on the public listener,
+// the admin UI and its API on the admin listener.
 //
 // Read upward, that is the path of a request: the binary starts the
 // composition root in httpapi, which hands each surface the services it

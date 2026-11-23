@@ -24,6 +24,8 @@ import (
 	"cafard/internal/blobs"
 	"cafard/internal/config"
 	"cafard/internal/httpapi"
+	"cafard/internal/httpapi/admin"
+	"cafard/internal/httpapi/api"
 	"cafard/internal/logging"
 	"cafard/internal/service/access"
 	"cafard/internal/service/chat"
@@ -59,7 +61,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "config":
 		return showConfig(args[1:], stdout, stderr)
 	case "admin":
-		return admin(args[1:], stdout, stderr)
+		return adminCommand(args[1:], stdout, stderr)
 	case "version", "-version", "--version":
 		fmt.Fprintln(stdout, "cafard", version.String())
 		return 0
@@ -155,7 +157,9 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	} else if cut > 0 {
 		log.Warn("uploads cut off by the last stop", "files", cut)
 	}
-	srv := httpapi.New(httpapi.Deps{Log: log, Access: acc, Chat: ch})
+	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Admin: admin.Config{
+		Listen: cfg.Listen, AdminListen: cfg.AdminListen, PublicURL: cfg.URL(), StateDir: cfg.StateDir, MaxUpload: api.MaxUpload,
+	}})
 
 	pubLn, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {

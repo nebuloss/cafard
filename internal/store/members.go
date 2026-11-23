@@ -155,15 +155,27 @@ func (s *Store) SetDescription(ctx context.Context, id int64, description string
 }
 
 // DeleteIdentity removes an identity from cafard. The row stays, marked
-// deleted and disabled, so its history keeps its author; its memberships go,
-// so it reaches nothing.
+// deleted and disabled, so its history keeps its author. Everything that let
+// it in goes: memberships, token, password, sign-ins, and any link still
+// waiting.
 func (s *Store) DeleteIdentity(ctx context.Context, id int64, a AuditEntry) error {
+	now := s.now().UnixMilli()
 	return s.change(ctx, a, func(tx *sql.Tx) error {
 		if err := one(tx.ExecContext(ctx, `UPDATE identities SET deleted_at = ?, enabled = 0, admin = 0 WHERE id = ? AND deleted_at IS NULL`,
-			s.now().UnixMilli(), id)); err != nil {
+			now, id)); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `DELETE FROM memberships WHERE identity_id = ?`, id)
+		for _, q := range []string{
+			`DELETE FROM memberships WHERE identity_id = ?`,
+			`DELETE FROM tokens WHERE identity_id = ?`,
+			`DELETE FROM passwords WHERE identity_id = ?`,
+			`DELETE FROM signins WHERE identity_id = ?`,
+		} {
+			if _, err := tx.ExecContext(ctx, q, id); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE links SET cancelled_at = ? WHERE identity_id = ? AND used_at IS NULL AND cancelled_at IS NULL`, now, id)
 		return err
 	})
 }

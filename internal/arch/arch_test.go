@@ -13,12 +13,13 @@ import (
 
 // layers is the map in the package comment, as data. Keep the two in step.
 var layers = map[string]int{
-	"internal/version": 0,
-	"internal/logging": 0,
-	"internal/testenv": 0,
-	"internal/arch":    0,
-	"internal/config":  0,
-	"internal/blobs":   0,
+	"internal/version":   0,
+	"internal/logging":   0,
+	"internal/testenv":   0,
+	"internal/arch":      0,
+	"internal/config":    0,
+	"internal/blobs":     0,
+	"internal/ratelimit": 0,
 
 	"internal/store": 1,
 
@@ -26,7 +27,9 @@ var layers = map[string]int{
 
 	"internal/service/chat": 3,
 
-	"internal/httpapi/api": 4,
+	"internal/httpapi/api":   4,
+	"internal/httpapi/admin": 4,
+	"internal/httpapi/join":  4,
 
 	"internal/httpapi": 5,
 
@@ -36,6 +39,22 @@ var layers = map[string]int{
 // onlyImportedBy names packages that a lower layer is not enough to make
 // available: each may be imported by the listed packages and no others.
 var onlyImportedBy = map[string][]string{}
+
+// The HTTP surfaces do not import one another: what one needs from another
+// is handed across by the composition root, as in claudication.
+var surfaces = []string{"internal/httpapi/api", "internal/httpapi/admin", "internal/httpapi/join"}
+
+func TestSurfacesDoNotImportEachOther(t *testing.T) {
+	root, module := moduleRoot(t)
+	imports := moduleImports(t, root, module)
+	for _, s := range surfaces {
+		for _, dep := range imports[s] {
+			if contains(surfaces, dep) {
+				t.Errorf("%s imports %s: surfaces get what they share from internal/httpapi", s, dep)
+			}
+		}
+	}
+}
 
 func TestImportsFollowTheLayers(t *testing.T) {
 	root, module := moduleRoot(t)

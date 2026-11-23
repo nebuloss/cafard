@@ -62,8 +62,9 @@ func TestTokensThatMustNotWork(t *testing.T) {
 	if err := w.svc.DeleteIdentity(ctx, w.guillaume, w.devCode.Identity); err != nil {
 		t.Fatal(err)
 	}
+	// Removing an agent deletes its token, so it is not a token any more.
 	_, err = w.svc.Authenticate(ctx, current, "x")
-	wantCode(t, "the token of a removed agent", err, Removed)
+	wantCode(t, "the token of a removed agent", err, Unauthorized)
 }
 
 func TestFirstAdmin(t *testing.T) {

@@ -19,17 +19,26 @@ import (
 	"net/http"
 	"strings"
 
+	"cafard/internal/httpapi/admin"
 	"cafard/internal/httpapi/api"
+	"cafard/internal/httpapi/join"
 	"cafard/internal/service/access"
 	"cafard/internal/service/chat"
+	"cafard/internal/store"
 	"cafard/internal/version"
 )
 
-// Deps is what the surfaces are built from.
+// Deps is what the surfaces are built from. A test may leave the services
+// out to check only the composition: the surfaces that need them are then
+// not mounted.
 type Deps struct {
 	Log    *slog.Logger
+	Store  *store.Store
 	Access *access.Service
 	Chat   *chat.Service
+	// Admin is what the admin UI shows of the configuration; its PublicURL
+	// is also where join links point.
+	Admin admin.Config
 }
 
 type Server struct {
@@ -52,6 +61,9 @@ func publicMux(d Deps) http.Handler {
 	if d.Access != nil && d.Chat != nil {
 		api.New(d.Log, d.Access, d.Chat).Register(mux)
 	}
+	if d.Access != nil {
+		join.New(d.Log, d.Access, d.Admin.PublicURL).Register(mux)
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -66,14 +78,18 @@ func publicMux(d Deps) http.Handler {
 func adminMux(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Write([]byte("cafard admin\n"))
-	})
+	if d.Store != nil && d.Access != nil {
+		admin.New(d.Log, d.Store, d.Access, d.Admin, admin.UI()).Register(mux)
+	} else {
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/" {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write([]byte("cafard admin\n"))
+		})
+	}
 	return secure(mux)
 }
 

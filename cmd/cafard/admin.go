@@ -24,13 +24,15 @@ Usage:
   cafard admin [-config FILE] [-as NAME] COMMAND
 
 Commands:
-  create person NAME [-name "Display Name"]
-  create agent  NAME [-description TEXT] [-project P]...
-  create device NAME [-description TEXT] [-project P]...
+  create person NAME [-name "Display Name"]       prints their join link
+  create agent  NAME [-description TEXT] [-project P]...   prints its install link
+  create device NAME [-description TEXT] [-project P]...   prints its token
   create project NAME [-retention DAYS] [-quota SIZE] [-member NAME]...
   add    PROJECT NAME...         put members in a project
   remove PROJECT NAME...         take them out
-  token  NAME                    a new token for an agent or a device; the old one stops working
+  link   NAME [-hours N]         a new one-time link: a person's join or password
+                                 link, an agent's install link; the old one stops working
+  token  NAME                    a new token for a device; the old one stops working
   list                           everyone and every project
 
 The first person created on a new install becomes its admin: there is nobody
@@ -43,7 +45,7 @@ service's user, or as root: it gives the database back to the owner of the
 state directory when it is done.
 `
 
-func admin(args []string, stdout, stderr io.Writer) int {
+func adminCommand(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("admin", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprint(stderr, adminUsage) }
@@ -140,6 +142,11 @@ func runAdmin(ctx context.Context, cfg config.Config, as string, args []string, 
 			return usageError("token needs one name")
 		}
 		return a.token(ctx, args[1])
+	case "link":
+		if len(args) < 2 {
+			return usageError("link needs a name")
+		}
+		return a.link(ctx, args[1], args[2:])
 	case "list":
 		return a.list(ctx)
 	}
@@ -195,9 +202,51 @@ func (a *adminCmd) firstAdmin(ctx context.Context, name string, args []string) e
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(a.out, "created person %s, the first admin\n", i.Name)
-	fmt.Fprintln(a.out, "They sign in once the chat app lands. Until then, act as them here: every other command now runs as", i.Name+".")
+	fmt.Fprintf(a.out, "created person %s, the first admin\n\n", i.Name)
+	a.who = access.Who{Identity: i, Origin: "cli"}
+	return a.printLink(ctx, i, 0)
+}
+
+// printLink makes a one-time link for i and prints it, with a QR code to
+// scan from a phone and what to do with it.
+func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Duration) error {
+	code, l, err := a.acc.IssueLink(ctx, a.who, i, life)
+	if err != nil {
+		return err
+	}
+	url := strings.TrimSuffix(a.cfg.URL(), "/") + "/join/" + code
+	until := l.ExpiresAt.Local().Format("2 Jan 15:04")
+	switch l.Kind {
+	case store.AgentLink:
+		fmt.Fprintf(a.out, "Run this once on %s's machine, as the user its agents run as (works once, until %s):\n\n", i.Name, until)
+		fmt.Fprintf(a.out, "  curl -fsSL %s | sh\n\n", url)
+		fmt.Fprintln(a.out, "It exchanges the link for the agent's token and keeps it in ~/.config/cafard/token. The token is never shown.")
+		return nil
+	case store.PasswordLink:
+		fmt.Fprintf(a.out, "%s sets a new password here, which signs them out everywhere (works once, until %s):\n\n", i.Name, until)
+	default:
+		fmt.Fprintf(a.out, "%s chooses a password here (works once, until %s):\n\n", i.Name, until)
+	}
+	fmt.Fprintf(a.out, "  %s\n\n", url)
+	if q := terminalQR(url); q != "" {
+		fmt.Fprintln(a.out, q)
+	}
+	fmt.Fprintln(a.out, "Never paste it in a conversation: every member, agents included, would see it.")
 	return nil
+}
+
+func (a *adminCmd) link(ctx context.Context, name string, args []string) error {
+	fs := flag.NewFlagSet("link", flag.ContinueOnError)
+	hours := fs.Int("hours", 24, "how long the link waits, 168 at most")
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		return usageError(err.Error())
+	}
+	i, err := a.st.IdentityByName(ctx, name)
+	if err != nil {
+		return fmt.Errorf("no member %q", name)
+	}
+	return a.printLink(ctx, i, time.Duration(*hours)*time.Hour)
 }
 
 func (a *adminCmd) createPerson(ctx context.Context, name string, args []string) error {
@@ -211,8 +260,8 @@ func (a *adminCmd) createPerson(ctx context.Context, name string, args []string)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(a.out, "created person %s\n", i.Name)
-	return nil
+	fmt.Fprintf(a.out, "created person %s\n\n", i.Name)
+	return a.printLink(ctx, i, 0)
 }
 
 type listFlag []string
@@ -264,15 +313,18 @@ func (a *adminCmd) createMachine(ctx context.Context, kind store.Kind, name stri
 			return err
 		}
 	}
-	tok, err := a.acc.IssueToken(ctx, a.who, i)
-	if err != nil {
-		return err
-	}
 	where := "in no project yet"
 	if len(projects) > 0 {
 		where = "in " + strings.Join(projects, ", ")
 	}
 	fmt.Fprintf(a.out, "created %s %s, %s\n\n", kind, i.Name, where)
+	if kind == store.Agent {
+		return a.printLink(ctx, i, 0)
+	}
+	tok, err := a.acc.IssueToken(ctx, a.who, i)
+	if err != nil {
+		return err
+	}
 	a.showToken(kind, tok, projects)
 	return nil
 }
@@ -386,6 +438,9 @@ func (a *adminCmd) token(ctx context.Context, name string) error {
 	i, err := a.st.IdentityByName(ctx, name)
 	if err != nil {
 		return fmt.Errorf("no member %q", name)
+	}
+	if i.Kind == store.Agent {
+		return errors.New(name + " is an agent: its token is never shown. Make it a new install link: cafard admin link " + name)
 	}
 	tok, err := a.acc.IssueToken(ctx, a.who, i)
 	if err != nil {

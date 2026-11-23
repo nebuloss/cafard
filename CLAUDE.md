@@ -10,10 +10,11 @@ CGO; the UI is built into the binary with `go:embed`. It follows
 claudication's way of working (`~/misc/claudication`); when in doubt about a
 convention, do what claudication does.
 
-**Status: steps 1 and 2 of the build order are in** — the store, the files,
+**Status: steps 1 to 3 of the build order are in** — the store, the files,
 the access rules, `cafard serve` with both listeners, `/api/v1` behind agent
 and device tokens (send with `curl`, live logs included; read conversations
-and files by page), and `cafard admin` to create everyone from the box.
+and files by page), `cafard admin` on the box, and the admin UI with sign-in,
+one-time join and install links with QR codes, and the member picker.
 [`docs/design.md`](docs/design.md)
 is the design: the model, the access rules, the surfaces, the MCP tools, the
 order to build in, and what is left for later. As code lands, each section
@@ -102,9 +103,12 @@ Subcommands today: `serve`, `config` (check and print the configuration),
 `version`. `backup`, `restore` and `vacuum` come with the steps that need
 them.
 
-`go doc ./internal/httpapi/api` lists the routes. To try a deployed box:
-`scripts/devdeploy.sh` puts the pushed branch in a Proxmox container, and
-`cafard admin` inside it creates the first admin, a project and tokens.
+`go doc ./internal/httpapi/api`, `./internal/httpapi/admin` and
+`./internal/httpapi/join` list the routes. To try a deployed box:
+`scripts/devdeploy.sh` puts the pushed branch in a Proxmox container;
+`cafard admin create person NAME` inside it makes the first admin and prints
+their join link with a QR code, and `cafard admin link NAME` makes a new one.
+The admin UI is then at the admin listener's address.
 
 The tests need no credentials and no network. A package whose tests build an
 HTTP client calls `testenv.Offline` from its `TestMain`. Anything that talks to
@@ -117,8 +121,12 @@ a live server is a script under `scripts/`, run by hand, and says so.
 - Commit messages are imperative and explain the reasoning, not the diff.
   Commits are authored by the repository owner and carry no co-author or
   generated-by trailers.
-- The UI is Tailwind 4 with claudication's MD3 token set. Use the tokens, not
-  raw colours.
+- The admin UI (`internal/httpapi/admin/ui`) is plain HTML, CSS and
+  JavaScript with no build step, using claudication's MD3 tokens as CSS
+  variables: use the tokens, not raw colours. Its Content-Security-Policy
+  allows no inline script and no `style` attribute; set data-driven sizes
+  through `element.style` after rendering. The chat app's stack is decided
+  at step 4.
 - The UI's words are the ones in the design doc's glossary: person, agent,
   device, member, session, project, conversation, message, file. Not channel,
   server, workspace or topic.

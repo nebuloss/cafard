@@ -58,7 +58,10 @@ func (b *box) must(args ...string) string {
 	return out
 }
 
-var tokenRE = regexp.MustCompile(`cfd_(ag|dv)_[a-z2-7]{52}`)
+var (
+	tokenRE = regexp.MustCompile(`cfd_(ag|dv)_[a-z2-7]{52}`)
+	linkRE  = regexp.MustCompile(`https://cafard\.example/join/([a-z2-7]{52})`)
+)
 
 func TestAdminFromAnEmptyInstall(t *testing.T) {
 	b := newBox(t)
@@ -67,8 +70,9 @@ func TestAdminFromAnEmptyInstall(t *testing.T) {
 	if out, code := b.admin("create", "project", "be98"); code == 0 || !strings.Contains(out, "no admin yet") {
 		t.Errorf("before the first admin: %d %s", code, out)
 	}
-	if out := b.must("create", "person", "guillaume", "-name", "Guillaume"); !strings.Contains(out, "the first admin") {
-		t.Errorf("first person: %s", out)
+	if out := b.must("create", "person", "guillaume", "-name", "Guillaume"); !strings.Contains(out, "the first admin") ||
+		!linkRE.MatchString(out) || !strings.Contains(out, "█") {
+		t.Errorf("first person, with a join link and its QR code: %s", out)
 	}
 	if out := b.must("create", "person", "camille"); strings.Contains(out, "first admin") {
 		t.Errorf("second person became admin: %s", out)
@@ -81,10 +85,14 @@ func TestAdminFromAnEmptyInstall(t *testing.T) {
 	if !strings.HasPrefix(devToken, "cfd_dv_") || !strings.Contains(dev, "https://cafard.example/api/v1/send/be98/") {
 		t.Fatalf("create device printed:\n%s", dev)
 	}
+	// An agent comes with an install link; its token is never printed.
 	agent := b.must("create", "agent", "dev-code", "-project", "be98,zeeos")
-	agentToken := tokenRE.FindString(agent)
-	if !strings.HasPrefix(agentToken, "cfd_ag_") || !strings.Contains(agent, "Never paste it in a conversation") {
+	agentCode := linkRE.FindStringSubmatch(agent)
+	if agentCode == nil || tokenRE.MatchString(agent) || !strings.Contains(agent, "curl -fsSL https://cafard.example/join/") {
 		t.Fatalf("create agent printed:\n%s", agent)
+	}
+	if out, code := b.admin("token", "dev-code"); code != 1 || !strings.Contains(out, "never shown") {
+		t.Errorf("token for an agent: %d %s", code, out)
 	}
 
 	b.must("add", "zeeos", "camille")
@@ -107,6 +115,16 @@ func TestAdminFromAnEmptyInstall(t *testing.T) {
 
 	// The tokens work against the server, and a new one replaces the old.
 	pub := b.serve()
+	resp, err := http.Post("http://"+pub+"/join/"+agentCode[1]+"/token", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	agentToken := strings.TrimSpace(string(raw))
+	if resp.StatusCode != 200 || !strings.HasPrefix(agentToken, "cfd_ag_") {
+		t.Fatalf("redeeming the install link: %d %q", resp.StatusCode, raw)
+	}
 	send := func(token, path, body string) int {
 		req, _ := http.NewRequest("PUT", "http://"+pub+path, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -129,7 +147,7 @@ func TestAdminFromAnEmptyInstall(t *testing.T) {
 	}
 	req, _ := http.NewRequest("GET", "http://"+pub+"/api/v1/projects/be98/conversations/first/messages", nil)
 	req.Header.Set("Authorization", "Bearer "+agentToken)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
