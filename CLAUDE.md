@@ -10,11 +10,13 @@ CGO; the UI is built into the binary with `go:embed`. It follows
 claudication's way of working (`~/misc/claudication`); when in doubt about a
 convention, do what claudication does.
 
-**Status: steps 1 to 3 of the build order are in** — the store, the files,
-the access rules, `cafard serve` with both listeners, `/api/v1` behind agent
-and device tokens (send with `curl`, live logs included; read conversations
-and files by page), `cafard admin` on the box, and the admin UI with sign-in,
-one-time join and install links with QR codes, and the member picker.
+**Status: steps 1 to 3 of the build order are in, and step 4's back end** —
+the store, the files, the access rules, `cafard serve` with both listeners,
+`/api/v1` behind agent and device tokens and people's chat sign-in (send
+with `curl`, live logs included; read by page; conversations started from
+their first message; members, reads, file deletion, the profile), live
+notices through `internal/live` and `/api/v1/events`, `cafard admin` on the
+box, and the admin UI. The chat app itself (step 4c) is next.
 [`docs/design.md`](docs/design.md)
 is the design: the model, the access rules, the surfaces, the MCP tools, the
 order to build in, and what is left for later. As code lands, each section

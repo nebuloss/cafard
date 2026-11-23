@@ -133,9 +133,9 @@ func (s *Service) SendText(ctx context.Context, who access.Who, project, convers
 // file stored as it is: half a log is still the log up to where it broke,
 // which is often the part that matters. The error is returned all the same.
 func (s *Service) SendFile(ctx context.Context, who access.Who, project, conversation, name, contentType, text string, body io.Reader) (Sent, error) {
-	name = path.Base(strings.TrimSpace(name))
-	if name == "" || name == "." || name == "/" || name == "-" || len(name) > 255 || !utf8.ValidString(name) {
-		return Sent{}, &access.Refusal{Code: access.BadName, Message: "Name the file at the end of the address: …/send/<project>/<conversation>/boot.log."}
+	name, err := fileName(name)
+	if err != nil {
+		return Sent{}, err
 	}
 	if len(text) > MaxText {
 		return Sent{}, &access.Refusal{Code: access.BadValue, Message: "The caption is too long."}
@@ -150,28 +150,37 @@ func (s *Service) SendFile(ctx context.Context, who access.Who, project, convers
 	// and its message should appear with its first line.
 	head, rest := firstChunk(body)
 	ctype := detectType(name, contentType, head)
-	br := io.MultiReader(bytes.NewReader(head), rest)
 
 	m, err := s.st.AddMessage(ctx, c.ID, who.ID, strings.TrimSpace(text), []store.NewFile{{Name: name, ContentType: ctype}})
 	if err != nil {
 		return Sent{}, err
 	}
-	f := &m.Files[0]
+	stored, copyErr := s.upload(ctx, m.Files[0], head, rest)
+	if stored.ID == 0 {
+		return Sent{}, copyErr
+	}
+	m.Files[0] = stored
+	return Sent{Project: p, Conversation: c, Created: created, Message: m}, copyErr
+}
+
+// upload receives the bytes of a file already posted as live, and stores
+// them. If the body fails partway, what arrived is stored and the error
+// returned with the stored file; a zero file means nothing could be stored.
+func (s *Service) upload(ctx context.Context, f store.File, head []byte, rest io.Reader) (store.File, error) {
 	w, err := s.bl.Create(strconv.FormatInt(f.ID, 10))
 	if err != nil {
-		return Sent{}, err
+		return store.File{}, err
 	}
-
-	copyErr := s.receive(ctx, f.ID, w, br)
+	copyErr := s.receive(ctx, f.ID, w, io.MultiReader(bytes.NewReader(head), rest))
 	sum, size, err := w.Commit()
 	if err != nil {
-		return Sent{}, err
+		return store.File{}, err
 	}
 	if err := s.st.StoreFile(context.WithoutCancel(ctx), f.ID, sum, size); err != nil {
-		return Sent{}, err
+		return store.File{}, err
 	}
 	f.State, f.SHA256, f.Size = store.Stored, sum, size
-	return Sent{Project: p, Conversation: c, Created: created, Message: m}, copyErr
+	return f, copyErr
 }
 
 // receive copies body into w, telling the store how far the file has got at
@@ -331,7 +340,17 @@ func (s *Service) Messages(ctx context.Context, who access.Who, project, convers
 		limit = MaxPage
 	}
 	ms, err := s.st.Messages(ctx, c.ID, after, limit)
-	return c, ms, err
+	if err != nil {
+		return c, nil, err
+	}
+	// Being shown messages is reading them: the reader's position moves to
+	// the last one, which is what "Read by" and unread counts come from.
+	if len(ms) > 0 {
+		if err := s.st.MarkRead(ctx, who.ID, c.ID, ms[len(ms)-1].ID); err != nil {
+			return c, nil, err
+		}
+	}
+	return c, ms, nil
 }
 
 // File is a file who may read, with a reader over its bytes: the whole blob,

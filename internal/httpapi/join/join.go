@@ -18,12 +18,12 @@ package join
 import (
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"cafard/internal/httpapi/httpx"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -51,13 +51,7 @@ func (j *Join) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /join/{code}/token", j.limited(j.token))
 }
 
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
+func clientIP(r *http.Request) string { return httpx.ClientIP(r) }
 
 func (j *Join) limited(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -93,8 +87,26 @@ func (j *Join) open(w http.ResponseWriter, r *http.Request) {
 		shellError(w, http.StatusBadRequest, "This link is for "+id.Name+", a person: open it in a browser.")
 		return
 	}
+	if l.Kind == store.SigninLink {
+		j.signIn(w, r, code)
+		return
+	}
 	page(w, http.StatusOK, pageData{Title: "Choose a password", Name: displayName(id), Username: id.Name,
 		Kind: l.Kind, Expires: l.ExpiresAt, Min: access.MinPassword})
+}
+
+// signIn is a phone that scanned the code shown by "Sign in another phone":
+// it is signed in to the chat app and sent there. Opening the link is the
+// whole of it, on purpose: the person proved who they are by giving their
+// password on the device that showed the code, two minutes ago at most.
+func (j *Join) signIn(w http.ResponseWriter, r *http.Request, code string) {
+	_, cookie, err := j.acc.RedeemSigninLink(r.Context(), code, clientIP(r), r.UserAgent())
+	if err != nil {
+		j.refused(w, r, err)
+		return
+	}
+	httpx.SetChatCookie(w, cookie, strings.HasPrefix(j.publicURL, "https://"))
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func displayName(id store.Identity) string {

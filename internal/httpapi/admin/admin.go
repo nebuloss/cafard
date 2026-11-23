@@ -41,9 +41,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,6 +49,7 @@ import (
 
 	"rsc.io/qr"
 
+	"cafard/internal/httpapi/httpx"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -113,31 +112,10 @@ func (a *Admin) Register(mux *http.ServeMux) {
 	mux.Handle("/", a.static())
 }
 
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
+func clientIP(r *http.Request) string { return httpx.ClientIP(r) }
 
 // sameOrigin refuses a write from another site.
-func sameOrigin(r *http.Request) bool {
-	switch r.Header.Get("Sec-Fetch-Site") {
-	case "same-origin", "none":
-		return true
-	case "":
-	default:
-		return false
-	}
-	// No Sec-Fetch-Site: an older browser, or not a browser. A browser sends
-	// Origin on every cross-origin write; when it is there it must match.
-	if o := r.Header.Get("Origin"); o != "" {
-		u, err := url.Parse(o)
-		return err == nil && u.Host == r.Host
-	}
-	return true
-}
+func sameOrigin(r *http.Request) bool { return httpx.SameOrigin(r) }
 
 type handler func(w http.ResponseWriter, r *http.Request, who access.Who)
 
@@ -164,7 +142,10 @@ func (a *Admin) auth(next handler) http.HandlerFunc {
 }
 
 var statusOf = map[access.Code]int{
-	access.Unauthorized: http.StatusUnauthorized, access.Wrong: http.StatusUnauthorized,
+	access.Unauthorized: http.StatusUnauthorized,
+	// A wrong password is 403, not 401: the pages treat 401 as "you are signed
+	// out" and draw the sign-in form again, which would wipe the message.
+	access.Wrong:      http.StatusForbidden,
 	access.NotAllowed: http.StatusForbidden, access.NotAdmin: http.StatusForbidden, access.Self: http.StatusForbidden,
 	access.Paused: http.StatusForbidden, access.Removed: http.StatusForbidden, access.NotMember: http.StatusConflict,
 	access.Archived: http.StatusConflict, access.Exists: http.StatusConflict, access.Spent: http.StatusGone,

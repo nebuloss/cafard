@@ -26,6 +26,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"cafard/internal/live"
 )
 
 //go:embed migrations/*.sql
@@ -40,6 +42,39 @@ var ErrExists = errors.New("already exists")
 type Store struct {
 	db  *sql.DB
 	now func() time.Time
+	// hub is told what each write changed, so open pages and waiting agents
+	// read it again. Nil until Announce: cafard admin, run beside the server,
+	// writes without one.
+	hub *live.Hub
+}
+
+// Announce makes the store tell h what each write changes.
+func (s *Store) Announce(h *live.Hub) { s.hub = h }
+
+func (s *Store) publish(keys ...string) { s.hub.Publish(keys...) }
+
+// publishConversation tells that a conversation changed, and its project,
+// whose list of conversations shows each one's latest message.
+func (s *Store) publishConversation(ctx context.Context, conversationID int64) {
+	if s.hub == nil {
+		return
+	}
+	var projectID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT project_id FROM conversations WHERE id = ?`, conversationID).Scan(&projectID); err == nil {
+		s.publish(live.ConversationKey(projectID, conversationID), live.ProjectKey(projectID))
+	}
+}
+
+// publishFile is publishConversation for the conversation a file is in.
+func (s *Store) publishFile(ctx context.Context, fileID int64) {
+	if s.hub == nil {
+		return
+	}
+	var conversationID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT m.conversation_id FROM files f JOIN messages m ON m.id = f.message_id WHERE f.id = ?`,
+		fileID).Scan(&conversationID); err == nil {
+		s.publishConversation(ctx, conversationID)
+	}
 }
 
 // Open connects to the database at path and brings its schema up to date.

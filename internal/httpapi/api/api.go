@@ -4,18 +4,33 @@
 // reach, and it decides nothing itself: service/chat does the work, and asks
 // service/access first.
 //
-// Every route needs a credential. Today that is an agent's or a device's
-// token, `Authorization: Bearer cfd_…`; people's sign-ins come with the chat
-// app.
+// Every route but sign-in needs a credential: an agent's or a device's
+// token, `Authorization: Bearer cfd_…`, or a person's chat sign-in cookie.
+// A write made with the cookie must come from this site's own pages
+// (httpx.SameOrigin); one made with a token carries its credential in a
+// header no other site can set.
 //
-//	PUT  /api/v1/send/{project}/{conversation}/{name}  a file; `curl -T`
-//	POST /api/v1/send/{project}/{conversation}         text; `curl --data-binary`
-//	GET  /api/v1/me                                    who the token is
-//	GET  /api/v1/projects                              my projects
-//	GET  /api/v1/projects/{project}/conversations      a project's conversations
-//	GET  /api/v1/projects/{project}/conversations/{conversation}/messages
-//	GET  /api/v1/files/{id}                            a file's bytes
-//	GET  /api/v1/files/{id}/lines                      a page of a text file
+//	POST   /api/v1/signin                               a person signs in to the chat app
+//	POST   /api/v1/signout
+//	GET    /api/v1/me                                   who the credential is, and their projects
+//	GET    /api/v1/me/signins                           a person's sign-ins
+//	DELETE /api/v1/me/signins/{id}
+//	POST   /api/v1/me/phone                             {password}: a QR code that signs in another phone
+//	GET    /api/v1/events                               what changed, as server-sent events (live)
+//	PUT    /api/v1/send/{project}/{conversation}/{name} a file; `curl -T`; ?message=ID adds it to your message
+//	POST   /api/v1/send/{project}/{conversation}        text; `curl --data-binary`
+//	GET    /api/v1/projects                             my projects
+//	GET    /api/v1/projects/{project}/conversations     a project's conversations, with my unread counts
+//	POST   /api/v1/projects/{project}/conversations     {text, title?}: start one from its first message
+//	PATCH  /api/v1/projects/{project}/conversations/{conversation}  {title?, closed?}
+//	GET    /api/v1/projects/{project}/conversations/{conversation}/messages
+//	GET    /api/v1/projects/{project}/members
+//	POST   /api/v1/projects/{project}/members           {name}: people add existing people and agents
+//	DELETE /api/v1/projects/{project}/members/{name}
+//	GET    /api/v1/directory                            the people and agents a person can add
+//	GET    /api/v1/files/{id}                           a file's bytes
+//	GET    /api/v1/files/{id}/lines                     a page of a text file
+//	DELETE /api/v1/files/{id}                           its sender or an admin
 //
 // A refusal is JSON, {"error": code, "message": sentence}, with the status
 // the code calls for; the sentence says what to do instead where there is
@@ -28,12 +43,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"cafard/internal/httpapi/httpx"
+	"cafard/internal/live"
+	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
@@ -44,31 +61,51 @@ import (
 const MaxUpload = 256 << 20
 
 type API struct {
-	log  *slog.Logger
-	acc  *access.Service
-	chat *chat.Service
+	log       *slog.Logger
+	acc       *access.Service
+	chat      *chat.Service
+	hub       *live.Hub
+	publicURL string
+	secure    bool
+	limit     *ratelimit.Limiter
 }
 
-func New(log *slog.Logger, acc *access.Service, c *chat.Service) *API {
+// New builds /api/v1. hub is where live notices come from; publicURL is
+// where this listener is reached, for the codes that sign in a phone.
+func New(log *slog.Logger, acc *access.Service, c *chat.Service, hub *live.Hub, publicURL string) *API {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &API{log: log, acc: acc, chat: c}
+	return &API{log: log, acc: acc, chat: c, hub: hub, publicURL: strings.TrimSuffix(publicURL, "/"),
+		secure: strings.HasPrefix(publicURL, "https://"), limit: ratelimit.New(10, time.Minute)}
 }
 
 // Register adds the routes to mux.
 func (a *API) Register(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/v1/signin", a.signin)
+	mux.HandleFunc("POST /api/v1/signout", a.auth(a.signout))
+	mux.HandleFunc("GET /api/v1/me", a.auth(a.me))
+	mux.HandleFunc("GET /api/v1/me/signins", a.auth(a.mySignins))
+	mux.HandleFunc("DELETE /api/v1/me/signins/{id}", a.auth(a.deleteMySignin))
+	mux.HandleFunc("POST /api/v1/me/phone", a.auth(a.phoneCode))
+	mux.HandleFunc("GET /api/v1/events", a.auth(a.events))
 	mux.HandleFunc("PUT /api/v1/send/{project}/{conversation}/{name}", a.auth(a.sendFile))
 	// `curl -T - …/wifi-drops/` sends no name: answered by SendFile with how
 	// to give one, rather than by a 404 that says nothing.
 	mux.HandleFunc("PUT /api/v1/send/{project}/{conversation}/{$}", a.auth(a.sendFile))
 	mux.HandleFunc("POST /api/v1/send/{project}/{conversation}/{name}", a.auth(a.sendFile))
 	mux.HandleFunc("POST /api/v1/send/{project}/{conversation}", a.auth(a.sendText))
-	mux.HandleFunc("GET /api/v1/me", a.auth(a.me))
 	mux.HandleFunc("GET /api/v1/projects", a.auth(a.projects))
 	mux.HandleFunc("GET /api/v1/projects/{project}/conversations", a.auth(a.conversations))
+	mux.HandleFunc("POST /api/v1/projects/{project}/conversations", a.auth(a.startConversation))
+	mux.HandleFunc("PATCH /api/v1/projects/{project}/conversations/{conversation}", a.auth(a.updateConversation))
 	mux.HandleFunc("GET /api/v1/projects/{project}/conversations/{conversation}/messages", a.auth(a.messages))
+	mux.HandleFunc("GET /api/v1/projects/{project}/members", a.auth(a.members))
+	mux.HandleFunc("POST /api/v1/projects/{project}/members", a.auth(a.addMember))
+	mux.HandleFunc("DELETE /api/v1/projects/{project}/members/{name}", a.auth(a.removeMember))
+	mux.HandleFunc("GET /api/v1/directory", a.auth(a.directory))
 	mux.HandleFunc("GET /api/v1/files/{id}", a.auth(a.file))
+	mux.HandleFunc("DELETE /api/v1/files/{id}", a.auth(a.deleteFile))
 	mux.HandleFunc("GET /api/v1/files/{id}/lines", a.auth(a.lines))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", fmt.Sprintf("No route %s %s. The routes are listed in `go doc cafard/internal/httpapi/api`.", r.Method, r.URL.Path))
@@ -77,40 +114,51 @@ func (a *API) Register(mux *http.ServeMux) {
 
 type handler func(w http.ResponseWriter, r *http.Request, who access.Who)
 
-// auth resolves the bearer token to the member it belongs to.
+// auth resolves the credential to the member it belongs to: a bearer token
+// if the request has one, else the chat sign-in cookie.
 func (a *API) auth(next handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !ok || token == "" {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="cafard"`)
-			writeError(w, http.StatusUnauthorized, string(access.Unauthorized),
-				`Send a token: -H "Authorization: Bearer cfd_…". An admin makes one with cafard admin create agent or device.`)
+		from := clientIP(r)
+		if token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && token != "" {
+			id, err := a.acc.Authenticate(r.Context(), strings.TrimSpace(token), from)
+			if err != nil {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="cafard", error="invalid_token"`)
+				a.fail(w, r, err)
+				return
+			}
+			next(w, r, access.Who{Identity: id, Origin: "api · " + from})
 			return
 		}
-		from := clientIP(r)
-		id, err := a.acc.Authenticate(r.Context(), strings.TrimSpace(token), from)
+		cookie := httpx.ChatCookieValue(r)
+		if cookie == "" {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="cafard"`)
+			writeError(w, http.StatusUnauthorized, string(access.Unauthorized),
+				`Sign in, or send a token: -H "Authorization: Bearer cfd_…". An admin makes one with cafard admin create agent or device.`)
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !httpx.SameOrigin(r) {
+			writeError(w, http.StatusForbidden, "cross_site", "Writes from another site are refused.")
+			return
+		}
+		id, si, err := a.acc.Session(r.Context(), access.ChatSurface, cookie, from)
 		if err != nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="cafard", error="invalid_token"`)
+			if access.Is(err, access.Unauthorized) {
+				httpx.ClearChatCookie(w, a.secure)
+			}
 			a.fail(w, r, err)
 			return
 		}
-		next(w, r, access.Who{Identity: id, Origin: "api · " + from})
+		r = r.WithContext(withSignin(r.Context(), si))
+		next(w, r, access.Who{Identity: id, Origin: "chat · " + from})
 	}
 }
 
-// clientIP is the address the request came from. Behind a proxy that is the
-// proxy; trusting X-Forwarded-For from a configured proxy comes with the
-// deployment step, as in claudication.
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
+func clientIP(r *http.Request) string { return httpx.ClientIP(r) }
 
 var statusOf = map[access.Code]int{
-	access.Unauthorized:    http.StatusUnauthorized,
+	access.Unauthorized: http.StatusUnauthorized,
+	// 403 and not 401: the chat app treats 401 as "you are signed out".
+	access.Wrong:           http.StatusForbidden,
 	access.NotAllowed:      http.StatusForbidden,
 	access.NotAdmin:        http.StatusForbidden,
 	access.NotMember:       http.StatusForbidden,
@@ -209,18 +257,37 @@ func message(m store.Message) messageJSON {
 }
 
 type conversationJSON struct {
+	ID       int64      `json:"id"`
 	Address  string     `json:"address"`
 	Name     string     `json:"name"`
 	Title    string     `json:"title"`
 	Messages int        `json:"messages"`
+	Unread   int        `json:"unread,omitempty"`
 	LastAt   *time.Time `json:"last_at,omitempty"`
 	Closed   bool       `json:"closed,omitempty"`
 }
 
+func conversation(project string, c store.Conversation) conversationJSON {
+	j := conversationJSON{ID: c.ID, Address: project + "/" + c.Name, Name: c.Name, Title: c.Title, Messages: c.Messages, Closed: c.ClosedAt != nil}
+	if c.LastAt != nil {
+		t := c.LastAt.UTC()
+		j.LastAt = &t
+	}
+	return j
+}
+
 func (a *API) sendFile(w http.ResponseWriter, r *http.Request, who access.Who) {
 	body := http.MaxBytesReader(w, r.Body, MaxUpload)
-	sent, err := a.chat.SendFile(r.Context(), who, r.PathValue("project"), r.PathValue("conversation"),
-		r.PathValue("name"), r.Header.Get("Content-Type"), r.URL.Query().Get("text"), body)
+	q := r.URL.Query()
+	var sent chat.Sent
+	var err error
+	if id, perr := strconv.ParseInt(q.Get("message"), 10, 64); perr == nil && id > 0 {
+		sent, err = a.chat.AttachFile(r.Context(), who, r.PathValue("project"), r.PathValue("conversation"), id,
+			r.PathValue("name"), r.Header.Get("Content-Type"), body)
+	} else {
+		sent, err = a.chat.SendFile(r.Context(), who, r.PathValue("project"), r.PathValue("conversation"),
+			r.PathValue("name"), r.Header.Get("Content-Type"), q.Get("text"), body)
+	}
 	if sent.Message.ID == 0 {
 		a.fail(w, r, err)
 		return
@@ -256,14 +323,19 @@ func (a *API) sendText(w http.ResponseWriter, r *http.Request, who access.Who) {
 
 func sentJSON(s chat.Sent) map[string]any {
 	return map[string]any{
-		"address": s.Project.Name + "/" + s.Conversation.Name,
-		"created": s.Created,
-		"message": message(s.Message),
+		"address":      s.Project.Name + "/" + s.Conversation.Name,
+		"created":      s.Created,
+		"conversation": conversation(s.Project.Name, s.Conversation),
+		"message":      message(s.Message),
 	}
 }
 
 func (a *API) me(w http.ResponseWriter, r *http.Request, who access.Who) {
-	resp := map[string]any{"member": member(who.Identity)}
+	type meJSON struct {
+		memberJSON
+		Admin bool `json:"admin,omitempty"`
+	}
+	resp := map[string]any{"member": meJSON{memberJSON: member(who.Identity), Admin: who.Admin}}
 	if ps, err := a.chat.Projects(r.Context(), who); err == nil {
 		names := []string{}
 		for _, p := range ps {
@@ -281,12 +353,13 @@ func (a *API) projects(w http.ResponseWriter, r *http.Request, who access.Who) {
 		return
 	}
 	type projectJSON struct {
+		ID       int64  `json:"id"`
 		Name     string `json:"name"`
 		Archived bool   `json:"archived,omitempty"`
 	}
 	out := []projectJSON{}
 	for _, p := range ps {
-		out = append(out, projectJSON{Name: p.Name, Archived: p.Archived()})
+		out = append(out, projectJSON{ID: p.ID, Name: p.Name, Archived: p.Archived()})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"projects": out})
 }
@@ -298,13 +371,15 @@ func (a *API) conversations(w http.ResponseWriter, r *http.Request, who access.W
 		a.fail(w, r, err)
 		return
 	}
+	unread, err := a.chat.Unread(r.Context(), who, project)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
 	out := []conversationJSON{}
 	for _, c := range cs {
-		j := conversationJSON{Address: project + "/" + c.Name, Name: c.Name, Title: c.Title, Messages: c.Messages, Closed: c.ClosedAt != nil}
-		if c.LastAt != nil {
-			t := c.LastAt.UTC()
-			j.LastAt = &t
-		}
+		j := conversation(project, c)
+		j.Unread = unread[c.ID]
 		out = append(out, j)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"conversations": out})
@@ -314,7 +389,13 @@ func (a *API) messages(w http.ResponseWriter, r *http.Request, who access.Who) {
 	q := r.URL.Query()
 	after, _ := strconv.ParseInt(q.Get("after"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
-	c, ms, err := a.chat.Messages(r.Context(), who, r.PathValue("project"), r.PathValue("conversation"), after, limit)
+	project, name := r.PathValue("project"), r.PathValue("conversation")
+	c, ms, err := a.chat.Messages(r.Context(), who, project, name, after, limit)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	reads, err := a.chat.Reads(r.Context(), who, project, name)
 	if err != nil {
 		a.fail(w, r, err)
 		return
@@ -323,7 +404,18 @@ func (a *API) messages(w http.ResponseWriter, r *http.Request, who access.Who) {
 	for _, m := range ms {
 		out = append(out, message(m))
 	}
-	resp := map[string]any{"title": c.Title, "messages": out}
+	// read_by is how far each member has read: the chat app shows "Read by
+	// dev-code" under the last message of yours that each has reached.
+	type readJSON struct {
+		memberJSON
+		UpTo int64     `json:"up_to"`
+		At   time.Time `json:"at"`
+	}
+	readBy := []readJSON{}
+	for _, rd := range reads {
+		readBy = append(readBy, readJSON{memberJSON: member(rd.Member), UpTo: rd.MessageID, At: rd.At.UTC()})
+	}
+	resp := map[string]any{"conversation": conversation(project, c), "title": c.Title, "messages": out, "read_by": readBy}
 	if len(ms) > 0 {
 		resp["next_after"] = ms[len(ms)-1].ID
 	}

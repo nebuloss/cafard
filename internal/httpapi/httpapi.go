@@ -22,6 +22,7 @@ import (
 	"cafard/internal/httpapi/admin"
 	"cafard/internal/httpapi/api"
 	"cafard/internal/httpapi/join"
+	"cafard/internal/live"
 	"cafard/internal/service/access"
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
@@ -37,6 +38,8 @@ type Deps struct {
 	Store  *store.Store
 	Access *access.Service
 	Chat   *chat.Service
+	// Hub is where /api/v1/events hears what changed.
+	Hub *live.Hub
 	// Admin is what the admin UI shows of the configuration; its PublicURL
 	// is also where join links point.
 	Admin admin.Config
@@ -60,7 +63,7 @@ func publicMux(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
 	if d.Access != nil && d.Chat != nil {
-		api.New(d.Log, d.Access, d.Chat).Register(mux)
+		api.New(d.Log, d.Access, d.Chat, d.Hub, d.Admin.PublicURL).Register(mux)
 	}
 	if d.Access != nil {
 		join.New(d.Log, d.Access, d.Admin.PublicURL).Register(mux)

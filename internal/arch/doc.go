@@ -4,16 +4,19 @@
 // Every package sits on a layer, and imports only from layers below its own.
 // Lowest first:
 //
-//	0  leaves         version logging testenv arch config blobs ratelimit webui
+//	0  leaves         version logging testenv arch config blobs ratelimit webui live
 //	1  records        store
 //	2  rules          service/access
 //	3  services       service/chat
-//	4  HTTP surfaces  httpapi/api httpapi/admin httpapi/join
-//	5  composition    httpapi
-//	6  binary         cmd/cafard
+//	4  HTTP plumbing  httpapi/httpx
+//	5  HTTP surfaces  httpapi/api httpapi/admin httpapi/join
+//	6  composition    httpapi
+//	7  binary         cmd/cafard
 //
 // The surfaces do not import one another; the composition root hands across
-// what one needs from another. /api/v1 and /join are on the public listener,
+// what one needs from another, and httpx holds what they share (the client's
+// address, the cross-site check, the chat sign-in cookie). The store tells
+// live what each write changed; /api/v1/events listens. /api/v1 and /join are on the public listener,
 // the admin UI and its API on the admin listener.
 //
 // Read upward, that is the path of a request: the binary starts the

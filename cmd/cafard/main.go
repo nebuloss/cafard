@@ -26,6 +26,7 @@ import (
 	"cafard/internal/httpapi"
 	"cafard/internal/httpapi/admin"
 	"cafard/internal/httpapi/api"
+	"cafard/internal/live"
 	"cafard/internal/logging"
 	"cafard/internal/service/access"
 	"cafard/internal/service/chat"
@@ -150,6 +151,12 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	if err != nil {
 		return err
 	}
+	// Every write tells the hub what it changed; open pages hear it through
+	// /api/v1/events. Closed before the listeners shut down, so a stream left
+	// open does not hold the shutdown until it times out.
+	hub := live.New()
+	defer hub.Close()
+	st.Announce(hub)
 	acc := access.New(st)
 	ch := chat.New(st, bl, acc)
 	if cut, err := ch.Start(ctx); err != nil {
@@ -157,7 +164,7 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	} else if cut > 0 {
 		log.Warn("uploads cut off by the last stop", "files", cut)
 	}
-	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Admin: admin.Config{
+	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Hub: hub, Admin: admin.Config{
 		Listen: cfg.Listen, AdminListen: cfg.AdminListen, PublicURL: cfg.URL(), StateDir: cfg.StateDir, MaxUpload: api.MaxUpload,
 	}})
 
@@ -193,6 +200,7 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	case <-ctx.Done():
 	case serveErr = <-errs:
 	}
+	hub.Close()
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	for _, s := range servers {

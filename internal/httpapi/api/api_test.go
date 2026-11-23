@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"cafard/internal/blobs"
+	"cafard/internal/httpapi/join"
+	"cafard/internal/live"
 	"cafard/internal/service/access"
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
@@ -24,6 +26,10 @@ var ctx = context.Background()
 type rig struct {
 	srv                     *httptest.Server
 	agent, device, outsider string
+	st                      *store.Store
+	acc                     *access.Service
+	admin                   access.Who
+	hub                     *live.Hub
 }
 
 // newRig is a server with dev-code (agent) and dev-build (device) in be98,
@@ -61,7 +67,10 @@ func newRig(t *testing.T) *rig {
 		outsider: token("lab-bench", store.Agent, false),
 	}
 	mux := http.NewServeMux()
-	New(nil, acc, chat.New(st, bl, acc)).Register(mux)
+	r.st, r.acc, r.admin, r.hub = st, acc, admin, live.New()
+	st.Announce(r.hub)
+	New(nil, acc, chat.New(st, bl, acc), r.hub, "http://cafard.example").Register(mux)
+	join.New(nil, acc, "http://cafard.example").Register(mux)
 	r.srv = httptest.NewServer(mux)
 	t.Cleanup(r.srv.Close)
 	return r

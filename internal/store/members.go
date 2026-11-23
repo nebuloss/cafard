@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"cafard/internal/live"
 )
 
 // Kind is what an identity is. It is also its access level: a person and an
@@ -135,16 +137,24 @@ func (s *Store) Identities(ctx context.Context) ([]Identity, error) {
 
 // SetEnabled pauses or resumes an identity.
 func (s *Store) SetEnabled(ctx context.Context, id int64, enabled bool, a AuditEntry) error {
-	return s.change(ctx, a, func(tx *sql.Tx) error {
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
 		return one(tx.ExecContext(ctx, `UPDATE identities SET enabled = ? WHERE id = ? AND deleted_at IS NULL`, enabled, id))
 	})
+	if err == nil {
+		s.publish(live.MemberKey(id))
+	}
+	return err
 }
 
 // SetAdmin grants or withdraws admin from a person.
 func (s *Store) SetAdmin(ctx context.Context, id int64, admin bool, a AuditEntry) error {
-	return s.change(ctx, a, func(tx *sql.Tx) error {
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
 		return one(tx.ExecContext(ctx, `UPDATE identities SET admin = ? WHERE id = ? AND kind = 'person' AND deleted_at IS NULL`, admin, id))
 	})
+	if err == nil {
+		s.publish(live.MemberKey(id))
+	}
+	return err
 }
 
 // SetDescription changes what an agent's machine is said to do.
@@ -160,7 +170,7 @@ func (s *Store) SetDescription(ctx context.Context, id int64, description string
 // waiting.
 func (s *Store) DeleteIdentity(ctx context.Context, id int64, a AuditEntry) error {
 	now := s.now().UnixMilli()
-	return s.change(ctx, a, func(tx *sql.Tx) error {
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
 		if err := one(tx.ExecContext(ctx, `UPDATE identities SET deleted_at = ?, enabled = 0, admin = 0 WHERE id = ? AND deleted_at IS NULL`,
 			now, id)); err != nil {
 			return err
@@ -178,6 +188,10 @@ func (s *Store) DeleteIdentity(ctx context.Context, id int64, a AuditEntry) erro
 		_, err := tx.ExecContext(ctx, `UPDATE links SET cancelled_at = ? WHERE identity_id = ? AND used_at IS NULL AND cancelled_at IS NULL`, now, id)
 		return err
 	})
+	if err == nil {
+		s.publish(live.MemberKey(id))
+	}
+	return err
 }
 
 // CreateProject adds p. Its name must be free.
@@ -254,22 +268,36 @@ func (s *Store) SetArchived(ctx context.Context, id int64, archived bool, a Audi
 	if archived {
 		at = s.now().UnixMilli()
 	}
-	return s.change(ctx, a, func(tx *sql.Tx) error {
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
 		return one(tx.ExecContext(ctx, `UPDATE projects SET archived_at = ? WHERE id = ?`, at, id))
 	})
+	if err == nil {
+		s.publish(live.ProjectKey(id))
+	}
+	return err
 }
 
 // DeleteProject removes a project and every membership of it.
 func (s *Store) DeleteProject(ctx context.Context, id int64, a AuditEntry) error {
-	return s.change(ctx, a, func(tx *sql.Tx) error {
+	// Its members are told too: the project leaves their lists.
+	members, _ := s.Members(ctx, id)
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
 		return one(tx.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id))
 	})
+	if err == nil {
+		keys := []string{live.ProjectKey(id)}
+		for _, m := range members {
+			keys = append(keys, live.MemberKey(m.ID))
+		}
+		s.publish(keys...)
+	}
+	return err
 }
 
 // AddMembership puts an identity in a project. addedBy is the person who did
 // it, recorded beside the membership as well as in the audit log.
 func (s *Store) AddMembership(ctx context.Context, projectID, identityID, addedBy int64, a AuditEntry) error {
-	return s.change(ctx, a, func(tx *sql.Tx) error {
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO memberships (project_id, identity_id, added_by, added_at) VALUES (?, ?, ?, ?)`,
 			projectID, identityID, addedBy, s.now().UnixMilli())
 		if isUnique(err) {
@@ -277,13 +305,21 @@ func (s *Store) AddMembership(ctx context.Context, projectID, identityID, addedB
 		}
 		return err
 	})
+	if err == nil {
+		s.publish(live.MemberKey(identityID), live.ProjectKey(projectID))
+	}
+	return err
 }
 
 // RemoveMembership takes an identity out of a project.
 func (s *Store) RemoveMembership(ctx context.Context, projectID, identityID int64, a AuditEntry) error {
-	return s.change(ctx, a, func(tx *sql.Tx) error {
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
 		return one(tx.ExecContext(ctx, `DELETE FROM memberships WHERE project_id = ? AND identity_id = ?`, projectID, identityID))
 	})
+	if err == nil {
+		s.publish(live.MemberKey(identityID), live.ProjectKey(projectID))
+	}
+	return err
 }
 
 // IsMember reports whether an identity is in a project. For service/access.

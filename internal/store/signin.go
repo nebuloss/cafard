@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"cafard/internal/live"
 )
 
 // PasswordHash is a person's password hash, or ErrNotFound for a person who
@@ -137,6 +139,9 @@ const (
 	PersonLink   LinkKind = "person"
 	PasswordLink LinkKind = "password"
 	AgentLink    LinkKind = "agent"
+	// SigninLink signs in another browser as the person who made it, from
+	// their profile: the QR code a phone scans.
+	SigninLink LinkKind = "signin"
 )
 
 // Link is a one-time link.
@@ -174,7 +179,14 @@ func (s *Store) CreateLink(ctx context.Context, l Link, hash string, a AuditEntr
 	now := s.now()
 	l.CreatedAt = now
 	err := s.change(ctx, a, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `UPDATE links SET cancelled_at = ? WHERE identity_id = ? AND used_at IS NULL AND cancelled_at IS NULL`,
+		// A sign-in link and a join or password link are different ways in
+		// and do not cancel each other: showing a QR code to sign in a phone
+		// must not void a password link an admin just sent.
+		same := `kind <> 'signin'`
+		if l.Kind == SigninLink {
+			same = `kind = 'signin'`
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE links SET cancelled_at = ? WHERE identity_id = ? AND used_at IS NULL AND cancelled_at IS NULL AND `+same,
 			now.UnixMilli(), l.IdentityID); err != nil {
 			return err
 		}
@@ -286,9 +298,13 @@ func (s *Store) RedeemAgentLink(ctx context.Context, l Link, tokenHash, from str
 
 // SetProjectLimits changes a project's retention and quota.
 func (s *Store) SetProjectLimits(ctx context.Context, id int64, retentionDays int, quotaBytes int64, a AuditEntry) error {
-	return s.change(ctx, a, func(tx *sql.Tx) error {
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
 		return one(tx.ExecContext(ctx, `UPDATE projects SET retention_days = ?, quota_bytes = ? WHERE id = ?`, retentionDays, quotaBytes, id))
 	})
+	if err == nil {
+		s.publish(live.ProjectKey(id))
+	}
+	return err
 }
 
 // ProjectStats is what a project holds.
@@ -397,4 +413,24 @@ func (s *Store) SigninCounts(ctx context.Context) (map[int64]int, error) {
 		out[id] = n
 	}
 	return out, rows.Err()
+}
+
+// RedeemSigninLink uses a sign-in link and records the sign-in it grants,
+// in one transaction.
+func (s *Store) RedeemSigninLink(ctx context.Context, l Link, si Signin, cookieHash string, a AuditEntry) (Signin, error) {
+	now := s.now()
+	si.IdentityID, si.CreatedAt, si.LastUsed = l.IdentityID, now, now
+	err := s.change(ctx, a, func(tx *sql.Tx) error {
+		if err := useLink(ctx, tx, l.ID, si.From, now); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `INSERT INTO signins (identity_id, hash, surface, user_agent, created_at, last_used_at, last_used_from, expires_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, l.IdentityID, cookieHash, si.Surface, si.UserAgent, now.UnixMilli(), now.UnixMilli(), si.From, si.ExpiresAt.UnixMilli())
+		if err != nil {
+			return err
+		}
+		si.ID, err = res.LastInsertId()
+		return err
+	})
+	return si, err
 }

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"cafard/internal/live"
 )
 
 // Conversation is a thread in a project.
@@ -78,6 +80,9 @@ func (s *Store) EnsureConversation(ctx context.Context, projectID int64, name, t
 	}
 	n, _ := res.RowsAffected()
 	c, err = s.ConversationByName(ctx, projectID, name)
+	if err == nil && n > 0 {
+		s.publish(live.ProjectKey(projectID))
+	}
 	return c, n > 0, err
 }
 
@@ -163,6 +168,7 @@ func (s *Store) AddMessage(ctx context.Context, conversationID, authorID int64, 
 	if err := tx.Commit(); err != nil {
 		return Message{}, err
 	}
+	s.publishConversation(ctx, conversationID)
 	if m.Author, err = s.Identity(ctx, authorID); err != nil {
 		return Message{}, err
 	}
@@ -171,13 +177,21 @@ func (s *Store) AddMessage(ctx context.Context, conversationID, authorID int64, 
 
 // StoreFile records that a live file arrived whole.
 func (s *Store) StoreFile(ctx context.Context, id int64, sha256 string, size int64) error {
-	return one(s.db.ExecContext(ctx, `UPDATE files SET state = 'stored', sha256 = ?, size = ? WHERE id = ? AND state = 'live'`,
+	err := one(s.db.ExecContext(ctx, `UPDATE files SET state = 'stored', sha256 = ?, size = ? WHERE id = ? AND state = 'live'`,
 		sha256, size, id))
+	if err == nil {
+		s.publishFile(ctx, id)
+	}
+	return err
 }
 
-// GrowFile records how much of a live file has arrived, for readers.
+// GrowFile records how much of a live file has arrived, for readers, and
+// tells them it grew.
 func (s *Store) GrowFile(ctx context.Context, id int64, size int64) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE files SET size = ? WHERE id = ? AND state = 'live'`, size, id)
+	if err == nil {
+		s.publishFile(ctx, id)
+	}
 	return err
 }
 

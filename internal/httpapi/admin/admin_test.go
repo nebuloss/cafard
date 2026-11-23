@@ -128,7 +128,7 @@ func TestSignInIsNeeded(t *testing.T) {
 	if code, out := r.call("GET", "/admin/api/members", nil); code != 401 || out["error"] != "unauthorized" {
 		t.Errorf("without signing in: %d %v", code, out)
 	}
-	if code, _ := r.call("POST", "/admin/api/signin", map[string]string{"username": "guillaume", "password": "not set yet!"}); code != 401 {
+	if code, _ := r.call("POST", "/admin/api/signin", map[string]string{"username": "guillaume", "password": "not set yet!"}); code != 403 {
 		t.Errorf("before joining: %d", code)
 	}
 	r.signIn()

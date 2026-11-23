@@ -21,6 +21,7 @@ var layers = map[string]int{
 	"internal/blobs":     0,
 	"internal/ratelimit": 0,
 	"internal/webui":     0,
+	"internal/live":      0,
 
 	"internal/store": 1,
 
@@ -28,13 +29,15 @@ var layers = map[string]int{
 
 	"internal/service/chat": 3,
 
-	"internal/httpapi/api":   4,
-	"internal/httpapi/admin": 4,
-	"internal/httpapi/join":  4,
+	"internal/httpapi/httpx": 4,
 
-	"internal/httpapi": 5,
+	"internal/httpapi/api":   5,
+	"internal/httpapi/admin": 5,
+	"internal/httpapi/join":  5,
 
-	"cmd/cafard": 6,
+	"internal/httpapi": 6,
+
+	"cmd/cafard": 7,
 }
 
 // onlyImportedBy names packages that a lower layer is not enough to make
