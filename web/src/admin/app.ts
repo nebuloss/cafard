@@ -10,7 +10,8 @@ import { NoticeCenter, bell } from './notices';
 import { MemberPage, ProjectPage } from './pages';
 import { canonical, fromHash, navLevel, placeOf, trailOf, type Place } from './route';
 import type { View } from './view';
-import { AuditView, MembersView, OverviewView, ProjectsView, SettingsView, SignInView } from './views';
+import { AuditView } from './audit';
+import { MembersView, OverviewView, ProjectsView, SettingsView, SignInView } from './views';
 
 /**
  * AdminApp runs the admin UI: it signs in, reads the store, and draws the

@@ -34,7 +34,8 @@
 //	DELETE /admin/api/links/{id}
 //	GET    /admin/api/notices                 what needs the admin now (notices.go)
 //	POST   /admin/api/notices/read            {ids, read?}
-//	GET    /admin/api/audit
+//	GET    /admin/api/audit                   ?actor=&target=&kind=&source=&before=: a page, newest first
+//	GET    /admin/api/audit/facets            each column's values and counts
 //	GET    /admin/api/config
 package admin
 
@@ -110,6 +111,7 @@ func (a *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/links", a.auth(a.links))
 	mux.HandleFunc("DELETE /admin/api/links/{id}", a.auth(a.cancelLink))
 	mux.HandleFunc("GET /admin/api/audit", a.auth(a.audit))
+	mux.HandleFunc("GET /admin/api/audit/facets", a.auth(a.auditFacets))
 	mux.HandleFunc("GET /admin/api/notices", a.auth(a.noticeList))
 	mux.HandleFunc("POST /admin/api/notices/read", a.auth(a.noticesRead))
 	mux.HandleFunc("GET /admin/api/config", a.auth(a.config))
@@ -859,28 +861,57 @@ func (a *Admin) cancelLink(w http.ResponseWriter, r *http.Request, who access.Wh
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// audit is a page of the audit log, newest first, narrowed by
+// ?actor=…&target=…&kind=…&source=… (each repeatable) and continued with
+// ?before=<next>.
 func (a *Admin) audit(w http.ResponseWriter, r *http.Request, who access.Who) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit <= 0 || limit > 1000 {
-		limit = 300
-	}
-	es, err := a.st.Audit(r.Context(), limit)
+	q := r.URL.Query()
+	before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	rows, next, err := a.st.AuditPage(r.Context(), store.AuditFilter{
+		Actors: q["actor"], Targets: q["target"], Kinds: q["kind"], Sources: q["source"], Before: before, Limit: limit,
+	})
 	if err != nil {
 		a.fail(w, r, err)
 		return
 	}
 	type entry struct {
+		ID     int64     `json:"id"`
 		At     time.Time `json:"at"`
 		Actor  string    `json:"actor"`
 		Action string    `json:"action"`
 		Target string    `json:"target"`
 		Origin string    `json:"origin"`
+		Kind   string    `json:"kind"`
+		Source string    `json:"source"`
 	}
 	out := []entry{}
-	for _, e := range es {
-		out = append(out, entry{At: e.At.UTC(), Actor: e.Actor, Action: e.Action, Target: e.Target, Origin: e.Origin})
+	for _, e := range rows {
+		out = append(out, entry{ID: e.ID, At: e.At.UTC(), Actor: e.Actor, Action: e.Action, Target: e.Target, Origin: e.Origin, Kind: e.Kind, Source: e.Source})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"entries": out})
+	writeJSON(w, http.StatusOK, map[string]any{"entries": out, "next": next})
+}
+
+// auditFacets are the values each filterable column of the audit log has,
+// with their counts: what its heading's menu offers.
+func (a *Admin) auditFacets(w http.ResponseWriter, r *http.Request, who access.Who) {
+	f, err := a.st.AuditFacets(r.Context())
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	type facet struct {
+		Value string `json:"value"`
+		Count int    `json:"count"`
+	}
+	out := map[string][]facet{}
+	for field, list := range f {
+		out[field] = []facet{}
+		for _, v := range list {
+			out[field] = append(out[field], facet{v.Value, v.Count})
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (a *Admin) config(w http.ResponseWriter, r *http.Request, who access.Who) {

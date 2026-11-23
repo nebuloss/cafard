@@ -8,7 +8,7 @@ import type { AdminApp } from './app';
 import { CreateMemberFlow, CreateProjectFlow } from './create';
 import { pathOf } from './route';
 import { AdminStore } from './store';
-import type { AuditEntry, Member } from './types';
+import type { Member } from './types';
 import { View } from './view';
 
 function linkPill(m: Member): Html {
@@ -115,40 +115,6 @@ export class ProjectsView extends View {
     return this.card('Projects', html`<div class="${ui.tableWrap}"><table class="${ui.table}"><thead><tr class="${ui.tr}">${TH('Name')}${TH('Members')}${TH('Conversations', 'text-right')}${TH('Files', 'text-right')}${TH('Storage')}</tr></thead>
       <tbody>${rows.length ? rows : html`<tr><td colspan="5" class="${ui.empty}">No project yet.</td></tr>`}</tbody></table></div>`,
       html`<button class="${ui.btn('filled', 'sm')}" data-act="new-project">${Icon.of('plus')}New project</button>`);
-  }
-}
-
-export class AuditView extends View {
-  constructor(app: AdminApp) {
-    super(app);
-    this.actions = {
-      afilter: (t) => {
-        this.app.ui.audit = t.dataset['v'] ?? 'all';
-        this.render();
-      },
-    };
-  }
-
-  protected override afterRender(): void {
-    super.afterRender();
-    // The card is the window's height, and its table scrolls inside it.
-    this.root.classList.add('h-full', 'pb-4');
-  }
-
-  static kindOf(e: AuditEntry): string {
-    if (/signed (in|out)|sign-in/.test(e.action)) return 'signins';
-    if (/project/.test(e.action)) return 'projects';
-    return 'access';
-  }
-
-  protected view(): Html {
-    const f = this.app.ui.audit;
-    const seg = ([['all', 'All'], ['access', 'Access'], ['projects', 'Projects'], ['signins', 'Sign-ins']] as const).map(([k, l]) =>
-      html`<button class="${ui.segBtn}" aria-pressed="${String(f === k)}" data-act="afilter" data-v="${k}">${l}</button>`);
-    const rows = this.store.audit.filter((e) => f === 'all' || AuditView.kindOf(e) === f).map((e) =>
-      html`<tr class="${ui.tr}"><td class="${TD} whitespace-nowrap text-[13px] text-on-surface-variant tabular-nums">${time.when(e.at)}</td><td class="${TD}"><b>${e.actor}</b> ${e.action} <b>${e.target}</b></td><td class="${TD} font-mono text-xs text-on-surface-variant">${e.origin}</td></tr>`);
-    return this.card('Audit log', html`<div class="${ui.tableWrap} min-h-0 flex-1 overflow-auto"><table class="${ui.table}"><thead class="sticky top-0 z-10 bg-surface-lowest shadow-[0_1px_0_var(--color-outline-variant)]"><tr>${TH('When')}${TH('What')}${TH('From')}</tr></thead><tbody>${rows.length ? rows : html`<tr><td colspan="3" class="${ui.empty}">Nothing yet.</td></tr>`}</tbody></table></div>`,
-      html`<div class="${ui.seg}" role="group" aria-label="Show">${seg}</div>`, 'h-full min-h-0');
   }
 }
 

@@ -1,5 +1,6 @@
 import { ApiClient } from '@shared/api';
-import type { AuditEntry, Config, Link, Member, Notice, Project } from './types';
+import { AuditFilter } from './audit-filter';
+import type { AuditEntry, AuditFacets, Config, Link, Member, Notice, Project } from './types';
 
 /**
  * AdminStore holds what the admin UI shows, read from /admin/api. Every
@@ -12,6 +13,9 @@ export class AdminStore {
   members: Member[] = [];
   projects: Project[] = [];
   audit: AuditEntry[] = [];
+  /** The id to read the next page of the audit log before, or 0 at its end. */
+  auditNext = 0;
+  auditFacets: AuditFacets = {};
   links: Link[] = [];
   /** What needs the admin, read on every load: the bell is on every page. */
   notices: Notice[] = [];
@@ -51,13 +55,34 @@ export class AdminStore {
     this.members = m.members;
     this.projects = p.projects;
     this.notices = n.notices;
-    if (tab === 'audit') this.audit = (await this.api.get<{ entries: AuditEntry[] }>('/audit')).entries;
+    if (tab === 'audit') await this.loadAudit(AuditFilter.fromSearch(location.search));
     if (tab === 'overview') this.links = (await this.api.get<{ links: Link[] }>('/links')).links;
     if (!this.config) this.config = await this.api.get<Config>('/config');
   }
 
   async loadNotices(): Promise<void> {
     this.notices = (await this.api.get<{ notices: Notice[] }>('/notices')).notices;
+  }
+
+  /** The newest page of the audit log as filter narrows it, and its columns' values. */
+  async loadAudit(filter: AuditFilter): Promise<void> {
+    const q = filter.query();
+    const [page, facets] = await Promise.all([
+      this.api.get<{ entries: AuditEntry[]; next: number }>(`/audit${q ? '?' + q : ''}`),
+      this.api.get<AuditFacets>('/audit/facets'),
+    ]);
+    this.audit = page.entries;
+    this.auditNext = page.next;
+    this.auditFacets = facets;
+  }
+
+  /** The next page of the log, after the ones read. */
+  async moreAudit(filter: AuditFilter): Promise<void> {
+    if (!this.auditNext) return;
+    const q = filter.query();
+    const page = await this.api.get<{ entries: AuditEntry[]; next: number }>(`/audit?${q ? q + '&' : ''}before=${this.auditNext}`);
+    this.audit = [...this.audit, ...page.entries];
+    this.auditNext = page.next;
   }
 
   /** The notices not marked read: what the bell counts. */

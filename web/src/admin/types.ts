@@ -50,12 +50,20 @@ export interface Project {
 }
 
 export interface AuditEntry {
+  id: number;
   at: string;
   actor: string;
   action: string;
   target: string;
   origin: string;
+  /** members, projects, links or sign-ins: worked out from the action. */
+  kind: string;
+  /** admin, chat, cli, join, mcp, api: the origin before its address. */
+  source: string;
 }
+
+/** A column's values in the audit log, with how many entries have each. */
+export type AuditFacets = Partial<Record<'actor' | 'kind' | 'target' | 'source', { value: string; count: number }[]>>;
 
 export interface Signin {
   id: number;
