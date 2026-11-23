@@ -17,6 +17,7 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"cafard/internal/httpapi/admin"
@@ -48,6 +49,9 @@ type Deps struct {
 	// Admin is what the admin UI shows of the configuration; its PublicURL
 	// is also where join links point.
 	Admin admin.Config
+	// TrustedProxies are the proxies whose X-Forwarded-For and
+	// X-Forwarded-Proto are believed, on both listeners.
+	TrustedProxies []netip.Prefix
 }
 
 type Server struct {
@@ -55,7 +59,10 @@ type Server struct {
 }
 
 func New(d Deps) *Server {
-	return &Server{public: publicMux(d), admin: adminMux(d)}
+	if d.Admin.PublicURL == nil {
+		d.Admin.PublicURL = httpx.NewPublicURL("")
+	}
+	return &Server{public: httpx.Proxied(d.TrustedProxies, publicMux(d)), admin: httpx.Proxied(d.TrustedProxies, adminMux(d))}
 }
 
 // Public is the handler for the public listener.

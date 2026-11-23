@@ -15,7 +15,7 @@ export const FIELD_LABEL: Record<AuditField, string> = { actor: 'Who', kind: 'Ki
 
 /** How a kind or a source reads; any other value reads as itself. */
 export const VALUE_LABEL: Partial<Record<AuditField, Record<string, string>>> = {
-  kind: { members: 'Members', projects: 'Projects', links: 'Links & tokens', 'sign-ins': 'Sign-ins' },
+  kind: { members: 'Members', projects: 'Projects', links: 'Links & tokens', 'sign-ins': 'Sign-ins', settings: 'Settings' },
   source: { admin: 'Admin UI', chat: 'Chat', cli: 'Box (cli)', join: 'Join link', mcp: 'MCP', api: 'API', 'upload link': 'Upload link' },
 };
 

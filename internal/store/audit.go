@@ -16,6 +16,7 @@ import (
 const auditKind = `CASE
 	WHEN action LIKE '%signed %' OR action LIKE '%sign-in%' OR action LIKE '%sign in%' OR action LIKE '%code to sign%' OR action LIKE '%password%' THEN 'sign-ins'
 	WHEN action LIKE '%link%' OR action LIKE '%token%' THEN 'links'
+	WHEN action LIKE '%public URL%' THEN 'settings'
 	WHEN action LIKE '%project%' OR action LIKE '%retention%' OR action LIKE 'archived%' OR action LIKE 'unarchived%' THEN 'projects'
 	ELSE 'members' END`
 

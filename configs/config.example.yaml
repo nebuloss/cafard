@@ -18,8 +18,16 @@ state-dir: "/var/lib/cafard"
 
 # The address people and agents reach `listen` at, as it appears in join
 # links and in the MCP config the join script writes. Leave it empty to use
-# http://<listen>.
+# http://<listen>. The admin UI's settings can set another over it, without a
+# restart.
 public-url: "https://cafard.example"
+
+# The proxies in front of cafard, by address or CIDR: their X-Forwarded-For
+# and X-Forwarded-Proto are believed. Without them every client behind a
+# proxy shares its address, and one rate limit.
+trusted-proxies:
+  - "10.0.60.2"    # the proxy publishing `listen`
+  - "10.0.10.1"    # the one serving the admin UI on the internal network
 
 # The hash of the admin password, which opens the admin UI. Written by
 # `cafard passwd`, which asks for the password; restart cafard after.

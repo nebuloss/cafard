@@ -63,19 +63,17 @@ type API struct {
 	acc       *access.Service
 	chat      *chat.Service
 	hub       *live.Hub
-	publicURL string
-	secure    bool
+	publicURL *httpx.PublicURL
 	limit     *ratelimit.Limiter
 }
 
 // New builds /api/v1. hub is where live notices come from; publicURL is
 // where this listener is reached, for the codes that sign in a phone.
-func New(log *slog.Logger, acc *access.Service, c *chat.Service, hub *live.Hub, publicURL string) *API {
+func New(log *slog.Logger, acc *access.Service, c *chat.Service, hub *live.Hub, publicURL *httpx.PublicURL) *API {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &API{log: log, acc: acc, chat: c, hub: hub, publicURL: strings.TrimSuffix(publicURL, "/"),
-		secure: strings.HasPrefix(publicURL, "https://"), limit: ratelimit.New(10, time.Minute)}
+	return &API{log: log, acc: acc, chat: c, hub: hub, publicURL: publicURL, limit: ratelimit.New(10, time.Minute)}
 }
 
 // Register adds the routes to mux.
@@ -140,7 +138,7 @@ func (a *API) auth(next handler) http.HandlerFunc {
 		id, si, err := a.acc.Session(r.Context(), access.ChatSurface, cookie, from)
 		if err != nil {
 			if access.Is(err, access.Unauthorized) {
-				httpx.ClearChatCookie(w, a.secure)
+				httpx.ClearChatCookie(w, httpx.IsHTTPS(r))
 			}
 			a.fail(w, r, err)
 			return

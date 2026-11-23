@@ -77,7 +77,12 @@ export interface Signin {
 export interface Config {
   listen: string;
   admin_listen: string;
+  /** Where links point: the one set in the settings, or the file's. */
   public_url: string;
+  /** public-url in the configuration file, or what it stands for. */
+  public_url_file: string;
+  /** Whether the settings set one over the file's. */
+  public_url_set: boolean;
   state_dir: string;
   max_upload: number;
   version: string;

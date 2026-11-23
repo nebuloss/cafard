@@ -55,6 +55,7 @@ import (
 
 	"rsc.io/qr"
 
+	"cafard/internal/config"
 	"cafard/internal/httpapi/httpx"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
@@ -66,8 +67,10 @@ const cookieName = "cafard_admin"
 
 // Config is what the configuration page shows, and what links are built on.
 type Config struct {
-	Listen, AdminListen, PublicURL, StateDir string
-	MaxUpload                                int64
+	Listen, AdminListen, StateDir string
+	// PublicURL is where links point, which the settings page changes.
+	PublicURL *httpx.PublicURL
+	MaxUpload int64
 	// PasswordHash is the admin password's, from the configuration file.
 	PasswordHash string
 }
@@ -79,7 +82,6 @@ type Admin struct {
 	cfg      Config
 	ui       fs.FS
 	limit    *ratelimit.Limiter
-	secure   bool
 	sessions *sessions
 }
 
@@ -88,8 +90,7 @@ func New(log *slog.Logger, st *store.Store, acc *access.Service, cfg Config, ui 
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &Admin{log: log, st: st, acc: acc, cfg: cfg, ui: ui, limit: ratelimit.New(10, time.Minute), sessions: newSessions(),
-		secure: strings.HasPrefix(cfg.PublicURL, "https://")}
+	return &Admin{log: log, st: st, acc: acc, cfg: cfg, ui: ui, limit: ratelimit.New(10, time.Minute), sessions: newSessions()}
 }
 
 func (a *Admin) Register(mux *http.ServeMux) {
@@ -115,6 +116,7 @@ func (a *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/notices", a.auth(a.noticeList))
 	mux.HandleFunc("POST /admin/api/notices/read", a.auth(a.noticesRead))
 	mux.HandleFunc("GET /admin/api/config", a.auth(a.config))
+	mux.HandleFunc("PUT /admin/api/settings/public-url", a.auth(a.setPublicURL))
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "No route "+r.Method+" "+r.URL.Path+".")
 	})
@@ -229,7 +231,7 @@ func (a *Admin) signin(w http.ResponseWriter, r *http.Request) {
 	}
 	cookie := a.sessions.start()
 	a.log.Info("admin signed in", "from", from, "browser", access.DescribeAgent(r.UserAgent()))
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: cookie, Path: "/", HttpOnly: true, Secure: a.secure,
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: cookie, Path: "/", HttpOnly: true, Secure: httpx.IsHTTPS(r),
 		SameSite: http.SameSiteStrictMode, MaxAge: int(sessionLife.Seconds())})
 	writeJSON(w, http.StatusOK, map[string]any{})
 }
@@ -238,7 +240,7 @@ func (a *Admin) signout(w http.ResponseWriter, r *http.Request, who access.Who) 
 	if c, err := r.Cookie(cookieName); err == nil {
 		a.sessions.end(c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, Secure: a.secure,
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, Secure: httpx.IsHTTPS(r),
 		SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -405,7 +407,7 @@ func (a *Admin) newLink(r *http.Request, who access.Who, i store.Identity, hours
 		return nil, err
 	}
 	lj := linkOf(l)
-	lj.URL = strings.TrimSuffix(a.cfg.PublicURL, "/") + "/join/" + code
+	lj.URL = a.cfg.PublicURL.String() + "/join/" + code
 	if q, err := qr.Encode(lj.URL, qr.M); err == nil {
 		lj.QR = "data:image/png;base64," + base64.StdEncoding.EncodeToString(q.PNG())
 	}
@@ -914,9 +916,47 @@ func (a *Admin) auditFacets(w http.ResponseWriter, r *http.Request, who access.W
 
 func (a *Admin) config(w http.ResponseWriter, r *http.Request, who access.Who) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"listen": a.cfg.Listen, "admin_listen": a.cfg.AdminListen, "public_url": a.cfg.PublicURL, "state_dir": a.cfg.StateDir,
+		"listen": a.cfg.Listen, "admin_listen": a.cfg.AdminListen, "state_dir": a.cfg.StateDir,
+		"public_url": a.cfg.PublicURL.String(), "public_url_file": a.cfg.PublicURL.File(), "public_url_set": a.cfg.PublicURL.IsSet(),
 		"max_upload": a.cfg.MaxUpload, "version": version.String(),
 		"link_hours": int(access.DefaultLinkLife.Hours()), "link_max_hours": int(access.MaxLinkLife.Hours()),
 		"admin_signin_hours": 12, "chat_signin_days": 90,
 	})
+}
+
+// setPublicURL sets where links point, over the file's public-url, or with
+// an empty value goes back to it. It takes effect at once: the next link
+// made carries it. Links already given keep the address they were given
+// with.
+func (a *Admin) setPublicURL(w http.ResponseWriter, r *http.Request, who access.Who) {
+	var in struct {
+		URL string `json:"url"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	u := strings.TrimSpace(in.URL)
+	if u != "" {
+		var err error
+		if u, err = config.CheckPublicURL(u); err != nil {
+			a.fail(w, r, &access.Refusal{Code: access.BadValue, Message: "The public URL " + err.Error() + "."})
+			return
+		}
+	}
+	if u == a.cfg.PublicURL.File() {
+		u = ""
+	}
+	action := "set the public URL to " + u
+	if u == "" {
+		action = "set the public URL back to the file's, " + a.cfg.PublicURL.File()
+	}
+	if err := a.st.SetSetting(r.Context(), store.AuditEntry{Actor: who.Name, Action: action, Target: "settings", Origin: who.Origin},
+		store.SettingPublicURL, u); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.cfg.PublicURL.Set(u)
+	a.log.Info("public URL set", "url", a.cfg.PublicURL.String())
+	a.config(w, r, who)
 }

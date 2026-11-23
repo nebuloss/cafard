@@ -8,7 +8,7 @@ import type { AdminApp } from './app';
 import { CreateMemberFlow, CreateProjectFlow } from './create';
 import { pathOf } from './route';
 import { AdminStore } from './store';
-import type { Member } from './types';
+import type { Config, Member } from './types';
 import { View } from './view';
 
 function linkPill(m: Member): Html {
@@ -158,14 +158,43 @@ export class OverviewView extends View {
   }
 }
 
-/** Settings: the configuration, which changes only in the file on the box. */
+/**
+ * Settings: the public URL, which changes here, and the rest of the
+ * configuration, which changes only in the file on the box.
+ */
 export class SettingsView extends View {
+  constructor(app: AdminApp) {
+    super(app);
+    this.actions = {
+      'save-url': () => this.saveURL(this.$<HTMLInputElement>('#pubUrl').value),
+      'reset-url': () => this.saveURL(''),
+    };
+    this.root.addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.saveURL(this.$<HTMLInputElement>('#pubUrl').value);
+    });
+  }
+
+  private async saveURL(url: string): Promise<void> {
+    const c = await this.app.change(() => this.store.api.put<Config>('/settings/public-url', { url }), url ? 'Links now point at the new address.' : 'Back to the file\'s address.');
+    if (c) {
+      this.store.config = c;
+      this.render();
+    }
+  }
+
   protected view(): Html {
     const c = this.store.config;
     if (!c) return html`<p class="${ui.empty}">Loading…</p>`;
-    return html`${this.card('Listeners', html`<dl class="${ui.kv}">
+    const from = c.public_url_set
+      ? html`<span class="${ui.dim} text-xs">Set here, over <code>${c.public_url_file}</code> from the file</span>`
+      : html`<span class="${ui.dim} font-mono text-xs">public-url, /etc/cafard/config.yaml</span>`;
+    return html`${this.card('Public URL', html`<form class="flex flex-wrap items-center gap-2" novalidate>
+        <input class="${ui.input} min-w-0 flex-[1_1_18rem] font-mono" id="pubUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" aria-label="Public URL" value="${c.public_url}" placeholder="https://cafard.example.com" title="Where join links, upload links and agents' MCP configs point. Links already given keep theirs.">
+        <button class="${ui.btn('tonal', 'sm')}" type="submit">Save</button>
+        ${c.public_url_set ? html`<button class="${ui.btn('text', 'sm')}" type="button" data-act="reset-url" title="Use ${c.public_url_file}, from the file">Use the file's</button>` : ''}</form>`, from)}
+      ${this.card('Listeners', html`<dl class="${ui.kv}">
         <dt>listen</dt><dd><code>${c.listen}</code></dd>
-        <dt>public-url</dt><dd><code>${c.public_url}</code></dd>
         <dt>admin-listen</dt><dd><code>${c.admin_listen}</code></dd>
         <dt>state-dir</dt><dd><code>${c.state_dir}</code></dd>
         <dt>Build</dt><dd><code>${c.version}</code></dd></dl>`, html`<span class="${ui.dim} font-mono text-xs">/etc/cafard/config.yaml</span>`)}

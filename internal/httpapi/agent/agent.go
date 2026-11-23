@@ -59,16 +59,16 @@ type Agent struct {
 	uploads   *uploads.Signer
 	sessions  *sessions
 	server    *mcp.Server
-	publicURL string
+	publicURL *httpx.PublicURL
 }
 
 // New builds the MCP server. publicURL is where upload links point.
-func New(log *slog.Logger, acc *access.Service, c *chat.Service, att *attention.Service, publicURL string) *Agent {
+func New(log *slog.Logger, acc *access.Service, c *chat.Service, att *attention.Service, publicURL *httpx.PublicURL) *Agent {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	a := &Agent{log: log, acc: acc, chat: c, att: att, uploads: uploads.New(), sessions: newSessions(),
-		publicURL: strings.TrimSuffix(publicURL, "/")}
+		publicURL: publicURL}
 	a.sessions.onStart = a.autoSelect
 	a.server = &mcp.Server{
 		Name: "cafard", Title: "cafard", Version: version.Version,

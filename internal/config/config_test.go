@@ -78,6 +78,37 @@ func TestAdminListenerNeverOverlapsThePublicOne(t *testing.T) {
 	}
 }
 
+func TestCheckPublicURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://cafard.example":      "https://cafard.example",
+		"https://cafard.example/":     "https://cafard.example",
+		" http://10.0.60.9:8790 ":     "http://10.0.60.9:8790",
+		"ftp://cafard.example":        "",
+		"cafard.example":              "",
+		"https://cafard.example/chat": "",
+		"https://cafard.example/?a=b": "",
+		"https://me@cafard.example":   "",
+	} {
+		got, err := CheckPublicURL(in)
+		if got != want || (want == "") != (err != nil) {
+			t.Errorf("%q: %q %v", in, got, err)
+		}
+	}
+}
+
+func TestTrustedProxies(t *testing.T) {
+	c := Default()
+	c.TrustedProxies = []string{"10.0.60.2", "10.0.10.0/24", "::1"}
+	ps, err := c.Proxies()
+	if err != nil || len(ps) != 3 || ps[0].String() != "10.0.60.2/32" || ps[2].Bits() != 128 {
+		t.Fatalf("%v %v", ps, err)
+	}
+	c.TrustedProxies = []string{"npm.local"}
+	if c.Validate() == nil {
+		t.Error("a host name was taken for a proxy")
+	}
+}
+
 func TestURL(t *testing.T) {
 	c := Default()
 	if got := c.URL(); got != "http://127.0.0.1:8330" {

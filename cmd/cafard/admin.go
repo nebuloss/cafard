@@ -166,7 +166,7 @@ func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Du
 	if err != nil {
 		return err
 	}
-	url := strings.TrimSuffix(a.cfg.URL(), "/") + "/join/" + code
+	url := a.publicURL(ctx) + "/join/" + code
 	until := l.ExpiresAt.Local().Format("2 Jan 15:04")
 	switch l.Kind {
 	case store.AgentLink:
@@ -285,12 +285,21 @@ func (a *adminCmd) createMachine(ctx context.Context, kind store.Kind, name stri
 	if err != nil {
 		return err
 	}
-	a.showToken(kind, tok, projects)
+	a.showToken(ctx, kind, tok, projects)
 	return nil
 }
 
-func (a *adminCmd) showToken(kind store.Kind, tok string, projects []string) {
-	url := strings.TrimSuffix(a.cfg.URL(), "/")
+// publicURL is where the service's links point: the one set in the admin
+// UI, or the file's.
+func (a *adminCmd) publicURL(ctx context.Context) string {
+	if u, err := a.st.Setting(ctx, store.SettingPublicURL); err == nil && u != "" {
+		return u
+	}
+	return strings.TrimSuffix(a.cfg.URL(), "/")
+}
+
+func (a *adminCmd) showToken(ctx context.Context, kind store.Kind, tok string, projects []string) {
+	url := a.publicURL(ctx)
 	project := "<project>"
 	if len(projects) > 0 {
 		project = projects[0]
@@ -412,7 +421,7 @@ func (a *adminCmd) token(ctx context.Context, name string) error {
 		names = append(names, p.Name)
 	}
 	fmt.Fprintf(a.out, "new token for %s; the old one no longer works\n\n", i.Name)
-	a.showToken(i.Kind, tok, names)
+	a.showToken(ctx, i.Kind, tok, names)
 	return nil
 }
 

@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"cafard/internal/blobs"
+	"cafard/internal/httpapi/httpx"
 	"cafard/internal/service/access"
 	"cafard/internal/service/attention"
 	"cafard/internal/service/chat"
@@ -76,7 +77,7 @@ func newRig(t *testing.T) *rig {
 	srv := httptest.NewUnstartedServer(mux)
 	srv.Start()
 	t.Cleanup(srv.Close)
-	New(nil, acc, r.chat, attention.New(st, acc), srv.URL).Register(mux)
+	New(nil, acc, r.chat, attention.New(st, acc), httpx.NewPublicURL(srv.URL)).Register(mux)
 	r.srv = srv
 	return r
 }

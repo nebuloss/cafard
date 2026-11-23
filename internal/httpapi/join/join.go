@@ -43,17 +43,17 @@ import (
 type Join struct {
 	log       *slog.Logger
 	acc       *access.Service
-	publicURL string
+	publicURL *httpx.PublicURL
 	limit     *ratelimit.Limiter
 }
 
 // New serves join links. publicURL is where agents reach this listener, as
 // written into the install script.
-func New(log *slog.Logger, acc *access.Service, publicURL string) *Join {
+func New(log *slog.Logger, acc *access.Service, publicURL *httpx.PublicURL) *Join {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Join{log: log, acc: acc, publicURL: strings.TrimSuffix(publicURL, "/"), limit: ratelimit.New(30, time.Minute)}
+	return &Join{log: log, acc: acc, publicURL: publicURL, limit: ratelimit.New(30, time.Minute)}
 }
 
 func (j *Join) Register(mux *http.ServeMux) {
@@ -114,7 +114,7 @@ func (j *Join) open(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				c = Clients[0]
 			}
-			link := j.publicURL + "/join/" + code
+			link := j.publicURL.String() + "/join/" + code
 			d := pageData{Title: "Set up " + id.Name, Name: id.Name, Expires: l.ExpiresAt, Agent: true,
 				Sh: install.Command(link, false, c.ID), PS1: install.Command(link, true, c.ID)}
 			for _, o := range Clients {
@@ -147,7 +147,7 @@ func (j *Join) signIn(w http.ResponseWriter, r *http.Request, code string) {
 		j.refused(w, r, err)
 		return
 	}
-	httpx.SetChatCookie(w, cookie, strings.HasPrefix(j.publicURL, "https://"))
+	httpx.SetChatCookie(w, cookie, httpx.IsHTTPS(r))
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -172,7 +172,7 @@ func (j *Join) signInPerson(w http.ResponseWriter, r *http.Request) {
 		j.refused(w, r, err)
 		return
 	}
-	httpx.SetChatCookie(w, cookie, strings.HasPrefix(j.publicURL, "https://"))
+	httpx.SetChatCookie(w, cookie, httpx.IsHTTPS(r))
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -197,7 +197,7 @@ func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string
 		return
 	}
 	j.log.Info("agent link redeemed", "agent", id.Name, "from", clientIP(r), "shell", shell, "client", client.ID)
-	b := agentBundle(j.publicURL, id.Name, token, client)
+	b := agentBundle(j.publicURL.String(), id.Name, token, client)
 	if err := b.Validate(); err != nil {
 		// What agentBundle writes is fixed, so this is a bug; the link is
 		// spent, and an admin makes another once it is fixed.

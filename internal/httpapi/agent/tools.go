@@ -739,7 +739,7 @@ func (a *Agent) uploadLink(ctx context.Context, raw json.RawMessage) (any, error
 		return nil, mcp.RefuseWith(string(access.Archived), fmt.Sprintf("%s is archived (read-only). Nothing can be posted.", h.project.Name), nil)
 	}
 	code, g := a.uploads.Issue(uploads.Grant{IdentityID: h.who.ID, Project: h.project.Name, Conversation: c.Name, Name: name})
-	url := a.publicURL + "/u/" + code
+	url := a.publicURL.String() + "/u/" + code
 	return fmt.Sprintf("Run this in your shell, with the path of the file:\n\n  curl -sS -T <path> '%s'\n\n"+
 		"It sends one file, once, until %s, into %s as %s. Stream a growing log with `tail -f <path> | curl -sS -T - '…'`.",
 		url, g.Expires.UTC().Format("15:04Z"), c.Name, name), nil

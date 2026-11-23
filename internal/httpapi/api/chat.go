@@ -47,7 +47,7 @@ func (a *API) signout(w http.ResponseWriter, r *http.Request, who access.Who) {
 	if si, ok := signinFrom(r.Context()); ok {
 		a.acc.SignOut(r.Context(), who, si)
 	}
-	httpx.ClearChatCookie(w, a.secure)
+	httpx.ClearChatCookie(w, httpx.IsHTTPS(r))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -113,7 +113,7 @@ func (a *API) phoneCode(w http.ResponseWriter, r *http.Request, who access.Who) 
 		a.fail(w, r, err)
 		return
 	}
-	url := a.publicURL + "/join/" + code
+	url := a.publicURL.String() + "/join/" + code
 	resp := map[string]any{"url": url, "expires_at": l.ExpiresAt.UTC()}
 	if q, err := qr.Encode(url, qr.M); err == nil {
 		resp["qr"] = "data:image/png;base64," + base64.StdEncoding.EncodeToString(q.PNG())

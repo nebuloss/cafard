@@ -29,6 +29,7 @@ const KIND_PILL: Record<string, string> = {
   projects: 'bg-tertiary-container text-on-tertiary-container',
   links: 'bg-warning-container text-on-warning-container',
   'sign-ins': 'bg-info-container text-on-info-container',
+  settings: 'bg-surface-container-highest text-on-surface',
 };
 
 /** A value that narrows the log to itself when clicked. */

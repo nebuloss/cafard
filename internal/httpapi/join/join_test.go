@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"cafard/internal/httpapi/httpx"
 	"cafard/internal/install"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -46,7 +47,7 @@ func newRig(t *testing.T) *rig {
 	mux := http.NewServeMux()
 	r.srv = httptest.NewServer(mux)
 	t.Cleanup(r.srv.Close)
-	New(nil, acc, "https://cafard.example").Register(mux)
+	New(nil, acc, httpx.NewPublicURL("https://cafard.example")).Register(mux)
 	return r
 }
 

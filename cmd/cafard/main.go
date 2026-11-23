@@ -26,6 +26,7 @@ import (
 	"cafard/internal/httpapi"
 	"cafard/internal/httpapi/admin"
 	"cafard/internal/httpapi/api"
+	"cafard/internal/httpapi/httpx"
 	"cafard/internal/live"
 	"cafard/internal/logging"
 	"cafard/internal/service/access"
@@ -168,10 +169,22 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	} else if cut > 0 {
 		log.Warn("uploads cut off by the last stop", "files", cut)
 	}
+	// The public URL is the file's until the admin sets another in the
+	// admin UI; that one is in the database and outlives a restart.
+	publicURL := httpx.NewPublicURL(cfg.URL())
+	if set, err := st.Setting(ctx, store.SettingPublicURL); err != nil {
+		return err
+	} else {
+		publicURL.Set(set)
+	}
+	proxies, err := cfg.Proxies()
+	if err != nil {
+		return err
+	}
 	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Attention: attention.New(st, acc), Hub: hub, Admin: admin.Config{
-		Listen: cfg.Listen, AdminListen: cfg.AdminListen, PublicURL: cfg.URL(), StateDir: cfg.StateDir, MaxUpload: api.MaxUpload,
+		Listen: cfg.Listen, AdminListen: cfg.AdminListen, PublicURL: publicURL, StateDir: cfg.StateDir, MaxUpload: api.MaxUpload,
 		PasswordHash: cfg.AdminPasswordHash,
-	}})
+	}, TrustedProxies: proxies})
 
 	pubLn, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {

@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
+	"net/url"
 	"os"
 	"strings"
 
@@ -35,8 +37,14 @@ type Config struct {
 	StateDir string `yaml:"state-dir"`
 	// PublicURL is the address people and agents reach the public listener
 	// at, as it appears in join links and in the MCP config the join script
-	// writes. Empty means http://<listen>.
+	// writes. Empty means http://<listen>. The admin UI's settings can set
+	// another over it, kept in the database.
 	PublicURL string `yaml:"public-url"`
+	// TrustedProxies are the proxies in front of cafard, by address or
+	// CIDR: their X-Forwarded-For and X-Forwarded-Proto are believed. Behind
+	// a proxy without them, every client shares the proxy's address, and
+	// with it one rate limit.
+	TrustedProxies []string `yaml:"trusted-proxies"`
 	// AdminPasswordHash opens the admin UI: argon2id, as `cafard passwd`
 	// writes it. Empty, nobody can sign in to the admin UI; `cafard admin` on
 	// the box still works.
@@ -94,6 +102,14 @@ func (c Config) Validate() error {
 	if c.AdminPasswordHash != "" && !strings.HasPrefix(c.AdminPasswordHash, "$argon2id$") {
 		return errors.New("config: admin-password-hash is not an argon2id hash: set it with cafard passwd")
 	}
+	if c.PublicURL != "" {
+		if _, err := CheckPublicURL(c.PublicURL); err != nil {
+			return fmt.Errorf("config: public-url: %w", err)
+		}
+	}
+	if _, err := c.Proxies(); err != nil {
+		return err
+	}
 	pub, err := splitAddr("listen", c.Listen)
 	if err != nil {
 		return err
@@ -126,6 +142,43 @@ func splitAddr(key, s string) (addr, error) {
 		return addr{}, fmt.Errorf("config: %s %q: give a port", key, s)
 	}
 	return addr{host: host, port: port}, nil
+}
+
+// Proxies is TrustedProxies, each a prefix: an address alone is a /32 or
+// a /128.
+func (c Config) Proxies() ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, s := range c.TrustedProxies {
+		if p, err := netip.ParsePrefix(s); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		a, err := netip.ParseAddr(s)
+		if err != nil {
+			return nil, fmt.Errorf("config: trusted-proxies: %q is neither an address nor a CIDR", s)
+		}
+		out = append(out, netip.PrefixFrom(a, a.BitLen()))
+	}
+	return out, nil
+}
+
+// CheckPublicURL reads a public URL as the file or the admin UI gives it:
+// http or https, a host, and nothing after it, since cafard answers at the
+// root of its listener. It returns it without a trailing slash.
+func CheckPublicURL(s string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(s))
+	if err != nil {
+		return "", fmt.Errorf("%q is not a URL", s)
+	}
+	switch {
+	case u.Scheme != "http" && u.Scheme != "https":
+		return "", fmt.Errorf("%q: start it with https:// or http://", s)
+	case u.Host == "" || u.User != nil:
+		return "", fmt.Errorf("%q: give the host, as https://cafard.example.com", s)
+	case strings.Trim(u.Path, "/") != "" || u.RawQuery != "" || u.Fragment != "":
+		return "", fmt.Errorf("%q: give the host alone; cafard answers at the root of its address", s)
+	}
+	return u.Scheme + "://" + u.Host, nil
 }
 
 // URL is PublicURL, or the address the public listener answers on.

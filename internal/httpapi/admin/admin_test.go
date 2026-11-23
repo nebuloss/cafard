@@ -14,6 +14,7 @@ import (
 	"testing/fstest"
 
 	"cafard/internal/httpapi/admin"
+	"cafard/internal/httpapi/httpx"
 	"cafard/internal/httpapi/join"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -56,14 +57,14 @@ func newRig(t *testing.T) *rig {
 	pub := http.NewServeMux()
 	r.publicSrv = httptest.NewServer(pub)
 	t.Cleanup(r.publicSrv.Close)
-	join.New(nil, acc, r.publicSrv.URL).Register(pub)
+	join.New(nil, acc, httpx.NewPublicURL(r.publicSrv.URL)).Register(pub)
 
 	adm := http.NewServeMux()
 	hash, err := access.HashAdminPassword(adminPassword)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin.New(nil, st, acc, admin.Config{PublicURL: r.publicSrv.URL, PasswordHash: hash}, fakeUI).Register(adm)
+	admin.New(nil, st, acc, admin.Config{PublicURL: httpx.NewPublicURL(r.publicSrv.URL), PasswordHash: hash}, fakeUI).Register(adm)
 	r.adminSrv = httptest.NewServer(adm)
 	t.Cleanup(r.adminSrv.Close)
 
@@ -360,5 +361,30 @@ func TestAMissingUISaysHowToBuildIt(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 404 || !strings.Contains(string(body), "make build") {
 		t.Errorf("no UI: %d %s", resp.StatusCode, body)
+	}
+}
+
+// The public URL set in the settings is where the next link points, until
+// it is set back to the file's; a URL cafard cannot answer at is refused.
+func TestSetPublicURL(t *testing.T) {
+	r := newRig(t)
+	r.signIn()
+	code, out := r.call("PUT", "/admin/api/settings/public-url", map[string]any{"url": "https://cafard.example.com/"})
+	if code != 200 || out["public_url"] != "https://cafard.example.com" || out["public_url_set"] != true {
+		t.Fatalf("set: %d %v", code, out)
+	}
+	if v, _ := r.st.Setting(ctx, store.SettingPublicURL); v != "https://cafard.example.com" {
+		t.Errorf("kept as %q", v)
+	}
+	code, out = r.call("POST", "/admin/api/members", map[string]any{"kind": "agent", "name": "dev-code"})
+	if link, _ := out["link"].(map[string]any); code != 201 || !strings.HasPrefix(link["url"].(string), "https://cafard.example.com/join/") {
+		t.Errorf("link after the change: %d %v", code, out)
+	}
+	if code, out := r.call("PUT", "/admin/api/settings/public-url", map[string]any{"url": "https://cafard.example.com/chat"}); code != 400 {
+		t.Errorf("a path: %d %v", code, out)
+	}
+	code, out = r.call("PUT", "/admin/api/settings/public-url", map[string]any{"url": ""})
+	if code != 200 || out["public_url_set"] != false || out["public_url"] != r.publicSrv.URL {
+		t.Errorf("back to the file's: %d %v", code, out)
 	}
 }
