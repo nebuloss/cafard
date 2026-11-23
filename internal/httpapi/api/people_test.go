@@ -27,16 +27,15 @@ func (r *rig) person(t *testing.T) *person {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err := http.PostForm(r.srv.URL+"/join/"+code, url.Values{"password": {"guillaume's password"}, "again": {"guillaume's password"}})
+	// Sign in as people do: the Sign in button of their link, which
+	// leaves the chat's cookie in this client's jar.
+	jar, _ := cookiejar.New(nil)
+	p := &person{t: t, r: r, client: &http.Client{Jar: jar}}
+	resp, err := p.client.PostForm(r.srv.URL+"/join/"+code, url.Values{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	jar, _ := cookiejar.New(nil)
-	p := &person{t: t, r: r, client: &http.Client{Jar: jar}}
-	if code, body := p.call("POST", "/api/v1/signin", map[string]string{"username": "guillaume", "password": "guillaume's password"}); code != 200 {
-		t.Fatalf("sign in: %d %s", code, body)
-	}
 	// guillaume in be98, as a person in the project.
 	be98, _ := r.st.ProjectByName(ctx, "be98")
 	r.acc.AddMember(ctx, r.admin, be98, r.guillaume.Identity)
@@ -175,15 +174,15 @@ func TestDeleteAFile(t *testing.T) {
 	}
 }
 
-// Sign in another phone: the password again, a code, and the phone that
-// opens it is signed in and sent to the app.
+// Sign in another phone: a code from a phone signed in, and the phone that
+// opens it is signed in and sent to the app. A token cannot make one.
 func TestSignInAnotherPhone(t *testing.T) {
 	r := newRig(t)
 	p := r.person(t)
-	if code, _ := p.call("POST", "/api/v1/me/phone", map[string]string{"password": "wrong"}); code != 403 {
-		t.Errorf("a wrong password: %d", code)
+	if resp, _ := r.do(t, "POST", "/api/v1/me/phone", r.agent, strings.NewReader("{}")); resp.StatusCode != 403 {
+		t.Errorf("an agent's token asking for a phone code: %d", resp.StatusCode)
 	}
-	code, body := p.call("POST", "/api/v1/me/phone", map[string]string{"password": "guillaume's password"})
+	code, body := p.call("POST", "/api/v1/me/phone", nil)
 	var out struct{ URL, QR string }
 	json.Unmarshal(body, &out)
 	if code != 201 || !strings.HasPrefix(out.URL, "http://cafard.example/join/") || !strings.HasPrefix(out.QR, "data:image/png;base64,") {

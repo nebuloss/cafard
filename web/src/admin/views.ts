@@ -171,7 +171,7 @@ export class OverviewView extends View {
     const total = ps.reduce((s, p) => s + p.bytes, 0);
     const files = ps.reduce((s, p) => s + p.files, 0);
     const waiting = this.store.links.filter((l) => l.state === 'waiting').map((l) => {
-      const what = l.kind === 'agent' ? 'install' : l.kind === 'password' ? 'password' : 'join';
+      const what = l.kind === 'agent' ? 'install' : 'sign-in';
       return html`<tr class="${ui.tr}"><td class="${TD}"><a class="${ui.link}" href="${pathOf('members', l.member)}">${l.member}</a></td><td class="${TD}">${what}</td><td class="${TD} text-[13px]">${time.until(l.expires_at)}</td><td class="${TD} text-right"><button class="${ui.btn('danger-text', 'sm')}" data-act="cancel-link" data-v="${String(l.id)}">Cancel</button></td></tr>`;
     });
     const storage = ps.map((p) => html`<tr class="${ui.trLink}" role="button" tabindex="0" data-act="open" data-v="${p.name}"><td class="${TD}"><span class="${WHO}">${Avatar.project(p.name, 'sm')}<span class="nm">${p.name}</span>${p.archived ? html`<span class="${ui.pill.muted}">archived</span>` : ''}</span></td><td class="${TD} ${NUM}">${p.files}</td><td class="${TD} min-w-56">${Meter.of(p)}</td></tr>`);

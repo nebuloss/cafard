@@ -6,24 +6,22 @@ import (
 
 func TestSignInAnotherPhone(t *testing.T) {
 	w := newWorld(t)
-	w.join(w.camille, "camille's long password")
+	w.signIn(w.camille)
 	camille := w.reload(w.camille)
 
-	_, _, err := w.svc.IssueSigninLink(ctx, camille, "not my password")
-	wantCode(t, "a code with the wrong password", err, Wrong)
-	_, _, err = w.svc.IssueSigninLink(ctx, w.devCode, "anything")
+	_, _, err := w.svc.IssueSigninLink(ctx, w.devCode)
 	wantCode(t, "a code for an agent", err, NotAllowed)
 
-	code, l, err := w.svc.IssueSigninLink(ctx, camille, "camille's long password")
+	code, l, err := w.svc.IssueSigninLink(ctx, camille)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if l.ExpiresAt.Sub(l.CreatedAt) > SigninLinkLife {
 		t.Errorf("the code lasts %v", l.ExpiresAt.Sub(l.CreatedAt))
 	}
-	// A password link sent by an admin meanwhile is not cancelled by the code,
+	// A sign-in link sent by an admin meanwhile is not cancelled by the code,
 	// nor the code by it.
-	pwCode, _, _ := w.svc.IssueLink(ctx, w.admin, camille.Identity, 0)
+	adminCode, _, _ := w.svc.IssueLink(ctx, w.admin, camille.Identity, 0)
 
 	id, cookie, err := w.svc.RedeemSigninLink(ctx, code, "10.0.50.130", "Mozilla/5.0 (iPhone) Safari/604")
 	if err != nil || id.Name != "camille" {
@@ -35,8 +33,8 @@ func TestSignInAnotherPhone(t *testing.T) {
 	if _, _, err := w.svc.RedeemSigninLink(ctx, code, "x", ""); !Is(err, Spent) {
 		t.Errorf("the code used twice: %v", err)
 	}
-	if _, err := w.svc.ChoosePassword(ctx, pwCode, "a new long password", "x"); err != nil {
-		t.Errorf("the password link after a sign-in code: %v", err)
+	if _, _, err := w.svc.SignInWithLink(ctx, adminCode, "x", ""); err != nil {
+		t.Errorf("the admin's sign-in link after a phone's code: %v", err)
 	}
 	// A join link is not a sign-in code.
 	other, _, _ := w.svc.IssueLink(ctx, w.admin, w.labBench.Identity, 0)

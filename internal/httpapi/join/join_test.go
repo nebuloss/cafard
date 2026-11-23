@@ -69,40 +69,41 @@ func get(t *testing.T, u, ua string) (int, string, http.Header) {
 	return resp.StatusCode, string(b), resp.Header
 }
 
-func TestPersonChoosesAPassword(t *testing.T) {
+// A person's link is a page with a Sign in button. Opening it spends
+// nothing, as a messenger's preview fetches it before the person taps it;
+// the button signs this browser in and opens the chat.
+func TestPersonSignsInWithTheirLink(t *testing.T) {
 	r := newRig(t)
 	u := r.link(t, r.camille)
-	code, body, h := get(t, u, "Mozilla/5.0 (iPhone)")
-	if code != 200 || !strings.Contains(body, "Welcome, Camille") || !strings.Contains(body, `name="password"`) {
-		t.Fatalf("page: %d\n%s", code, body)
-	}
-	if !strings.Contains(h.Get("Content-Security-Policy"), "default-src 'none'") || h.Get("Cache-Control") != "no-store" {
-		t.Errorf("headers: %v", h)
-	}
-
-	post := func(pass, again string) (int, string) {
-		resp, err := http.PostForm(u, url.Values{"password": {pass}, "again": {again}})
-		if err != nil {
-			t.Fatal(err)
+	for i := 0; i < 2; i++ {
+		code, body, h := get(t, u, "Mozilla/5.0 (iPhone)")
+		if code != 200 || !strings.Contains(body, "Sign in as Camille") || !strings.Contains(body, `<form method="post">`) {
+			t.Fatalf("page, opening %d: %d\n%s", i+1, code, body)
 		}
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(resp.Body)
-		return resp.StatusCode, string(b)
+		if !strings.Contains(h.Get("Content-Security-Policy"), "default-src 'none'") || h.Get("Cache-Control") != "no-store" {
+			t.Errorf("headers: %v", h)
+		}
 	}
-	if code, body := post("one long password", "another long one"); code != 400 || !strings.Contains(body, "different") {
-		t.Errorf("mismatch: %d", code)
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := noRedirect.PostForm(u, url.Values{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if code, body := post("short", "short"); code != 400 || !strings.Contains(body, "at least") {
-		t.Errorf("too short: %d %s", code, body)
+	resp.Body.Close()
+	var cookie string
+	for _, c := range resp.Cookies() {
+		if c.Name == "cafard_chat" {
+			cookie = c.Value
+		}
 	}
-	if code, body := post("camille's long password", "camille's long password"); code != 200 || !strings.Contains(body, "You are in") {
-		t.Errorf("set: %d %s", code, body)
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/" || cookie == "" {
+		t.Fatalf("sign in: %d %q, cookie %q", resp.StatusCode, resp.Header.Get("Location"), cookie)
+	}
+	if who, _, err := r.acc.Session(ctx, access.ChatSurface, cookie, "x"); err != nil || who.Name != "camille" {
+		t.Errorf("the sign-in: %+v %v", who, err)
 	}
 	if code, body, _ := get(t, u, ""); code != http.StatusGone || !strings.Contains(body, "no longer works") {
 		t.Errorf("after use: %d %s", code, body)
-	}
-	if _, _, err := r.acc.SignIn(ctx, access.ChatSurface, "camille", "camille's long password", "x", ""); err != nil {
-		t.Errorf("signing in with the new password: %v", err)
 	}
 }
 

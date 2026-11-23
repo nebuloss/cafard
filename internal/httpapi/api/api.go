@@ -4,18 +4,17 @@
 // reach, and it decides nothing itself: service/chat does the work, and asks
 // service/access first.
 //
-// Every route but sign-in needs a credential: an agent's or a device's
+// Every route needs a credential: an agent's or a device's
 // token, `Authorization: Bearer cfd_…`, or a person's chat sign-in cookie.
 // A write made with the cookie must come from this site's own pages
 // (httpx.SameOrigin); one made with a token carries its credential in a
 // header no other site can set.
 //
-//	POST   /api/v1/signin                               a person signs in to the chat app
 //	POST   /api/v1/signout
 //	GET    /api/v1/me                                   who the credential is, and their projects
 //	GET    /api/v1/me/signins                           a person's sign-ins
 //	DELETE /api/v1/me/signins/{id}
-//	POST   /api/v1/me/phone                             {password}: a QR code that signs in another phone
+//	POST   /api/v1/me/phone                             a QR code that signs in another phone
 //	GET    /api/v1/events                               what changed, as server-sent events (live)
 //	PUT    /api/v1/send/{project}/{conversation}/{name} a file; `curl -T`; ?message=ID adds it to your message
 //	POST   /api/v1/send/{project}/{conversation}        text; `curl --data-binary`
@@ -81,7 +80,6 @@ func New(log *slog.Logger, acc *access.Service, c *chat.Service, hub *live.Hub, 
 
 // Register adds the routes to mux.
 func (a *API) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/signin", a.signin)
 	mux.HandleFunc("POST /api/v1/signout", a.auth(a.signout))
 	mux.HandleFunc("GET /api/v1/me", a.auth(a.me))
 	mux.HandleFunc("GET /api/v1/me/signins", a.auth(a.mySignins))

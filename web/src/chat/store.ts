@@ -151,11 +151,6 @@ export class ChatStore {
     return this.me;
   }
 
-  async signIn(username: string, password: string): Promise<void> {
-    await this.api.post('/signin', { username, password });
-    await this.whoAmI();
-  }
-
   async signOut(): Promise<void> {
     await this.api.post('/signout');
     this.me = null;

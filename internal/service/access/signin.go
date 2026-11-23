@@ -15,10 +15,11 @@ import (
 	"cafard/internal/store"
 )
 
-// Passwords are argon2id, at the parameters OWASP gives as its baseline:
-// 19 MiB, two passes, one lane. The containers cafard runs in have 512 MB;
-// this keeps a sign-in under a tenth of a second and a burst of them inside
-// that memory, and the sign-in rate limit keeps it a burst.
+// The admin password is argon2id, at the parameters OWASP gives as its
+// baseline: 19 MiB, two passes, one lane. The containers cafard runs in
+// have 512 MB; this keeps a check under a tenth of a second and a burst of
+// them inside that memory, and the sign-in rate limit keeps it a burst.
+// People have no passwords: they sign in with links (links.go).
 const (
 	argonMemory  = 19 * 1024
 	argonTime    = 2
@@ -26,7 +27,6 @@ const (
 	argonKeyLen  = 32
 	saltLen      = 16
 
-	MinPassword = 10
 	MaxPassword = 256
 )
 
@@ -64,22 +64,9 @@ func checkPassword(hash, password string) bool {
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
-// dummyHash is checked against when the username does not exist, so a
-// wrong username takes as long as a wrong password and the two cannot be
-// told apart by timing.
+// dummyHash is checked against when no admin password is set, so the
+// answer takes as long either way.
 var dummyHash, _ = hashPassword("cafard has no such person")
-
-// validPassword refuses what cannot be a password. Length is the only rule:
-// composition rules make passwords harder to remember, not harder to guess.
-func validPassword(p string) error {
-	switch {
-	case len(p) < MinPassword:
-		return refuse(BadValue, "Use at least %d characters.", MinPassword)
-	case len(p) > MaxPassword:
-		return refuse(BadValue, "Use at most %d characters.", MaxPassword)
-	}
-	return nil
-}
 
 // Surfaces a person signs in to, each with sign-ins of its own.
 const (
@@ -95,53 +82,8 @@ var signinLife = map[string]time.Duration{
 	ChatSurface:  90 * 24 * time.Hour,
 }
 
-// Wrong is a username or password that does not match. One code for both,
-// so a refusal does not say which.
+// Wrong is an admin password that does not match.
 const Wrong Code = "wrong"
-
-// SignIn checks a person's username and password and returns a new
-// sign-in's cookie value, for the chat app.
-func (s *Service) SignIn(ctx context.Context, surface, username, password, from, userAgent string) (cookie string, who store.Identity, err error) {
-	if surface == AdminSurface {
-		return "", store.Identity{}, refuse(NotAdmin, "The admin UI opens with the admin password, not a person's.")
-	}
-	life, ok := signinLife[surface]
-	if !ok {
-		return "", store.Identity{}, fmt.Errorf("sign in: no surface %q", surface)
-	}
-	wrong := refuse(Wrong, "That username and password do not match.")
-	id, err := s.st.IdentityByName(ctx, strings.ToLower(strings.TrimSpace(username)))
-	hash := dummyHash
-	if err == nil && id.Kind == store.Person {
-		if h, herr := s.st.PasswordHash(ctx, id.ID); herr == nil {
-			hash = h
-		} else if !errors.Is(herr, store.ErrNotFound) {
-			return "", store.Identity{}, herr
-		}
-	} else if err != nil && !errors.Is(err, store.ErrNotFound) {
-		return "", store.Identity{}, err
-	}
-	if !checkPassword(hash, password) || hash == dummyHash {
-		return "", store.Identity{}, wrong
-	}
-	if err := active(id); err != nil {
-		return "", store.Identity{}, err
-	}
-	cookie, err = randomToken()
-	if err != nil {
-		return "", store.Identity{}, err
-	}
-	if len(userAgent) > 200 {
-		userAgent = userAgent[:200]
-	}
-	_, err = s.st.CreateSignin(ctx, store.Signin{
-		IdentityID: id.ID, Surface: surface, UserAgent: userAgent, From: from, ExpiresAt: time.Now().Add(life),
-	}, hashToken(cookie), store.AuditEntry{Actor: id.Name, Action: "signed in to the " + surface + " app on", Target: describeAgent(userAgent), Origin: surface + " · " + from})
-	if err != nil {
-		return "", store.Identity{}, err
-	}
-	return cookie, id, nil
-}
 
 // Session is the person a sign-in cookie belongs to, if they may still act,
 // and the sign-in itself. Each use slides its expiry.

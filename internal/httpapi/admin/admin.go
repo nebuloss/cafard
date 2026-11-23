@@ -22,7 +22,7 @@
 //	POST   /admin/api/members                 create one; a person or an agent comes with its link
 //	PATCH  /admin/api/members/{name}          enabled, description, projects (the full set)
 //	DELETE /admin/api/members/{name}
-//	POST   /admin/api/members/{name}/link     a new join, password or install link
+//	POST   /admin/api/members/{name}/link     a new sign-in or install link
 //	POST   /admin/api/members/{name}/token    a new token, for a device
 //	GET    /admin/api/members/{name}/signins
 //	DELETE /admin/api/members/{name}/signins/{id}

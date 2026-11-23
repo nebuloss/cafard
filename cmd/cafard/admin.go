@@ -30,8 +30,8 @@ Commands:
   create project NAME [-retention DAYS] [-quota SIZE] [-member NAME]...
   add    PROJECT NAME...         put members in a project
   remove PROJECT NAME...         take them out
-  link   NAME [-hours N]         a new one-time link: a person's join or password
-                                 link, an agent's install link; the old one stops working
+  link   NAME [-hours N]         a new one-time link: a person's sign-in link, an
+                                 agent's install link; the old one stops working
   token  NAME                    a new token for a device; the old one stops working
   list                           everyone and every project
 
@@ -169,10 +169,8 @@ func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Du
 		fmt.Fprintf(a.out, "  curl -fsSL %s | sh\n\n", url)
 		fmt.Fprintln(a.out, "It exchanges the link for the agent's token and keeps it in ~/.config/cafard/token. The token is never shown.")
 		return nil
-	case store.PasswordLink:
-		fmt.Fprintf(a.out, "%s sets a new password here, which signs them out everywhere (works once, until %s):\n\n", i.Name, until)
 	default:
-		fmt.Fprintf(a.out, "%s chooses a password here (works once, until %s):\n\n", i.Name, until)
+		fmt.Fprintf(a.out, "%s opens this to sign in, on the device they will use (works once, until %s):\n\n", i.Name, until)
 	}
 	fmt.Fprintf(a.out, "  %s\n\n", url)
 	if q := terminalQR(url); q != "" {

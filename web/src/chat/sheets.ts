@@ -370,11 +370,8 @@ export class ProfileSheet extends Component {
         await this.app.attempt(() => this.app.store.signOut());
         this.app.showSignIn('You are signed out.');
       },
+      'phone-code': () => this.showPhoneCode(),
     };
-    this.root.addEventListener('submit', (e) => {
-      e.preventDefault();
-      void this.showPhoneCode();
-    });
   }
 
   protected view(): Html {
@@ -384,9 +381,8 @@ export class ProfileSheet extends Component {
     // The QR code stays black on white in both themes, for the camera.
     const phone = this.phone
       ? html`<div class="flex flex-wrap items-center gap-3.5 px-4 pt-2 pb-3"><div class="w-40 max-w-full shrink-0 rounded-xl bg-white p-2">${this.phone.qr ? html`<img class="block w-full [image-rendering:pixelated]" src="${this.phone.qr}" alt="QR code that signs in a phone">` : ''}</div><p class="flex-[1_1_180px] text-[13px] text-on-surface-variant">Scan it with the phone's camera. It works once, ${time.until(this.phone.expires_at)}, and signs that phone in as you.</p></div>`
-      : html`<form class="${look.pad}" novalidate>
-          <div class="flex flex-wrap gap-2"><input class="${ui.input} flex-[1_1_180px]" type="password" name="password" autocomplete="current-password" placeholder="Your password" aria-label="Your password"><button class="${ui.btn('filled')}" type="submit">Show code</button></div>
-          ${this.error ? html`<p class="${ui.error} mt-2">${this.error}</p>` : ''}</form>`;
+      : html`<div class="${look.pad}"><button class="${ui.btn('filled')}" data-act="phone-code">Show a code</button>
+          ${this.error ? html`<p class="${ui.error} mt-2">${this.error}</p>` : ''}</div>`;
     return html`<div class="${look.sheetHead}">${me ? Avatar.of(me) : ''}<div class="min-w-0 flex-1"><h3>${me?.display_name || me?.name || ''}</h3><p>@${me?.name ?? ''}${me?.admin ? ' · admin' : ''}</p></div>${closeButton()}</div>
       <div class="${look.sheetScroll}">
         <div class="${look.sec}">Sign in another phone</div>${phone}
@@ -406,9 +402,8 @@ export class ProfileSheet extends Component {
   }
 
   private async showPhoneCode(): Promise<void> {
-    const pw = this.find<HTMLInputElement>('input[name="password"]')?.value ?? '';
     try {
-      this.phone = await this.app.store.api.post<{ url: string; qr?: string; expires_at: string }>('/me/phone', { password: pw });
+      this.phone = await this.app.store.api.post<{ url: string; qr?: string; expires_at: string }>('/me/phone');
       this.error = '';
     } catch (e) {
       this.error = e instanceof Refused ? e.message : reason(e);
@@ -417,42 +412,26 @@ export class ProfileSheet extends Component {
   }
 }
 
-/** SignInView is the chat app's sign-in form. */
+/**
+ * SignInView is what a browser not signed in sees. People have no
+ * passwords: a browser is signed in by opening a sign-in link an admin made,
+ * or by scanning the code a phone already signed in shows (profile, "Sign in
+ * another phone"). So there is nothing to type here.
+ */
 export class SignInView extends Component {
   constructor(
-    private readonly app: ChatApp,
+    _app: ChatApp,
     private readonly message?: string,
   ) {
     super('div', 'grid min-h-full place-items-center px-[max(16px,env(safe-area-inset-left,0px))] py-6');
-    this.root.addEventListener('submit', (e) => {
-      e.preventDefault();
-      void this.submit();
-    });
   }
 
   protected view(): Html {
-    return html`<form class="flex w-[min(380px,100%)] flex-col gap-3.5" novalidate>
+    return html`<div class="${ui.card} w-[min(380px,100%)] gap-4 p-6">
       <div class="flex items-center gap-2 text-xl font-bold tracking-[-.01em] [&_svg]:size-[26px] [&_svg]:text-primary">${Icon.logo} cafard</div>
-      <h1 class="text-[22px] font-bold">Sign in</h1>
       ${this.message ? html`<p class="${ui.error}" role="alert">${this.message}</p>` : ''}
-      <div class="${ui.field}"><label class="${ui.label}" for="u">Username</label><input class="${ui.input}" id="u" autocomplete="username" autocapitalize="none" required></div>
-      <div class="${ui.field}"><label class="${ui.label}" for="p">Password</label><input class="${ui.input}" id="p" type="password" autocomplete="current-password" required></div>
-      <p class="${ui.error}" id="sErr" hidden></p>
-      <button class="${ui.btn('filled')}" type="submit">Sign in</button></form>`;
+      <p class="text-sm">Open the sign-in link an admin sent you, or scan the code from a phone that is signed in: <span class="text-on-surface-variant">profile, Sign in another phone</span>.</p></div>`;
   }
 
-  focus(): void {
-    this.find<HTMLInputElement>('#u')?.focus();
-  }
-
-  private async submit(): Promise<void> {
-    const err = this.$('#sErr');
-    try {
-      await this.app.store.signIn(this.$<HTMLInputElement>('#u').value.trim(), this.$<HTMLInputElement>('#p').value);
-      await this.app.showApp();
-    } catch (e) {
-      err.hidden = false;
-      err.textContent = reason(e);
-    }
-  }
+  focus(): void {}
 }

@@ -43,33 +43,6 @@ func readJSON(r *http.Request, v any) error {
 
 // Signing in.
 
-func (a *API) signin(w http.ResponseWriter, r *http.Request) {
-	if !httpx.SameOrigin(r) {
-		writeError(w, http.StatusForbidden, "cross_site", "Writes from another site are refused.")
-		return
-	}
-	var in struct{ Username, Password string }
-	if err := readJSON(r, &in); err != nil {
-		a.fail(w, r, err)
-		return
-	}
-	from := clientIP(r)
-	for _, key := range []string{"ip " + from, "user " + strings.ToLower(in.Username)} {
-		if ok, wait := a.limit.Allow(key); !ok {
-			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-			writeError(w, http.StatusTooManyRequests, "slow_down", fmt.Sprintf("Too many attempts. Try again in %d seconds.", int(wait.Seconds())+1))
-			return
-		}
-	}
-	cookie, id, err := a.acc.SignIn(r.Context(), access.ChatSurface, in.Username, in.Password, from, r.UserAgent())
-	if err != nil {
-		a.fail(w, r, err)
-		return
-	}
-	httpx.SetChatCookie(w, cookie, a.secure)
-	writeJSON(w, http.StatusOK, map[string]any{"member": member(id)})
-}
-
 func (a *API) signout(w http.ResponseWriter, r *http.Request, who access.Who) {
 	if si, ok := signinFrom(r.Context()); ok {
 		a.acc.SignOut(r.Context(), who, si)
@@ -122,13 +95,12 @@ func (a *API) deleteMySignin(w http.ResponseWriter, r *http.Request, who access.
 	writeError(w, http.StatusNotFound, string(access.NotFound), "No such sign-in.")
 }
 
-// phoneCode is "Sign in another phone": the person gives their password
-// again, and gets a code a phone scans to be signed in as them, for two
-// minutes, once.
+// phoneCode is "Sign in another phone": a code a phone scans to be signed
+// in as the person, for two minutes, once. It needs the chat app's sign-in,
+// a person's, rather than a token; people have no password to ask again.
 func (a *API) phoneCode(w http.ResponseWriter, r *http.Request, who access.Who) {
-	var in struct{ Password string }
-	if err := readJSON(r, &in); err != nil {
-		a.fail(w, r, err)
+	if _, ok := signinFrom(r.Context()); !ok {
+		writeError(w, http.StatusForbidden, string(access.NotAllowed), "Only a person signed in to the chat app can sign in another phone.")
 		return
 	}
 	if ok, wait := a.limit.Allow("phone " + who.Name); !ok {
@@ -136,7 +108,7 @@ func (a *API) phoneCode(w http.ResponseWriter, r *http.Request, who access.Who) 
 		writeError(w, http.StatusTooManyRequests, "slow_down", "Too many attempts. Wait a minute.")
 		return
 	}
-	code, l, err := a.acc.IssueSigninLink(r.Context(), who, in.Password)
+	code, l, err := a.acc.IssueSigninLink(r.Context(), who)
 	if err != nil {
 		a.fail(w, r, err)
 		return

@@ -9,9 +9,14 @@ import (
 )
 
 // One-time links (docs/design.md, "Creating an identity"). A link is not a
-// credential: it carries a code that is exchanged, once, for one: a password
-// the person chooses, or an agent's token. A screenshot of its QR code is
-// worthless once it has been used.
+// credential: it carries a code that is exchanged, once, for one: a sign-in
+// for the browser that opens a person's link, or an agent's token. A
+// screenshot of its QR code is worthless once it has been used.
+//
+// People have no passwords. A person signs in by opening a link: the first
+// an admin makes them is their join link, and an admin makes them another
+// when they need one (a new laptop, every phone signed out); a phone already
+// signed in signs in another with its QR code (phone.go).
 
 // LinkLife bounds how long a link may wait. 24 hours by default, 7 days at
 // most: a link is meant to be used now, by someone who is expecting it.
@@ -24,11 +29,9 @@ const (
 const Spent Code = "spent"
 
 // IssueLink makes a one-time link for target and returns its code with the
-// link. For a person, it lets them choose a password: a join link if they
-// have none, a password link if they have one, which also ends every
-// sign-in when used. For an agent, it is exchanged by the install script for
-// the agent's token. Devices have no link: an admin gives their token to the
-// script that sends. Admins only.
+// link. A person's signs in the browser that opens it. An agent's is
+// exchanged by the install script for the agent's token. Devices have no
+// link: an admin gives their token to the script that sends. Admins only.
 func (s *Service) IssueLink(ctx context.Context, who Who, target store.Identity, life time.Duration) (code string, l store.Link, err error) {
 	if err := requireAdmin(who); err != nil {
 		return "", store.Link{}, err
@@ -47,12 +50,7 @@ func (s *Service) IssueLink(ctx context.Context, who Who, target store.Identity,
 	switch target.Kind {
 	case store.Agent:
 	case store.Person:
-		kind, action = store.PersonLink, "made a join link for"
-		if _, err := s.st.PasswordHash(ctx, target.ID); err == nil {
-			kind, action = store.PasswordLink, "made a password link for"
-		} else if !errors.Is(err, store.ErrNotFound) {
-			return "", store.Link{}, err
-		}
+		kind, action = store.PersonLink, "made a sign-in link for"
 	default:
 		return "", store.Link{}, refuse(NotAllowed, "%s is a device: give it a token instead (it has no link to open).", target.Name)
 	}
@@ -95,32 +93,17 @@ func (s *Service) LinkFor(ctx context.Context, code string) (store.Link, store.I
 	return l, id, nil
 }
 
-// ChoosePassword uses a person's join or password link to set their
-// password. Every sign-in they had ends.
-func (s *Service) ChoosePassword(ctx context.Context, code, password, from string) (store.Identity, error) {
+// SignInWithLink uses a person's sign-in link to sign the browser that
+// opened it in to the chat app, and returns its cookie.
+func (s *Service) SignInWithLink(ctx context.Context, code, from, userAgent string) (store.Identity, string, error) {
 	l, id, err := s.LinkFor(ctx, code)
 	if err != nil {
-		return store.Identity{}, err
+		return store.Identity{}, "", err
 	}
-	if l.Kind != store.PersonLink && l.Kind != store.PasswordLink {
-		return store.Identity{}, refuse(NotAllowed, "This link connects an agent: run it with curl on the agent's machine.")
+	if l.Kind != store.PersonLink {
+		return store.Identity{}, "", refuse(NotAllowed, "This link connects an agent: run it with curl on the agent's machine.")
 	}
-	if err := validPassword(password); err != nil {
-		return store.Identity{}, err
-	}
-	hash, err := hashPassword(password)
-	if err != nil {
-		return store.Identity{}, err
-	}
-	action := "joined with their link"
-	if l.Kind == store.PasswordLink {
-		action = "set a new password with their link"
-	}
-	err = s.st.RedeemPasswordLink(ctx, l, hash, from, store.AuditEntry{Actor: id.Name, Action: action, Target: id.Name, Origin: "join · " + from})
-	if errors.Is(err, store.ErrLinkSpent) {
-		return store.Identity{}, refuse(Spent, "This link was used a moment ago. Ask an admin for a new one.")
-	}
-	return id, err
+	return s.redeemSignin(ctx, l, id, from, userAgent, "signed in with their link on")
 }
 
 // RedeemAgentLink exchanges an agent's install link for its token, which is

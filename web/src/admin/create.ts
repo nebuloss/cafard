@@ -172,7 +172,7 @@ export class GiveScreen extends Component {
     if (!l) return Html.empty;
     const right = m.kind === 'agent'
       ? html`<div class="${ui.field}"><span class="${ui.label}">Run on ${m.name}, as the user its agents run as</span>${copyBox(l.command ?? '')}</div>`
-      : html`<div class="${ui.field}"><span class="${ui.label}">${l.kind === 'password' ? 'Password link' : 'Join link'}</span>${copyBox(l.url ?? '')}</div>`;
+      : html`<div class="${ui.field}"><span class="${ui.label}">Sign-in link</span>${copyBox(l.url ?? '')}</div><p class="text-[12.5px] text-on-surface-variant">${who} opens it, or scans the code, on the device they will use, and is signed in. No password.</p>`;
     const STATUS = 'flex items-center gap-2 rounded-md3-s px-3 py-2.5 text-[13.5px]';
     const dot = (on: boolean) => html`<span class="size-2 rounded-full ${on ? 'bg-success' : 'bg-warning animate-[pulse_1.4s_infinite]'}"></span>`;
     const status = this.state === 'used'

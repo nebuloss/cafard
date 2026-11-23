@@ -1,18 +1,24 @@
 // Package join is /join/{code} on the public listener: where a one-time link
 // is used (docs/design.md, "Creating an identity").
 //
-//	GET  /join/{code}        a person's link: a page to choose a password.
+//	GET  /join/{code}        a person's link: a page with a Sign in button.
+//	                         a phone's QR code: signs in, and opens the chat.
 //	                         an agent's link: the install script, for
 //	                         `curl -fsSL …/join/{code} | sh`.
-//	POST /join/{code}        the password form.
+//	POST /join/{code}        the Sign in button: signs this browser in, and
+//	                         opens the chat.
 //	POST /join/{code}/token  the install script exchanging the code for the
 //	                         agent's token, once.
 //
 // The page and the script hold no secret: the code is in the URL already,
 // and the token exists only from the moment the script asks for it. Every
 // route is rate-limited per address, so a code cannot be guessed at speed;
-// at 256 bits it could not be anyway, and the limit is for the password
-// form behind it.
+// at 256 bits it could not be anyway.
+//
+// A person's link is used by the button, not by opening it: a link sent in
+// a message is fetched by the messenger's preview before the person taps it,
+// and a link used by a GET would be spent by the preview. The phone's QR
+// code is scanned, never sent, and lasts two minutes: opening it is enough.
 package join
 
 import (
@@ -47,7 +53,7 @@ func New(log *slog.Logger, acc *access.Service, publicURL string) *Join {
 
 func (j *Join) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /join/{code}", j.limited(j.open))
-	mux.HandleFunc("POST /join/{code}", j.limited(j.choose))
+	mux.HandleFunc("POST /join/{code}", j.limited(j.signInPerson))
 	mux.HandleFunc("POST /join/{code}/token", j.limited(j.token))
 }
 
@@ -91,14 +97,13 @@ func (j *Join) open(w http.ResponseWriter, r *http.Request) {
 		j.signIn(w, r, code)
 		return
 	}
-	page(w, http.StatusOK, pageData{Title: "Choose a password", Name: displayName(id), Username: id.Name,
-		Kind: l.Kind, Expires: l.ExpiresAt, Min: access.MinPassword})
+	page(w, http.StatusOK, pageData{Title: "Sign in", Name: displayName(id), Username: id.Name, Expires: l.ExpiresAt})
 }
 
 // signIn is a phone that scanned the code shown by "Sign in another phone":
 // it is signed in to the chat app and sent there. Opening the link is the
-// whole of it, on purpose: the person proved who they are by giving their
-// password on the device that showed the code, two minutes ago at most.
+// whole of it: the code was on the screen of a phone signed in as the
+// person, two minutes ago at most.
 func (j *Join) signIn(w http.ResponseWriter, r *http.Request, code string) {
 	_, cookie, err := j.acc.RedeemSigninLink(r.Context(), code, clientIP(r), r.UserAgent())
 	if err != nil {
@@ -116,7 +121,8 @@ func displayName(id store.Identity) string {
 	return id.Name
 }
 
-func (j *Join) choose(w http.ResponseWriter, r *http.Request) {
+// signInPerson is the Sign in button of a person's link.
+func (j *Join) signInPerson(w http.ResponseWriter, r *http.Request) {
 	// The form posts back to its own URL. A post from another site would need
 	// the code, which is the secret; refusing cross-site posts as well costs
 	// nothing.
@@ -124,34 +130,13 @@ func (j *Join) choose(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Cross-site requests are refused.", http.StatusForbidden)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad form.", http.StatusBadRequest)
-		return
-	}
-	code := r.PathValue("code")
-	pass, again := r.PostForm.Get("password"), r.PostForm.Get("again")
-	l, id, err := j.acc.LinkFor(r.Context(), code)
+	_, cookie, err := j.acc.SignInWithLink(r.Context(), r.PathValue("code"), clientIP(r), r.UserAgent())
 	if err != nil {
 		j.refused(w, r, err)
 		return
 	}
-	data := pageData{Title: "Choose a password", Name: displayName(id), Username: id.Name, Kind: l.Kind, Expires: l.ExpiresAt, Min: access.MinPassword}
-	if pass != again {
-		data.Error = "The two passwords are different."
-		page(w, http.StatusBadRequest, data)
-		return
-	}
-	if _, err := j.acc.ChoosePassword(r.Context(), code, pass, clientIP(r)); err != nil {
-		if ref, ok := err.(*access.Refusal); ok && ref.Code == access.BadValue {
-			data.Error = ref.Message
-			page(w, http.StatusBadRequest, data)
-			return
-		}
-		j.refused(w, r, err)
-		return
-	}
-	page(w, http.StatusOK, pageData{Title: "You are in", Name: displayName(id), Username: id.Name, Done: true, Kind: l.Kind})
+	httpx.SetChatCookie(w, cookie, strings.HasPrefix(j.publicURL, "https://"))
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (j *Join) token(w http.ResponseWriter, r *http.Request) {

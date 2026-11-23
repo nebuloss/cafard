@@ -98,10 +98,13 @@ func (r *rig) call(method, path string, body any) (int, map[string]any) {
 	return resp.StatusCode, out
 }
 
-// joinWith opens a person's link and chooses a password, as their phone would.
-func (r *rig) joinWith(linkURL, password string) int {
+// joinWith presses Sign in on a person's link, as their phone would.
+// It answers with the redirect to the chat, which is not followed: this rig
+// serves no chat app.
+func (r *rig) joinWith(linkURL string) int {
 	r.t.Helper()
-	resp, err := http.PostForm(linkURL, url.Values{"password": {password}, "again": {password}})
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := noRedirect.PostForm(linkURL, url.Values{})
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -170,11 +173,11 @@ func TestOnlyTheAdminPasswordOpens(t *testing.T) {
 	r.signIn()
 	_, out := r.call("POST", "/admin/api/members", map[string]any{"kind": "person", "name": "camille"})
 	link := out["link"].(map[string]any)
-	if r.joinWith(link["url"].(string), "camille's password") != 200 {
+	if r.joinWith(link["url"].(string)) != http.StatusSeeOther {
 		t.Fatal("camille could not join")
 	}
 	other := &rig{t: t, adminSrv: r.adminSrv, client: &http.Client{}}
-	if code, _ := other.call("POST", "/admin/api/signin", map[string]string{"password": "camille's password"}); code != 403 {
+	if code, _ := other.call("POST", "/admin/api/signin", map[string]string{"password": "a guess at the admin password"}); code != 403 {
 		t.Errorf("a person's password into the admin UI: %d", code)
 	}
 	if code, _ := other.call("GET", "/admin/api/members", nil); code != 401 {

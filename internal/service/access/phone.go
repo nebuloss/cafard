@@ -13,33 +13,16 @@ import (
 // screen is soon worthless (docs/design.md, "Signing in").
 const SigninLinkLife = 2 * time.Minute
 
-// CheckPassword confirms a signed-in person's own password, for the actions
-// that ask for it again: showing a code that signs in another phone as them
-// should not be something an unlocked computer left alone can do.
-func (s *Service) CheckPassword(ctx context.Context, who Who, password string) error {
+// IssueSigninLink makes a code that signs another browser in as who: the QR
+// code a phone already signed in shows. People only, for themselves. It asks
+// nothing more than the sign-in itself: there is no password to ask for,
+// and the code lasts two minutes.
+func (s *Service) IssueSigninLink(ctx context.Context, who Who) (string, store.Link, error) {
 	if err := active(who.Identity); err != nil {
-		return err
+		return "", store.Link{}, err
 	}
-	hash, err := s.st.PasswordHash(ctx, who.ID)
-	if errors.Is(err, store.ErrNotFound) {
-		hash = dummyHash
-	} else if err != nil {
-		return err
-	}
-	if !checkPassword(hash, password) || hash == dummyHash {
-		return refuse(Wrong, "That is not your password.")
-	}
-	return nil
-}
-
-// IssueSigninLink makes a code that signs another browser in as who, after
-// who has given their password again. People only, for themselves.
-func (s *Service) IssueSigninLink(ctx context.Context, who Who, password string) (string, store.Link, error) {
 	if who.Kind != store.Person {
 		return "", store.Link{}, refuse(NotAllowed, "Only people sign in; %s has a token.", who.Name)
-	}
-	if err := s.CheckPassword(ctx, who, password); err != nil {
-		return "", store.Link{}, err
 	}
 	code, err := randomToken()
 	if err != nil {
@@ -63,6 +46,12 @@ func (s *Service) RedeemSigninLink(ctx context.Context, code, from, userAgent st
 	if l.Kind != store.SigninLink {
 		return store.Identity{}, "", refuse(NotAllowed, "This is not a sign-in code.")
 	}
+	return s.redeemSignin(ctx, l, id, from, userAgent, "signed in a phone by QR code:")
+}
+
+// redeemSignin uses a link that signs a person in, and records the
+// browser's sign-in to the chat app.
+func (s *Service) redeemSignin(ctx context.Context, l store.Link, id store.Identity, from, userAgent, action string) (store.Identity, string, error) {
 	cookie, err := randomToken()
 	if err != nil {
 		return store.Identity{}, "", err
@@ -72,9 +61,9 @@ func (s *Service) RedeemSigninLink(ctx context.Context, code, from, userAgent st
 	}
 	_, err = s.st.RedeemSigninLink(ctx, l, store.Signin{Surface: ChatSurface, UserAgent: userAgent, From: from,
 		ExpiresAt: time.Now().Add(signinLife[ChatSurface])}, hashToken(cookie),
-		store.AuditEntry{Actor: id.Name, Action: "signed in a phone by QR code:", Target: describeAgent(userAgent), Origin: "join · " + from})
+		store.AuditEntry{Actor: id.Name, Action: action, Target: describeAgent(userAgent), Origin: "join · " + from})
 	if errors.Is(err, store.ErrLinkSpent) {
-		return store.Identity{}, "", refuse(Spent, "This code was used a moment ago. Show a new one.")
+		return store.Identity{}, "", refuse(Spent, "This link was used a moment ago. Ask for a new one.")
 	}
 	if err != nil {
 		return store.Identity{}, "", err

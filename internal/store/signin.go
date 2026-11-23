@@ -9,20 +9,13 @@ import (
 	"cafard/internal/live"
 )
 
-// PasswordHash is a person's password hash, or ErrNotFound for a person who
-// has not joined yet.
-func (s *Store) PasswordHash(ctx context.Context, identityID int64) (string, error) {
-	var h string
-	err := s.db.QueryRowContext(ctx, `SELECT hash FROM passwords WHERE identity_id = ?`, identityID).Scan(&h)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	return h, err
-}
-
-// Joined lists who has a password, by identity id.
+// Joined lists the people who have signed in at least once, by identity id:
+// whoever used a link of theirs that signs in (their join link, a later
+// sign-in link, a phone's QR code, or a password link from before people
+// had no passwords).
 func (s *Store) Joined(ctx context.Context) (map[int64]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT identity_id FROM passwords`)
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT identity_id FROM links
+		WHERE used_at IS NOT NULL AND kind IN ('person', 'password', 'signin')`)
 	if err != nil {
 		return nil, err
 	}
@@ -36,18 +29,6 @@ func (s *Store) Joined(ctx context.Context) (map[int64]bool, error) {
 		out[id] = true
 	}
 	return out, rows.Err()
-}
-
-func setPassword(ctx context.Context, tx *sql.Tx, identityID int64, hash string, now time.Time) error {
-	if _, err := tx.ExecContext(ctx, `INSERT INTO passwords (identity_id, hash, set_at) VALUES (?, ?, ?)
-		ON CONFLICT (identity_id) DO UPDATE SET hash = excluded.hash, set_at = excluded.set_at`,
-		identityID, hash, now.UnixMilli()); err != nil {
-		return err
-	}
-	// A new password ends every sign-in: it is what someone does when they
-	// think the old one is known.
-	_, err := tx.ExecContext(ctx, `DELETE FROM signins WHERE identity_id = ?`, identityID)
-	return err
 }
 
 // Signin is a browser or a phone signed in as a person.
@@ -136,7 +117,11 @@ func (s *Store) DeleteSignin(ctx context.Context, id int64, a AuditEntry) error 
 type LinkKind string
 
 const (
-	PersonLink   LinkKind = "person"
+	// PersonLink signs a person in, in the browser that opens it: their
+	// join link, and any later sign-in link an admin makes them.
+	PersonLink LinkKind = "person"
+	// PasswordLink set a person's password, before people had none. None is
+	// made now; old ones show in the history.
 	PasswordLink LinkKind = "password"
 	AgentLink    LinkKind = "agent"
 	// SigninLink signs in another browser as the person who made it, from
@@ -179,9 +164,9 @@ func (s *Store) CreateLink(ctx context.Context, l Link, hash string, a AuditEntr
 	now := s.now()
 	l.CreatedAt = now
 	err := s.change(ctx, a, func(tx *sql.Tx) error {
-		// A sign-in link and a join or password link are different ways in
-		// and do not cancel each other: showing a QR code to sign in a phone
-		// must not void a password link an admin just sent.
+		// A phone's QR code and an admin's link are different ways in and
+		// do not cancel each other: showing a QR code to sign in a phone
+		// must not void a sign-in link an admin just sent.
 		same := `kind <> 'signin'`
 		if l.Kind == SigninLink {
 			same = `kind = 'signin'`
@@ -266,18 +251,6 @@ func useLink(ctx context.Context, tx *sql.Tx, id int64, from string, now time.Ti
 		return ErrLinkSpent
 	}
 	return nil
-}
-
-// RedeemPasswordLink uses a person or password link and sets the person's
-// password, ending every sign-in they had, in one transaction.
-func (s *Store) RedeemPasswordLink(ctx context.Context, l Link, passwordHash, from string, a AuditEntry) error {
-	now := s.now()
-	return s.change(ctx, a, func(tx *sql.Tx) error {
-		if err := useLink(ctx, tx, l.ID, from, now); err != nil {
-			return err
-		}
-		return setPassword(ctx, tx, l.IdentityID, passwordHash, now)
-	})
 }
 
 // RedeemAgentLink uses an agent link and gives the agent its token, in one
@@ -415,8 +388,9 @@ func (s *Store) SigninCounts(ctx context.Context) (map[int64]int, error) {
 	return out, rows.Err()
 }
 
-// RedeemSigninLink uses a sign-in link and records the sign-in it grants,
-// in one transaction.
+// RedeemSigninLink uses a link that signs a person in (an admin's sign-in
+// link, or a phone's QR code) and records the browser's sign-in, in one
+// transaction.
 func (s *Store) RedeemSigninLink(ctx context.Context, l Link, si Signin, cookieHash string, a AuditEntry) (Signin, error) {
 	now := s.now()
 	si.IdentityID, si.CreatedAt, si.LastUsed = l.IdentityID, now, now

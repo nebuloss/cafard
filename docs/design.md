@@ -216,33 +216,31 @@ by whichever agent reads it first.
 
 ### Signing in
 
-People sign in with a **username and a password**, and may add **passkeys**.
-There is no email: a DMZ host has no business sending mail, and nothing in
-cafard needs an address.
+**People have no passwords.** A browser or a phone is signed in by a
+one-time link, never by something typed. There is no email either: a DMZ
+host has no business sending mail, and nothing in cafard needs an address.
 
-- **Passwords** are hashed with argon2id (`golang.org/x/crypto`, already a
-  dependency). Sign-in is rate-limited per IP and per username, with no
-  lockout that a stranger could trigger against someone else.
-- **Passkeys** are the better path on a phone — Face ID or a fingerprint
-  instead of typing — and need no second factor. They are added from the
-  profile, never required.
-- **A forgotten password is a new join link.** Admin makes one from the
-  person's row; it sets a new password and ends every existing sign-in.
-  Admin never sees or types a person's password.
-- **Sign in a phone from your profile.** On a computer where you are signed
-  in, *Profile → Sign in another phone* shows a QR code; the phone scans it
-  and is signed in as you, without typing a password on a phone keyboard.
-  The code works once and expires after **2 minutes**, and showing it asks
-  for your password or passkey again if you last entered it more than 10
-  minutes ago, so an unlocked computer left alone does not hand out
-  sign-ins. The new sign-in appears in the list below at once.
-- **Sign-ins** — the profile lists every browser and phone signed in as you,
-  with where and when it was last used, and *Sign out* on each. A sign-in
-  lasts 90 days from its last use, so a phone stays signed in while it is
-  used. The UI calls these *sign-ins*, never devices: a device is a
-  send-only identity.
+- **A sign-in link** is made by the admin, from the person's page or with
+  `cafard admin link NAME`, and works once, 24 hours by default. The first
+  one is the person's join link; another is made whenever they need a way
+  in on a new device. Opening it shows *Sign in as Camille*; the button
+  signs that browser in and opens the chat. Opening alone spends nothing,
+  because a messenger fetches a link for its preview before the person taps
+  it. The admin never sees a secret of the person's: there is none.
+- **Sign in a phone from your profile.** A browser signed in shows, under
+  *Profile → Sign in another phone*, a QR code; the phone scans it and is
+  signed in as you. The code works once and expires after **2 minutes**,
+  and is used by opening it: it is scanned, never sent.
+- **Sign-ins**: the profile lists every browser and phone signed in as you,
+  with where and when it was last used, and *Sign out* on each; the admin
+  sees and ends them from the person's page. A sign-in lasts 90 days from
+  its last use, so a phone stays signed in while it is used. The UI calls
+  these *sign-ins*, never devices: a device is a send-only identity.
+- **Passkeys** may come later, for a person who wants to sign in a new
+  browser without asking anyone; nothing depends on them.
 
-Agents never have a password; their only credential is their token.
+Agents have no password either; their only credential is their token. The
+admin UI's password is the box's, not a person's (*Who manages what*).
 
 ### Tokens
 

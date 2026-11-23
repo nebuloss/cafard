@@ -11,6 +11,7 @@ export interface MemberRef {
 
 export interface Link {
   id: number;
+  /** password: from before people had none; no new one is made. */
   kind: 'person' | 'password' | 'agent';
   member: string;
   state: LinkState;

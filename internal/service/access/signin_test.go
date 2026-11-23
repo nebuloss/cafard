@@ -30,37 +30,34 @@ func TestPasswordHashing(t *testing.T) {
 	}
 }
 
-// join is what opening a person's link and choosing a password does.
-func (w *world) join(person Who, password string) {
+// signIn is what pressing Sign in on a person's link does: it returns the
+// sign-in's cookie.
+func (w *world) signIn(person Who) string {
 	w.t.Helper()
 	code, _, err := w.svc.IssueLink(ctx, w.admin, person.Identity, 0)
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	if _, err := w.svc.ChoosePassword(ctx, code, password, "10.0.50.112"); err != nil {
+	_, cookie, err := w.svc.SignInWithLink(ctx, code, "10.0.50.112", "Mozilla/5.0 (iPhone) Safari/605")
+	if err != nil {
 		w.t.Fatal(err)
 	}
+	return cookie
 }
 
-func TestJoinLinkThenSignIn(t *testing.T) {
+// People have no passwords: a link signs in the browser that uses it, once.
+func TestASignInLinkSignsIn(t *testing.T) {
 	w := newWorld(t)
 	code, l, err := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, time.Hour)
 	if err != nil || l.Kind != store.PersonLink {
 		t.Fatalf("link: %+v %v", l, err)
 	}
-	if _, err := w.svc.ChoosePassword(ctx, code, "short", "x"); !Is(err, BadValue) {
-		t.Errorf("a short password: %v", err)
-	}
-	if _, err := w.svc.ChoosePassword(ctx, code, "camille's long password", "10.0.50.112"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := w.svc.ChoosePassword(ctx, code, "again and again", "x"); !Is(err, Spent) {
-		t.Errorf("the link used twice: %v", err)
-	}
-
-	cookie, id, err := w.svc.SignIn(ctx, ChatSurface, "Camille", "camille's long password", "10.0.50.44", "Mozilla/5.0 (iPhone) Safari/605")
+	id, cookie, err := w.svc.SignInWithLink(ctx, code, "10.0.50.44", "Mozilla/5.0 (iPhone) Safari/605")
 	if err != nil || id.Name != "camille" || cookie == "" {
 		t.Fatalf("sign in: %v", err)
+	}
+	if _, _, err := w.svc.SignInWithLink(ctx, code, "x", ""); !Is(err, Spent) {
+		t.Errorf("the link used twice: %v", err)
 	}
 	if got, _, err := w.svc.Session(ctx, ChatSurface, cookie, "10.0.50.44"); err != nil || got.Name != "camille" {
 		t.Errorf("session: %+v %v", got, err)
@@ -69,46 +66,15 @@ func TestJoinLinkThenSignIn(t *testing.T) {
 	if _, _, err := w.svc.Session(ctx, AdminSurface, cookie, "x"); !Is(err, Unauthorized) {
 		t.Errorf("a chat cookie on the admin surface: %v", err)
 	}
-	// camille is not an admin.
-	if _, _, err := w.svc.SignIn(ctx, AdminSurface, "camille", "camille's long password", "x", ""); !Is(err, NotAdmin) {
-		t.Errorf("a non-admin into the admin UI: %v", err)
-	}
-}
-
-// A wrong username and a wrong password are the same refusal.
-func TestWrongSignIns(t *testing.T) {
-	w := newWorld(t)
-	w.join(w.camille, "camille's long password")
-	for _, tc := range []struct{ user, pass string }{
-		{"camille", "wrong password!"},
-		{"nobody", "camille's long password"},
-		{"dev-code", "anything at all"}, // an agent has no password
-		{"guillaume", "never set one!"}, // a person who has not joined
-	} {
-		_, _, err := w.svc.SignIn(ctx, ChatSurface, tc.user, tc.pass, "x", "")
-		if !Is(err, Wrong) || err.Error() != "That username and password do not match." {
-			t.Errorf("%s / %s: %v", tc.user, tc.pass, err)
+	// A second link signs in a second browser; the first stays signed in.
+	second := w.signIn(w.camille)
+	for _, c := range []string{cookie, second} {
+		if _, _, err := w.svc.Session(ctx, ChatSurface, c, "x"); err != nil {
+			t.Errorf("a sign-in ended by another: %v", err)
 		}
 	}
-}
-
-func TestPasswordLinkEndsEverySignIn(t *testing.T) {
-	w := newWorld(t)
-	w.join(w.camille, "first long password")
-	cookie, _, _ := w.svc.SignIn(ctx, ChatSurface, "camille", "first long password", "x", "")
-
-	code, l, err := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
-	if err != nil || l.Kind != store.PasswordLink {
-		t.Fatalf("second link: %+v %v", l, err)
-	}
-	if _, err := w.svc.ChoosePassword(ctx, code, "second long password", "x"); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := w.svc.Session(ctx, ChatSurface, cookie, "x"); !Is(err, Unauthorized) {
-		t.Errorf("a sign-in survived a new password: %v", err)
-	}
-	if _, _, err := w.svc.SignIn(ctx, ChatSurface, "camille", "first long password", "x", ""); !Is(err, Wrong) {
-		t.Errorf("the old password still works: %v", err)
+	if ss, _ := w.svc.Signins(ctx, w.camille); len(ss) != 2 {
+		t.Errorf("%d sign-ins, want 2", len(ss))
 	}
 }
 
@@ -117,10 +83,10 @@ func TestANewLinkCancelsTheOld(t *testing.T) {
 	w := newWorld(t)
 	old, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
 	current, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
-	if _, err := w.svc.ChoosePassword(ctx, old, "a long password", "x"); !Is(err, Spent) {
+	if _, _, err := w.svc.SignInWithLink(ctx, old, "x", ""); !Is(err, Spent) {
 		t.Errorf("the old link: %v", err)
 	}
-	if _, err := w.svc.ChoosePassword(ctx, current, "a long password", "x"); err != nil {
+	if _, _, err := w.svc.SignInWithLink(ctx, current, "x", ""); err != nil {
 		t.Errorf("the current link: %v", err)
 	}
 }
@@ -140,14 +106,14 @@ func TestLinksThatMustNotWork(t *testing.T) {
 	if err := w.svc.CancelLink(ctx, w.admin, l); err != nil {
 		t.Fatal(err)
 	}
-	_, err = w.svc.ChoosePassword(ctx, code, "a long password", "x")
+	_, _, err = w.svc.SignInWithLink(ctx, code, "x", "")
 	wantCode(t, "a cancelled link", err, Spent)
-	_, err = w.svc.ChoosePassword(ctx, "nonsense", "a long password", "x")
+	_, _, err = w.svc.SignInWithLink(ctx, "nonsense", "x", "")
 	wantCode(t, "a made-up code", err, Spent)
 
 	agentCode, _, _ := w.svc.IssueLink(ctx, w.admin, w.devCode.Identity, 0)
-	_, err = w.svc.ChoosePassword(ctx, agentCode, "a long password", "x")
-	wantCode(t, "an agent's link used for a password", err, NotAllowed)
+	_, _, err = w.svc.SignInWithLink(ctx, agentCode, "x", "")
+	wantCode(t, "an agent's link used to sign in", err, NotAllowed)
 	personCode, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
 	_, _, err = w.svc.RedeemAgentLink(ctx, personCode, "x")
 	wantCode(t, "a person's link used for a token", err, NotAllowed)
@@ -198,8 +164,7 @@ func TestALinkIsUsedOnceUnderARace(t *testing.T) {
 
 func TestRemovingSomeoneEndsTheirWayIn(t *testing.T) {
 	w := newWorld(t)
-	w.join(w.camille, "a long password")
-	cookie, _, _ := w.svc.SignIn(ctx, ChatSurface, "camille", "a long password", "x", "")
+	cookie := w.signIn(w.camille)
 	waiting, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
 	if err := w.svc.DeleteIdentity(ctx, w.admin, w.camille.Identity); err != nil {
 		t.Fatal(err)
@@ -207,7 +172,7 @@ func TestRemovingSomeoneEndsTheirWayIn(t *testing.T) {
 	if _, _, err := w.svc.Session(ctx, ChatSurface, cookie, "x"); err == nil {
 		t.Error("a removed person's sign-in still works")
 	}
-	if _, err := w.svc.ChoosePassword(ctx, waiting, "another long one", "x"); err == nil {
+	if _, _, err := w.svc.SignInWithLink(ctx, waiting, "x", ""); err == nil {
 		t.Error("a removed person's link still works")
 	}
 }

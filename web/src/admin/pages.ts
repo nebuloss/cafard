@@ -115,12 +115,12 @@ export class MemberPage extends ItemPage {
   private linkCard(m: Member): Html {
     if (m.kind === 'device' || m.joined) return Html.empty;
     const l = m.link;
-    const what = m.kind === 'agent' ? 'install' : 'join';
+    const what = m.kind === 'agent' ? 'install' : 'sign-in';
     const msg = !l ? 'No link yet.'
       : l.state === 'waiting' ? `The ${what} link is waiting · ${time.until(l.expires_at)}.`
       : l.state === 'expired' ? 'The link expired before it was used.'
       : 'The link was cancelled.';
-    return this.card(`${what[0]?.toUpperCase()}${what.slice(1)} link`, html`<p class="text-sm text-on-surface-variant">${msg}</p>`,
+    return this.card(m.kind === 'agent' ? 'Install link' : 'Sign-in link', html`<p class="text-sm text-on-surface-variant">${msg}</p>`,
       html`<button class="${ui.btn('filled', 'sm')}" data-act="relink">New ${what} link</button>`);
   }
 
@@ -148,7 +148,7 @@ export class MemberPage extends ItemPage {
     if (m.kind === 'person') {
       if (!m.joined) return Html.empty;
       return this.card('Sign-ins', html`<div class="signins">${this.signinRows()}</div>`,
-        html`<button class="${ui.btn('tonal', 'sm')}" data-act="relink" title="Sets a new password and ends every sign-in">New password link</button>`);
+        html`<button class="${ui.btn('tonal', 'sm')}" data-act="relink" title="Signs in the device that opens it">New sign-in link</button>`);
     }
     return this.card('Token', html`<dl class="${ui.kv}"><dt>Last used</dt><dd>${m.joined ? time.ago(m.last_used) : 'never'}</dd><dt>From</dt><dd class="font-mono text-xs">${m.last_from || '-'}</dd></dl>`,
       m.kind === 'agent'
