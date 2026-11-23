@@ -33,7 +33,7 @@ func TestPasswordHashing(t *testing.T) {
 // join is what opening a person's link and choosing a password does.
 func (w *world) join(person Who, password string) {
 	w.t.Helper()
-	code, _, err := w.svc.IssueLink(ctx, w.guillaume, person.Identity, 0)
+	code, _, err := w.svc.IssueLink(ctx, w.admin, person.Identity, 0)
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func (w *world) join(person Who, password string) {
 
 func TestJoinLinkThenSignIn(t *testing.T) {
 	w := newWorld(t)
-	code, l, err := w.svc.IssueLink(ctx, w.guillaume, w.camille.Identity, time.Hour)
+	code, l, err := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, time.Hour)
 	if err != nil || l.Kind != store.PersonLink {
 		t.Fatalf("link: %+v %v", l, err)
 	}
@@ -97,7 +97,7 @@ func TestPasswordLinkEndsEverySignIn(t *testing.T) {
 	w.join(w.camille, "first long password")
 	cookie, _, _ := w.svc.SignIn(ctx, ChatSurface, "camille", "first long password", "x", "")
 
-	code, l, err := w.svc.IssueLink(ctx, w.guillaume, w.camille.Identity, 0)
+	code, l, err := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
 	if err != nil || l.Kind != store.PasswordLink {
 		t.Fatalf("second link: %+v %v", l, err)
 	}
@@ -115,8 +115,8 @@ func TestPasswordLinkEndsEverySignIn(t *testing.T) {
 // A new link cancels the one before: one way in at a time.
 func TestANewLinkCancelsTheOld(t *testing.T) {
 	w := newWorld(t)
-	old, _, _ := w.svc.IssueLink(ctx, w.guillaume, w.camille.Identity, 0)
-	current, _, _ := w.svc.IssueLink(ctx, w.guillaume, w.camille.Identity, 0)
+	old, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
+	current, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
 	if _, err := w.svc.ChoosePassword(ctx, old, "a long password", "x"); !Is(err, Spent) {
 		t.Errorf("the old link: %v", err)
 	}
@@ -131,13 +131,13 @@ func TestLinksThatMustNotWork(t *testing.T) {
 	wantCode(t, "an agent makes a link", err, NotAllowed)
 	_, _, err = w.svc.IssueLink(ctx, w.camille, w.labBench.Identity, 0)
 	wantCode(t, "a non-admin makes a link", err, NotAdmin)
-	_, _, err = w.svc.IssueLink(ctx, w.guillaume, w.devBuild.Identity, 0)
+	_, _, err = w.svc.IssueLink(ctx, w.admin, w.devBuild.Identity, 0)
 	wantCode(t, "a link for a device", err, NotAllowed)
-	_, _, err = w.svc.IssueLink(ctx, w.guillaume, w.camille.Identity, 8*24*time.Hour)
+	_, _, err = w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 8*24*time.Hour)
 	wantCode(t, "a link for 8 days", err, BadValue)
 
-	code, l, _ := w.svc.IssueLink(ctx, w.guillaume, w.camille.Identity, 0)
-	if err := w.svc.CancelLink(ctx, w.guillaume, l); err != nil {
+	code, l, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
+	if err := w.svc.CancelLink(ctx, w.admin, l); err != nil {
 		t.Fatal(err)
 	}
 	_, err = w.svc.ChoosePassword(ctx, code, "a long password", "x")
@@ -145,18 +145,18 @@ func TestLinksThatMustNotWork(t *testing.T) {
 	_, err = w.svc.ChoosePassword(ctx, "nonsense", "a long password", "x")
 	wantCode(t, "a made-up code", err, Spent)
 
-	agentCode, _, _ := w.svc.IssueLink(ctx, w.guillaume, w.devCode.Identity, 0)
+	agentCode, _, _ := w.svc.IssueLink(ctx, w.admin, w.devCode.Identity, 0)
 	_, err = w.svc.ChoosePassword(ctx, agentCode, "a long password", "x")
 	wantCode(t, "an agent's link used for a password", err, NotAllowed)
-	personCode, _, _ := w.svc.IssueLink(ctx, w.guillaume, w.camille.Identity, 0)
+	personCode, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
 	_, _, err = w.svc.RedeemAgentLink(ctx, personCode, "x")
 	wantCode(t, "a person's link used for a token", err, NotAllowed)
 }
 
 func TestAgentLinkGivesItsTokenOnce(t *testing.T) {
 	w := newWorld(t)
-	before, _ := w.svc.IssueToken(ctx, w.guillaume, w.devCode.Identity)
-	code, _, _ := w.svc.IssueLink(ctx, w.guillaume, w.devCode.Identity, 0)
+	before, _ := w.svc.IssueToken(ctx, w.admin, w.devCode.Identity)
+	code, _, _ := w.svc.IssueLink(ctx, w.admin, w.devCode.Identity, 0)
 	id, token, err := w.svc.RedeemAgentLink(ctx, code, "10.0.50.20")
 	if err != nil || id.Name != "dev-code" || !strings.HasPrefix(token, "cfd_ag_") {
 		t.Fatalf("redeem: %v", err)
@@ -175,7 +175,7 @@ func TestAgentLinkGivesItsTokenOnce(t *testing.T) {
 // Two requests with one link at the same moment: exactly one gets through.
 func TestALinkIsUsedOnceUnderARace(t *testing.T) {
 	w := newWorld(t)
-	code, _, _ := w.svc.IssueLink(ctx, w.guillaume, w.devCode.Identity, 0)
+	code, _, _ := w.svc.IssueLink(ctx, w.admin, w.devCode.Identity, 0)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	won := 0
@@ -200,8 +200,8 @@ func TestRemovingSomeoneEndsTheirWayIn(t *testing.T) {
 	w := newWorld(t)
 	w.join(w.camille, "a long password")
 	cookie, _, _ := w.svc.SignIn(ctx, ChatSurface, "camille", "a long password", "x", "")
-	waiting, _, _ := w.svc.IssueLink(ctx, w.guillaume, w.camille.Identity, 0)
-	if err := w.svc.DeleteIdentity(ctx, w.guillaume, w.camille.Identity); err != nil {
+	waiting, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
+	if err := w.svc.DeleteIdentity(ctx, w.admin, w.camille.Identity); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := w.svc.Session(ctx, ChatSurface, cookie, "x"); err == nil {

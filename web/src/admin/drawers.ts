@@ -58,10 +58,6 @@ export class MemberDrawer extends Drawer {
         const m = this.member();
         if (m) await this.app.change(() => this.store.api.patch(path(), { enabled: !m.enabled }), m.enabled ? `${m.name} is paused.` : `${m.name} works again.`);
       },
-      admin: async () => {
-        const m = this.member();
-        if (m) await this.app.change(() => this.store.api.patch(path(), { admin: !m.admin }));
-      },
       'save-desc': async () => {
         await this.app.change(() => this.store.api.patch(path(), { description: this.$<HTMLTextAreaElement>('#desc').value }), 'Saved.');
       },
@@ -106,15 +102,12 @@ export class MemberDrawer extends Drawer {
   protected view(): Html {
     const m = this.member();
     if (!m) return html`<div class="d-body"><p class="empty">${this.name} is gone.</p></div>`;
-    const me = m.name === this.store.me?.name;
-    const kindTxt = m.kind === 'person' ? (m.admin ? 'Person · admin' : 'Person') : m.kind === 'agent' ? 'Agent · connects with its token' : 'Device · sends only';
+    const kindTxt = m.kind === 'person' ? 'Person' : m.kind === 'agent' ? 'Agent · connects with its token' : 'Device · sends only';
     const sections: Html[] = [];
 
     if (m.kind !== 'device' && !m.joined) sections.push(this.linkSection(m));
     if (m.kind !== 'person') {
       sections.push(html`<div class="sec"><h3>${m.kind === 'agent' ? 'What this machine can do' : 'Note'}</h3><div class="field"><textarea class="input" id="desc" aria-label="Description">${m.description ?? ''}</textarea>${m.kind === 'agent' ? html`<span class="help">Agents read this, so they know whom to ask: "serial console of the be98 test unit; can flash it".</span>` : ''}</div><div class="row"><button class="btn tonal sm" data-act="save-desc">Save</button></div></div>`);
-    } else {
-      sections.push(html`<div class="sec"><h3>Account</h3><div class="line"><div class="m"><b>Admin</b><span>Can sign in here and change everything on this page.</span></div>${me ? html`<span class="help">you</span>` : Switch.of(!!m.admin, 'admin', m.name, 'Admin')}</div></div>`);
     }
     const chips = m.projects.map((p) => html`<span class="chip">${p}<button data-act="rm-proj" data-p="${p}" aria-label="Remove from ${p}">${Icon.of('close')}</button></span>`);
     sections.push(html`<div class="sec"><h3>Projects</h3><div class="chips">${chips.length ? chips : html`<span class="help">In no project: it can reach nothing.</span>`}</div><div class="row"><button class="btn tonal sm" data-act="manage-projects">Add or remove projects</button></div></div>`);
@@ -126,16 +119,14 @@ export class MemberDrawer extends Drawer {
         <div class="row">${m.kind === 'agent' ? html`<button class="btn tonal sm" data-act="relink">New install link</button>` : html`<button class="btn tonal sm" data-act="regen">Regenerate token</button>`}</div>
         <span class="help">${m.kind === 'agent' ? "Running the new link on the machine replaces the token; the old one stops working then. An agent's token is never shown." : 'The current token stops working at once.'}</span></div>`);
     }
-    if (!me) {
-      sections.push(html`<div class="sec"><div class="line"><div class="m"><b>Paused</b><span>Stops working until switched back. Nothing is lost.</span></div>${Switch.of(!m.enabled, 'pause', m.name, 'Paused')}</div></div>`);
-      sections.push(html`<div class="sec"><h3>Remove</h3>${this.confirming
-        ? html`<div class="confirm"><p><b>Remove ${m.name} from cafard?</b></p><ul>
-            <li>${m.kind === 'person' ? 'Every sign-in ends now.' : 'Its token stops working on the next request.'}</li>
-            <li>It leaves its ${m.projects.length} project${m.projects.length === 1 ? '' : 's'}.</li>
-            <li>Its messages stay, shown as “${m.name} (removed)”, and the name stays taken.</li></ul>
-            <div class="row"><button class="btn danger sm" data-act="delete">Remove ${m.name}</button><button class="btn tonal sm" data-act="no-delete">Cancel</button></div></div>`
-        : html`<div class="row"><button class="btn danger-text sm" data-act="ask-delete">Remove ${m.name}…</button></div>`}</div>`);
-    }
+    sections.push(html`<div class="sec"><div class="line"><div class="m"><b>Paused</b><span>Stops working until switched back. Nothing is lost.</span></div>${Switch.of(!m.enabled, 'pause', m.name, 'Paused')}</div></div>`);
+    sections.push(html`<div class="sec"><h3>Remove</h3>${this.confirming
+      ? html`<div class="confirm"><p><b>Remove ${m.name} from cafard?</b></p><ul>
+          <li>${m.kind === 'person' ? 'Every sign-in ends now.' : 'Its token stops working on the next request.'}</li>
+          <li>It leaves its ${m.projects.length} project${m.projects.length === 1 ? '' : 's'}.</li>
+          <li>Its messages stay, shown as “${m.name} (removed)”, and the name stays taken.</li></ul>
+          <div class="row"><button class="btn danger sm" data-act="delete">Remove ${m.name}</button><button class="btn tonal sm" data-act="no-delete">Cancel</button></div></div>`
+      : html`<div class="row"><button class="btn danger-text sm" data-act="ask-delete">Remove ${m.name}…</button></div>`}</div>`);
     return html`${this.headOf(Avatar.of(m), html`${m.display_name || m.name}${!m.enabled ? html`<span class="pill muted">paused</span>` : ''}`, `${kindTxt} · @${m.name}`)}<div class="d-body">${sections}</div>`;
   }
 

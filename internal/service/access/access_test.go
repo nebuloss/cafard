@@ -17,7 +17,7 @@ type world struct {
 	t                           *testing.T
 	st                          *store.Store
 	svc                         *Service
-	guillaume, camille          Who
+	admin, guillaume, camille   Who
 	devCode, labBench, devBuild Who
 	be98, zeeos                 store.Project
 }
@@ -38,7 +38,8 @@ func newWorld(t *testing.T) *world {
 		}
 		return Who{Identity: i, Origin: "test"}
 	}
-	w.guillaume = mk("guillaume", store.Person, true)
+	w.admin = Admin("test")
+	w.guillaume = mk("guillaume", store.Person, false)
 	w.camille = mk("camille", store.Person, false)
 	w.devCode = mk("dev-code", store.Agent, false)
 	w.labBench = mk("lab-bench", store.Agent, false)
@@ -52,7 +53,7 @@ func newWorld(t *testing.T) *world {
 
 func (w *world) project(name string) store.Project {
 	w.t.Helper()
-	p, err := w.svc.CreateProject(ctx, w.guillaume, name, 30, 5e9)
+	p, err := w.svc.CreateProject(ctx, w.admin, name, 30, 5e9)
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -62,7 +63,7 @@ func (w *world) project(name string) store.Project {
 func (w *world) in(p store.Project, members ...Who) {
 	w.t.Helper()
 	for _, m := range members {
-		if err := w.svc.AddMember(ctx, w.guillaume, p, m.Identity); err != nil {
+		if err := w.svc.AddMember(ctx, w.admin, p, m.Identity); err != nil {
 			w.t.Fatal(err)
 		}
 	}
@@ -148,15 +149,16 @@ func TestNoAgentOrDeviceCanChangeAccess(t *testing.T) {
 	}
 }
 
-// Rule 2: only people add members, a person in the project or an admin.
+// Rule 2: only people add members, a person in the project, or the admin.
 func TestOnlyPeopleInTheProjectOrAdminsAddMembers(t *testing.T) {
 	w := newWorld(t)
 	// camille is in zeeos and not an admin: she may add to zeeos, not to be98.
 	wantCode(t, "camille adds lab-bench to zeeos", w.svc.AddMember(ctx, w.camille, w.zeeos, w.labBench.Identity), "")
 	wantCode(t, "camille adds herself to be98", w.svc.AddMember(ctx, w.camille, w.be98, w.camille.Identity), NotMember)
 	wantCode(t, "camille removes dev-code from be98", w.svc.RemoveMember(ctx, w.camille, w.be98, w.devCode.Identity), NotMember)
-	// guillaume is an admin and not in zeeos: he may.
-	wantCode(t, "guillaume removes lab-bench from zeeos", w.svc.RemoveMember(ctx, w.guillaume, w.zeeos, w.labBench.Identity), "")
+	// guillaume is not in zeeos: he may not; the admin may.
+	wantCode(t, "guillaume removes lab-bench from zeeos", w.svc.RemoveMember(ctx, w.guillaume, w.zeeos, w.labBench.Identity), NotMember)
+	wantCode(t, "the admin removes lab-bench from zeeos", w.svc.RemoveMember(ctx, w.admin, w.zeeos, w.labBench.Identity), "")
 	// Admin-only actions stay admin-only for camille.
 	_, err := w.svc.CreateProject(ctx, w.camille, "camille-only", 30, 5e9)
 	wantCode(t, "camille creates a project", err, NotAdmin)
@@ -178,7 +180,7 @@ func TestDirectMessagesNeedASharedProject(t *testing.T) {
 // Rule 4: removing a member keeps its row and name, and takes its access.
 func TestRemovedMembersKeepTheirNameAndLoseAccess(t *testing.T) {
 	w := newWorld(t)
-	if err := w.svc.DeleteIdentity(ctx, w.guillaume, w.labBench.Identity); err != nil {
+	if err := w.svc.DeleteIdentity(ctx, w.admin, w.labBench.Identity); err != nil {
 		t.Fatal(err)
 	}
 	lb := w.reload(w.labBench)
@@ -188,19 +190,19 @@ func TestRemovedMembersKeepTheirNameAndLoseAccess(t *testing.T) {
 	wantCode(t, "removed lab-bench reads be98", w.svc.CanRead(ctx, lb, w.be98), Removed)
 	wantCode(t, "dev-code writes to removed lab-bench", w.svc.CanDirectMessage(ctx, w.devCode, lb.Identity), Removed)
 	wantCode(t, "guillaume adds removed lab-bench back", w.svc.AddMember(ctx, w.guillaume, w.be98, lb.Identity), Removed)
-	_, err := w.svc.CreateIdentity(ctx, w.guillaume, NewIdentity{Kind: store.Agent, Name: "lab-bench"})
+	_, err := w.svc.CreateIdentity(ctx, w.admin, NewIdentity{Kind: store.Agent, Name: "lab-bench"})
 	wantCode(t, "a new lab-bench", err, Exists)
 }
 
 func TestPausedMembersCanDoNothing(t *testing.T) {
 	w := newWorld(t)
-	if err := w.svc.SetPaused(ctx, w.guillaume, w.devCode.Identity, true); err != nil {
+	if err := w.svc.SetPaused(ctx, w.admin, w.devCode.Identity, true); err != nil {
 		t.Fatal(err)
 	}
 	dc := w.reload(w.devCode)
 	wantCode(t, "paused dev-code reads be98", w.svc.CanRead(ctx, dc, w.be98), Paused)
 	wantCode(t, "paused dev-code posts in be98", w.svc.CanPost(ctx, dc, w.be98), Paused)
-	if err := w.svc.SetPaused(ctx, w.guillaume, dc.Identity, false); err != nil {
+	if err := w.svc.SetPaused(ctx, w.admin, dc.Identity, false); err != nil {
 		t.Fatal(err)
 	}
 	wantCode(t, "resumed dev-code reads be98", w.svc.CanRead(ctx, w.reload(dc), w.be98), "")
@@ -208,7 +210,7 @@ func TestPausedMembersCanDoNothing(t *testing.T) {
 
 func TestArchivedProjectsAreReadOnly(t *testing.T) {
 	w := newWorld(t)
-	if err := w.svc.SetArchived(ctx, w.guillaume, w.be98, true); err != nil {
+	if err := w.svc.SetArchived(ctx, w.admin, w.be98, true); err != nil {
 		t.Fatal(err)
 	}
 	be98 := w.reloadProject(w.be98)
@@ -217,15 +219,17 @@ func TestArchivedProjectsAreReadOnly(t *testing.T) {
 	wantCode(t, "guillaume adds camille to archived be98", w.svc.AddMember(ctx, w.guillaume, be98, w.camille.Identity), Archived)
 }
 
-// An admin cannot pause, delete or demote themselves: the last admin would
-// lock everyone out.
-func TestAdminsCannotLockThemselvesOut(t *testing.T) {
+// The admin manages access and is not a member: it reads and posts
+// nowhere, and a person is never an admin.
+func TestTheAdminIsNotAMember(t *testing.T) {
 	w := newWorld(t)
-	wantCode(t, "guillaume pauses himself", w.svc.SetPaused(ctx, w.guillaume, w.guillaume.Identity, true), Self)
-	wantCode(t, "guillaume deletes himself", w.svc.DeleteIdentity(ctx, w.guillaume, w.guillaume.Identity), Self)
-	wantCode(t, "guillaume drops his own admin", w.svc.SetAdmin(ctx, w.guillaume, w.guillaume.Identity, false), Self)
-	wantCode(t, "guillaume makes dev-code admin", w.svc.SetAdmin(ctx, w.guillaume, w.devCode.Identity, true), NotAllowed)
-	wantCode(t, "guillaume makes camille admin", w.svc.SetAdmin(ctx, w.guillaume, w.camille.Identity, true), "")
+	wantCode(t, "the admin reads be98", w.svc.CanRead(ctx, w.admin, w.be98), NotMember)
+	wantCode(t, "the admin posts in be98", w.svc.CanPost(ctx, w.admin, w.be98), NotMember)
+	_, err := w.svc.CreateProject(ctx, w.guillaume, "speedtest", 30, 5e9)
+	wantCode(t, "a person creates a project", err, NotAdmin)
+	_, err = w.svc.CreateIdentity(ctx, w.guillaume, NewIdentity{Kind: store.Agent, Name: "qa-bench"})
+	wantCode(t, "a person creates an agent", err, NotAdmin)
+	wantCode(t, "the admin pauses guillaume", w.svc.SetPaused(ctx, w.admin, w.guillaume.Identity, true), "")
 }
 
 func TestNamesAndValues(t *testing.T) {
@@ -240,16 +244,15 @@ func TestNamesAndValues(t *testing.T) {
 		{NewIdentity{Kind: store.Agent, Name: "x"}, BadName},
 		{NewIdentity{Kind: store.Device, Name: "dot.ted"}, BadName},
 		{NewIdentity{Kind: "robot", Name: "r2"}, BadValue},
-		{NewIdentity{Kind: store.Agent, Name: "boss", Admin: true}, NotAllowed},
 	} {
-		_, err := w.svc.CreateIdentity(ctx, w.guillaume, tc.n)
+		_, err := w.svc.CreateIdentity(ctx, w.admin, tc.n)
 		wantCode(t, "create "+string(tc.n.Kind)+" "+tc.n.Name, err, tc.code)
 	}
-	_, err := w.svc.CreateProject(ctx, w.guillaume, "Speed Test", 30, 5e9)
+	_, err := w.svc.CreateProject(ctx, w.admin, "Speed Test", 30, 5e9)
 	wantCode(t, "project with spaces", err, BadName)
-	_, err = w.svc.CreateProject(ctx, w.guillaume, "speedtest", 0, 5e9)
+	_, err = w.svc.CreateProject(ctx, w.admin, "speedtest", 0, 5e9)
 	wantCode(t, "project with no retention", err, BadValue)
-	_, err = w.svc.CreateProject(ctx, w.guillaume, "be98", 30, 5e9)
+	_, err = w.svc.CreateProject(ctx, w.admin, "be98", 30, 5e9)
 	wantCode(t, "a second be98", err, Exists)
 }
 

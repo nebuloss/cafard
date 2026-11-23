@@ -3,17 +3,15 @@ package access
 import (
 	"strings"
 	"testing"
-
-	"cafard/internal/store"
 )
 
 func TestTokensAuthenticateTheirIdentity(t *testing.T) {
 	w := newWorld(t)
-	agentTok, err := w.svc.IssueToken(ctx, w.guillaume, w.devCode.Identity)
+	agentTok, err := w.svc.IssueToken(ctx, w.admin, w.devCode.Identity)
 	if err != nil {
 		t.Fatal(err)
 	}
-	deviceTok, err := w.svc.IssueToken(ctx, w.guillaume, w.devBuild.Identity)
+	deviceTok, err := w.svc.IssueToken(ctx, w.admin, w.devBuild.Identity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,14 +35,14 @@ func TestOnlyAdminsIssueTokensAndOnlyToMachines(t *testing.T) {
 	wantCode(t, "an agent issues a token", err, NotAllowed)
 	_, err = w.svc.IssueToken(ctx, w.camille, w.labBench.Identity)
 	wantCode(t, "a non-admin issues a token", err, NotAdmin)
-	_, err = w.svc.IssueToken(ctx, w.guillaume, w.camille.Identity)
+	_, err = w.svc.IssueToken(ctx, w.admin, w.camille.Identity)
 	wantCode(t, "a token for a person", err, NotAllowed)
 }
 
 func TestTokensThatMustNotWork(t *testing.T) {
 	w := newWorld(t)
-	old, _ := w.svc.IssueToken(ctx, w.guillaume, w.devCode.Identity)
-	current, _ := w.svc.IssueToken(ctx, w.guillaume, w.devCode.Identity)
+	old, _ := w.svc.IssueToken(ctx, w.admin, w.devCode.Identity)
+	current, _ := w.svc.IssueToken(ctx, w.admin, w.devCode.Identity)
 
 	_, err := w.svc.Authenticate(ctx, old, "x")
 	wantCode(t, "a replaced token", err, Unauthorized)
@@ -53,13 +51,13 @@ func TestTokensThatMustNotWork(t *testing.T) {
 	_, err = w.svc.Authenticate(ctx, "cfd_dv_"+strings.TrimPrefix(current, "cfd_ag_"), "x")
 	wantCode(t, "an agent token relabelled as a device's", err, Unauthorized)
 
-	if err := w.svc.SetPaused(ctx, w.guillaume, w.devCode.Identity, true); err != nil {
+	if err := w.svc.SetPaused(ctx, w.admin, w.devCode.Identity, true); err != nil {
 		t.Fatal(err)
 	}
 	_, err = w.svc.Authenticate(ctx, current, "x")
 	wantCode(t, "the token of a paused agent", err, Paused)
 
-	if err := w.svc.DeleteIdentity(ctx, w.guillaume, w.devCode.Identity); err != nil {
+	if err := w.svc.DeleteIdentity(ctx, w.admin, w.devCode.Identity); err != nil {
 		t.Fatal(err)
 	}
 	// Removing an agent deletes its token, so it is not a token any more.
@@ -67,19 +65,17 @@ func TestTokensThatMustNotWork(t *testing.T) {
 	wantCode(t, "the token of a removed agent", err, Unauthorized)
 }
 
-func TestFirstAdmin(t *testing.T) {
-	st, err := store.Open(ctx, t.TempDir()+"/cafard.db")
+// The admin password: a hash to keep in the configuration, which only the
+// right password matches.
+func TestAdminPassword(t *testing.T) {
+	if _, err := HashAdminPassword("short"); !Is(err, BadValue) {
+		t.Errorf("a short password: %v", err)
+	}
+	hash, err := HashAdminPassword("Admin000")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
-	svc := New(st)
-	g, err := svc.CreateFirstAdmin(ctx, "guillaume", "Guillaume", "cli")
-	if err != nil || !g.Admin {
-		t.Fatalf("first admin: %+v %v", g, err)
+	if !CheckAdminPassword(hash, "Admin000") || CheckAdminPassword(hash, "Admin001") || CheckAdminPassword("", "Admin000") {
+		t.Error("the admin password checks wrongly")
 	}
-	_, err = svc.CreateFirstAdmin(ctx, "camille", "", "cli")
-	wantCode(t, "a second first admin", err, NotAdmin)
-	_, err = New(st).CreateFirstAdmin(ctx, "Not A Name", "", "cli")
-	wantCode(t, "a first admin with a bad name", err, BadName)
 }

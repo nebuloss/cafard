@@ -28,7 +28,7 @@ type rig struct {
 	agent, device, outsider string
 	st                      *store.Store
 	acc                     *access.Service
-	admin                   access.Who
+	admin, guillaume        access.Who
 	hub                     *live.Hub
 }
 
@@ -44,8 +44,11 @@ func newRig(t *testing.T) *rig {
 	t.Cleanup(func() { st.Close() })
 	bl, _ := blobs.Open(filepath.Join(dir, "files"))
 	acc := access.New(st)
-	g, _ := acc.CreateFirstAdmin(ctx, "guillaume", "", "test")
-	admin := access.Who{Identity: g, Origin: "test"}
+	admin := access.Admin("test")
+	g, err := acc.CreateIdentity(ctx, admin, access.NewIdentity{Kind: store.Person, Name: "guillaume"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	p, _ := acc.CreateProject(ctx, admin, "be98", 30, 5e9)
 	token := func(name string, kind store.Kind, inProject bool) string {
 		i, err := acc.CreateIdentity(ctx, admin, access.NewIdentity{Kind: kind, Name: name})
@@ -68,6 +71,7 @@ func newRig(t *testing.T) *rig {
 	}
 	mux := http.NewServeMux()
 	r.st, r.acc, r.admin, r.hub = st, acc, admin, live.New()
+	r.guillaume = access.Who{Identity: g, Origin: "test"}
 	st.Announce(r.hub)
 	New(nil, acc, chat.New(st, bl, acc), r.hub, "http://cafard.example").Register(mux)
 	join.New(nil, acc, "http://cafard.example").Register(mux)

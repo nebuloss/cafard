@@ -146,17 +146,6 @@ func (s *Store) SetEnabled(ctx context.Context, id int64, enabled bool, a AuditE
 	return err
 }
 
-// SetAdmin grants or withdraws admin from a person.
-func (s *Store) SetAdmin(ctx context.Context, id int64, admin bool, a AuditEntry) error {
-	err := s.change(ctx, a, func(tx *sql.Tx) error {
-		return one(tx.ExecContext(ctx, `UPDATE identities SET admin = ? WHERE id = ? AND kind = 'person' AND deleted_at IS NULL`, admin, id))
-	})
-	if err == nil {
-		s.publish(live.MemberKey(id))
-	}
-	return err
-}
-
 // SetDescription changes what an agent's machine is said to do.
 func (s *Store) SetDescription(ctx context.Context, id int64, description string, a AuditEntry) error {
 	return s.change(ctx, a, func(tx *sql.Tx) error {
@@ -295,11 +284,16 @@ func (s *Store) DeleteProject(ctx context.Context, id int64, a AuditEntry) error
 }
 
 // AddMembership puts an identity in a project. addedBy is the person who did
-// it, recorded beside the membership as well as in the audit log.
+// it (0 for the admin), recorded beside the membership as well as in the audit log.
 func (s *Store) AddMembership(ctx context.Context, projectID, identityID, addedBy int64, a AuditEntry) error {
 	err := s.change(ctx, a, func(tx *sql.Tx) error {
+		// 0 is the admin, who is not an identity (migration 005).
+		var by any = addedBy
+		if addedBy == 0 {
+			by = nil
+		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO memberships (project_id, identity_id, added_by, added_at) VALUES (?, ?, ?, ?)`,
-			projectID, identityID, addedBy, s.now().UnixMilli())
+			projectID, identityID, by, s.now().UnixMilli())
 		if isUnique(err) {
 			return ErrExists
 		}

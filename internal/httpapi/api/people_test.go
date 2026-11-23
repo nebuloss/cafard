@@ -23,7 +23,7 @@ type person struct {
 
 func (r *rig) person(t *testing.T) *person {
 	t.Helper()
-	code, _, err := r.acc.IssueLink(ctx, r.admin, r.admin.Identity, 0)
+	code, _, err := r.acc.IssueLink(ctx, r.admin, r.guillaume.Identity, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func (r *rig) person(t *testing.T) *person {
 	}
 	// guillaume in be98, as a person in the project.
 	be98, _ := r.st.ProjectByName(ctx, "be98")
-	r.acc.AddMember(ctx, r.admin, be98, r.admin.Identity)
+	r.acc.AddMember(ctx, r.admin, be98, r.guillaume.Identity)
 	return p
 }
 
@@ -67,7 +67,7 @@ func TestPeopleSignInWithACookie(t *testing.T) {
 	r := newRig(t)
 	p := r.person(t)
 	code, body := p.call("GET", "/api/v1/me", nil)
-	if code != 200 || !strings.Contains(string(body), `"guillaume"`) || !strings.Contains(string(body), `"admin": true`) {
+	if code != 200 || !strings.Contains(string(body), `"guillaume"`) {
 		t.Errorf("me: %d %s", code, body)
 	}
 	// A cookie write from another site is refused; the same write from the page works.
@@ -164,8 +164,11 @@ func TestDeleteAFile(t *testing.T) {
 	if resp, _ := r.do(t, "DELETE", "/api/v1/files/"+id, r.agent, nil); resp.StatusCode != 403 {
 		t.Errorf("an agent that did not send it: %d", resp.StatusCode)
 	}
-	if code, _ := p.call("DELETE", "/api/v1/files/"+id, nil); code != 204 {
-		t.Errorf("an admin: %d", code)
+	if code, _ := p.call("DELETE", "/api/v1/files/"+id, nil); code != 403 {
+		t.Errorf("a person who did not send it: %d", code)
+	}
+	if resp, _ := r.do(t, "DELETE", "/api/v1/files/"+id, r.device, nil); resp.StatusCode != 204 {
+		t.Errorf("its sender: %d", resp.StatusCode)
 	}
 	if resp, _ := r.do(t, "GET", "/api/v1/files/"+id, r.agent, nil); resp.StatusCode != 410 {
 		t.Errorf("the deleted file: %d", resp.StatusCode)
@@ -260,7 +263,7 @@ func TestEventsSayWhatChanged(t *testing.T) {
 	waitFor(`"topic":"conversation"`)
 
 	// guillaume joins zeeos: the stream says "me" and follows zeeos from then on.
-	r.acc.AddMember(ctx, r.admin, other, r.admin.Identity)
+	r.acc.AddMember(ctx, r.admin, other, r.guillaume.Identity)
 	waitFor(`"topic":"me"`)
 	_ = store.Agent
 }

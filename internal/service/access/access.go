@@ -263,7 +263,6 @@ type NewIdentity struct {
 	Name        string
 	DisplayName string
 	Description string
-	Admin       bool
 }
 
 // CreateIdentity creates a person, an agent or a device. Admins only.
@@ -279,11 +278,8 @@ func (s *Service) CreateIdentity(ctx context.Context, who Who, n NewIdentity) (s
 	if err := validName(n.Kind, n.Name); err != nil {
 		return store.Identity{}, err
 	}
-	if n.Admin && n.Kind != store.Person {
-		return store.Identity{}, refuse(NotAllowed, "Only a person can be an admin.")
-	}
 	id, err := s.st.CreateIdentity(ctx, store.Identity{
-		Name: n.Name, Kind: n.Kind, DisplayName: n.DisplayName, Description: n.Description, Admin: n.Admin,
+		Name: n.Name, Kind: n.Kind, DisplayName: n.DisplayName, Description: n.Description,
 	}, who.audit("created "+string(n.Kind), n.Name))
 	if errors.Is(err, store.ErrExists) {
 		return store.Identity{}, refuse(Exists, "%s already exists. Names are shared by people, agents and devices, removed ones included.", n.Name)
@@ -302,22 +298,6 @@ func (s *Service) SetPaused(ctx context.Context, who Who, target store.Identity,
 		action = "resumed"
 	}
 	return notFound(s.st.SetEnabled(ctx, target.ID, !paused, who.audit(action, target.Name)), target.Name)
-}
-
-// SetAdmin grants or withdraws admin. Admins only, and not their own: the
-// last admin cannot lock everyone out.
-func (s *Service) SetAdmin(ctx context.Context, who Who, target store.Identity, admin bool) error {
-	if err := s.manage(who, target); err != nil {
-		return err
-	}
-	if target.Kind != store.Person {
-		return refuse(NotAllowed, "Only a person can be an admin.")
-	}
-	action := "made admin"
-	if !admin {
-		action = "removed admin from"
-	}
-	return notFound(s.st.SetAdmin(ctx, target.ID, admin, who.audit(action, target.Name)), target.Name)
 }
 
 // SetDescription changes what an agent's or device's machine is said to do.
@@ -341,7 +321,7 @@ func (s *Service) manage(who Who, target store.Identity) error {
 		return err
 	}
 	if target.ID == who.ID {
-		return refuse(Self, "You cannot do that to yourself. Another admin can.")
+		return refuse(Self, "You cannot do that to yourself.")
 	}
 	return nil
 }

@@ -138,13 +138,16 @@ func TestDeleteFile(t *testing.T) {
 	if !w.svc.bl.Has(fb.SHA256) {
 		t.Fatal("the blob went while another message still holds it")
 	}
-	if err := w.svc.DeleteFile(ctx, w.guillaume, fb.ID); err != nil {
-		t.Fatalf("an admin: %v", err)
+	if err := w.svc.DeleteFile(ctx, w.guillaume, fb.ID); !access.Is(err, access.NotAllowed) {
+		t.Errorf("a person who did not send it: %v", err)
+	}
+	if err := w.svc.DeleteFile(ctx, w.device, fb.ID); err != nil {
+		t.Fatalf("its sender: %v", err)
 	}
 	if w.svc.bl.Has(fb.SHA256) {
 		t.Error("the blob stayed after its last file was deleted")
 	}
-	if err := w.svc.DeleteFile(ctx, w.guillaume, fb.ID); !access.Is(err, Gone) {
+	if err := w.svc.DeleteFile(ctx, w.device, fb.ID); !access.Is(err, Gone) {
 		t.Errorf("deleting twice: %v", err)
 	}
 	_, ms, _ := w.svc.Messages(ctx, w.devCode, "be98", "y", 0, 0)

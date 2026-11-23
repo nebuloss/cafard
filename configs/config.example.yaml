@@ -1,4 +1,5 @@
-# cafard's configuration: where it listens and where its state lives.
+# cafard's configuration: where it listens, where its state lives, and the
+# admin password's hash.
 # People, agents, projects and every setting the admin UI changes are in the
 # database, not here.
 
@@ -19,6 +20,10 @@ state-dir: "/var/lib/cafard"
 # links and in the MCP config the join script writes. Leave it empty to use
 # http://<listen>.
 public-url: "https://cafard.example"
+
+# The hash of the admin password, which opens the admin UI. Written by
+# `cafard passwd`, which asks for the password; restart cafard after.
+# admin-password-hash: "$argon2id$v=19$m=19456,t=2,p=1$…"
 
 log:
   level: info    # debug, info, warn, error

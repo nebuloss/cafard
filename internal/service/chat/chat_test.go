@@ -37,28 +37,28 @@ func newWorld(t *testing.T) *world {
 		t.Fatal(err)
 	}
 	acc := access.New(st)
-	g, err := acc.CreateFirstAdmin(ctx, "guillaume", "", "test")
+	g, err := acc.CreateIdentity(ctx, access.Admin("test"), access.NewIdentity{Kind: store.Person, Name: "guillaume"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	w := &world{st: st, svc: New(st, bl, acc), guillaume: access.Who{Identity: g, Origin: "test"}}
 	mk := func(name string, kind store.Kind) access.Who {
-		i, err := acc.CreateIdentity(ctx, w.guillaume, access.NewIdentity{Kind: kind, Name: name})
+		i, err := acc.CreateIdentity(ctx, access.Admin("test"), access.NewIdentity{Kind: kind, Name: name})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return access.Who{Identity: i, Origin: "test"}
 	}
 	w.devCode, w.device, w.labBench = mk("dev-code", store.Agent), mk("dev-build", store.Device), mk("lab-bench", store.Agent)
-	be98, err := acc.CreateProject(ctx, w.guillaume, "be98", 30, 5e9)
+	be98, err := acc.CreateProject(ctx, access.Admin("test"), "be98", 30, 5e9)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := acc.CreateProject(ctx, w.guillaume, "zeeos", 30, 5e9); err != nil {
+	if _, err := acc.CreateProject(ctx, access.Admin("test"), "zeeos", 30, 5e9); err != nil {
 		t.Fatal(err)
 	}
 	for _, m := range []access.Who{w.guillaume, w.devCode, w.device} {
-		if err := acc.AddMember(ctx, w.guillaume, be98, m.Identity); err != nil {
+		if err := acc.AddMember(ctx, access.Admin("test"), be98, m.Identity); err != nil {
 			t.Fatal(err)
 		}
 	}

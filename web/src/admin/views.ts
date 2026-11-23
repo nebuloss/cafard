@@ -98,15 +98,14 @@ export class MembersView extends View {
 
   /** Draws the rows only, so the search keeps its focus while typing. */
   private drawList(): void {
-    const me = this.store.me?.name;
     const rows = this.rows().map((m) => {
-      const tags = html`${m.kind !== 'person' ? html`<span class="kind ${m.kind}">${m.kind}</span>` : ''}${m.admin ? html`<span class="kind admin">admin</span>` : ''}${linkPill(m)}${!m.enabled ? html`<span class="pill muted">paused</span>` : ''}`;
+      const tags = html`${m.kind !== 'person' ? html`<span class="kind ${m.kind}">${m.kind}</span>` : ''}${linkPill(m)}${!m.enabled ? html`<span class="pill muted">paused</span>` : ''}`;
       const last = m.joined || m.kind === 'device' ? html`<b>${time.ago(m.last_used)}</b>${m.last_from ?? ''}` : html`<b>Not joined</b>`;
       const chips = m.projects.length ? m.projects.map((p) => html`<span class="chip">${p}</span>`) : html`<span class="sub">No project</span>`;
       return html`<div class="irow ${m.enabled ? '' : 'off'}" role="button" tabindex="0" data-act="open" data-v="${m.name}">${Avatar.of(m)}
         <span class="who"><span class="nm">${m.display_name || m.name}${tags}</span><span class="sub">${subOf(m)}</span></span>
         <span class="chips">${chips}</span><span class="last">${last}</span>
-        ${m.name === me ? html`<span></span>` : Switch.of(m.enabled, 'pause', m.name, `${m.enabled ? 'Pause' : 'Resume'} ${m.name}`)}<span class="chev">${Icon.of('chev')}</span></div>`;
+        ${Switch.of(m.enabled, 'pause', m.name, `${m.enabled ? 'Pause' : 'Resume'} ${m.name}`)}<span class="chev">${Icon.of('chev')}</span></div>`;
     });
     this.$('.list').innerHTML = (rows.length ? Html.join(rows) : html`<div class="empty">Nobody matches.</div>`).value;
   }
@@ -233,22 +232,22 @@ export class SignInView extends Component {
     return html`<form novalidate>
       <div class="brand">${Icon.logo} cafard <small>admin</small></div>
       <h1>Sign in</h1>
-      <p>Admins only. Your password is the one you chose with your join link; if you have none, ask another admin, or run <code>cafard admin link NAME</code> on the box.</p>
+      <p>With the admin password. It is set on the box with <code>cafard passwd</code>, which is also how a lost one is replaced.</p>
       ${this.message ? html`<p class="ferr" role="alert">${this.message}</p>` : ''}
-      <div class="field"><label for="u">Username</label><input class="input" id="u" autocomplete="username" autocapitalize="none" required></div>
-      <div class="field"><label for="p">Password</label><input class="input" id="p" type="password" autocomplete="current-password" required></div>
+      <input type="text" name="username" value="admin" autocomplete="username" hidden>
+      <div class="field"><label for="p">Admin password</label><input class="input" id="p" type="password" autocomplete="current-password" required></div>
       <span class="ferr" id="sErr" hidden></span>
       <button class="btn filled" type="submit">Sign in</button></form>`;
   }
 
   focus(): void {
-    this.find<HTMLInputElement>('#u')?.focus();
+    this.find<HTMLInputElement>('#p')?.focus();
   }
 
   private async submit(): Promise<void> {
     const err = this.$('#sErr');
     try {
-      await this.app.store.signIn(this.$<HTMLInputElement>('#u').value, this.$<HTMLInputElement>('#p').value);
+      await this.app.store.signIn(this.$<HTMLInputElement>('#p').value);
       await this.app.showShell();
     } catch (e) {
       err.hidden = false;
@@ -256,3 +255,4 @@ export class SignInView extends Component {
     }
   }
 }
+

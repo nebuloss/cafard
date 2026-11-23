@@ -98,25 +98,6 @@ func (s *Service) Authenticate(ctx context.Context, token, from string) (store.I
 	return id, nil
 }
 
-// CreateFirstAdmin creates the first person, as an admin, while cafard has
-// no admin. It is how a new install starts, from `cafard admin` on the box:
-// nobody exists yet to approve anyone. Once there is an admin it refuses,
-// and people are created by an admin like everyone else.
-func (s *Service) CreateFirstAdmin(ctx context.Context, name, displayName, origin string) (store.Identity, error) {
-	if err := validName(store.Person, name); err != nil {
-		return store.Identity{}, err
-	}
-	id, err := s.st.CreateFirstAdmin(ctx, store.Identity{Name: name, DisplayName: displayName},
-		store.AuditEntry{Actor: name, Action: "created the first admin", Target: name, Origin: origin})
-	switch {
-	case errors.Is(err, store.ErrHasAdmin):
-		return store.Identity{}, refuse(NotAdmin, "cafard has an admin already: create people as that admin.")
-	case errors.Is(err, store.ErrExists):
-		return store.Identity{}, refuse(Exists, "%s already exists.", name)
-	}
-	return id, err
-}
-
 // Active is an identity by id, if it may still act. What was granted ahead
 // of time, like an agent's upload link, is checked again with it when it is
 // used: the agent may have been paused or removed since.

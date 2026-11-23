@@ -82,17 +82,6 @@ func TestNamesAreUniqueAcrossKinds(t *testing.T) {
 	}
 }
 
-func TestOnlyPeopleCanBeAdmins(t *testing.T) {
-	s, _ := open(t)
-	if _, err := s.CreateIdentity(ctx, Identity{Name: "dev-code", Kind: Agent, Admin: true}, audit("create")); err == nil {
-		t.Fatal("the schema let an agent be an admin")
-	}
-	a, _ := s.CreateIdentity(ctx, Identity{Name: "lab-bench", Kind: Agent}, audit("create"))
-	if err := s.SetAdmin(ctx, a.ID, true, audit("admin")); !errors.Is(err, ErrNotFound) {
-		t.Errorf("SetAdmin on an agent: %v, want ErrNotFound", err)
-	}
-}
-
 func TestMemberships(t *testing.T) {
 	s, _ := open(t)
 	g, _ := s.CreateIdentity(ctx, Identity{Name: "guillaume", Kind: Person, Admin: true}, audit("create"))

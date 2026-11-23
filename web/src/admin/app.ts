@@ -77,7 +77,7 @@ export class AdminApp {
 
   /** Reads the store again and redraws the page and any open drawer. */
   async refresh(): Promise<void> {
-    if (!this.store.me || !this.shell) return;
+    if (!this.store.signedIn || !this.shell) return;
     await this.attempt(() => this.store.load(this.view));
     this.shell.render();
     if (this.drawer && this.layer.isOpen) this.drawer.render();
@@ -138,7 +138,6 @@ class Shell extends Component {
   }
 
   protected view(): Html {
-    const me = this.app.store.me;
     const current = this.app.view;
     const counts: Partial<Record<ViewName, number>> = { members: this.app.store.members.length, projects: this.app.store.projects.length };
     const nav = (Object.keys(VIEWS) as ViewName[]).map((k) => {
@@ -149,7 +148,7 @@ class Shell extends Component {
     return html`<header class="top"><div class="brand">${Icon.logo} cafard <small>admin</small></div>
       <span class="where" title="This UI is served only on admin-listen">${Icon.of('lock')}Internal network only</span>
       <span class="grow"></span>
-      <span class="me"><span>${me?.display_name || me?.name}</span><button data-act="signout">Sign out</button></span></header>
+      <span class="me"><span>admin</span><button data-act="signout">Sign out</button></span></header>
       <div class="body"><nav class="nav" aria-label="Admin sections">${nav}</nav><main class="main"><div class="page"></div></main></div>`;
   }
 

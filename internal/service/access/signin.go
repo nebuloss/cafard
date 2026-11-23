@@ -100,8 +100,11 @@ var signinLife = map[string]time.Duration{
 const Wrong Code = "wrong"
 
 // SignIn checks a person's username and password and returns a new
-// sign-in's cookie value. The admin surface takes admins only.
+// sign-in's cookie value, for the chat app.
 func (s *Service) SignIn(ctx context.Context, surface, username, password, from, userAgent string) (cookie string, who store.Identity, err error) {
+	if surface == AdminSurface {
+		return "", store.Identity{}, refuse(NotAdmin, "The admin UI opens with the admin password, not a person's.")
+	}
 	life, ok := signinLife[surface]
 	if !ok {
 		return "", store.Identity{}, fmt.Errorf("sign in: no surface %q", surface)
@@ -123,9 +126,6 @@ func (s *Service) SignIn(ctx context.Context, surface, username, password, from,
 	}
 	if err := active(id); err != nil {
 		return "", store.Identity{}, err
-	}
-	if surface == AdminSurface && !id.Admin {
-		return "", store.Identity{}, refuse(NotAdmin, "%s is not an admin. The admin UI is for admins; the chat app is for everyone.", id.Name)
 	}
 	cookie, err = randomToken()
 	if err != nil {
@@ -163,11 +163,6 @@ func (s *Service) Session(ctx context.Context, surface, cookie, from string) (st
 	}
 	if err := active(id); err != nil {
 		return store.Identity{}, store.Signin{}, err
-	}
-	// Losing admin ends admin sign-ins at the next request, not the next
-	// sign-in.
-	if surface == AdminSurface && !id.Admin {
-		return store.Identity{}, store.Signin{}, refuse(NotAdmin, "%s is no longer an admin.", id.Name)
 	}
 	if err := s.st.TouchSignin(ctx, si.ID, from, time.Now().Add(signinLife[surface])); err != nil {
 		return store.Identity{}, store.Signin{}, err

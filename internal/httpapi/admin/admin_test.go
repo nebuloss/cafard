@@ -41,7 +41,6 @@ type rig struct {
 	adminSrv  *httptest.Server
 	publicSrv *httptest.Server
 	client    *http.Client
-	firstCode string
 }
 
 func newRig(t *testing.T) *rig {
@@ -60,24 +59,21 @@ func newRig(t *testing.T) *rig {
 	join.New(nil, acc, r.publicSrv.URL).Register(pub)
 
 	adm := http.NewServeMux()
-	admin.New(nil, st, acc, admin.Config{PublicURL: r.publicSrv.URL}, fakeUI).Register(adm)
+	hash, err := access.HashAdminPassword(adminPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin.New(nil, st, acc, admin.Config{PublicURL: r.publicSrv.URL, PasswordHash: hash}, fakeUI).Register(adm)
 	r.adminSrv = httptest.NewServer(adm)
 	t.Cleanup(r.adminSrv.Close)
 
 	jar, _ := cookiejar.New(nil)
 	r.client = &http.Client{Jar: jar}
 
-	// The first admin, as `cafard admin create person` makes them, joined
-	// through their link.
-	g, err := acc.CreateFirstAdmin(ctx, "guillaume", "Guillaume", "test")
-	if err != nil {
+	// A person to put in projects.
+	if _, err := acc.CreateIdentity(ctx, access.Admin("test"), access.NewIdentity{Kind: store.Person, Name: "guillaume", DisplayName: "Guillaume"}); err != nil {
 		t.Fatal(err)
 	}
-	code, _, err := acc.IssueLink(ctx, access.Who{Identity: g, Origin: "test"}, g, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.firstCode = code
 	return r
 }
 
@@ -113,12 +109,11 @@ func (r *rig) joinWith(linkURL, password string) int {
 	return resp.StatusCode
 }
 
+const adminPassword = "the admin's password"
+
 func (r *rig) signIn() {
 	r.t.Helper()
-	if code := r.joinWith(r.publicSrv.URL+"/join/"+r.firstCode, "guillaume's password"); code != 200 {
-		r.t.Fatalf("joining: %d", code)
-	}
-	if code, out := r.call("POST", "/admin/api/signin", map[string]string{"username": "guillaume", "password": "guillaume's password"}); code != 200 {
+	if code, out := r.call("POST", "/admin/api/signin", map[string]string{"password": adminPassword}); code != 200 {
 		r.t.Fatalf("sign in: %d %v", code, out)
 	}
 }
@@ -128,11 +123,14 @@ func TestSignInIsNeeded(t *testing.T) {
 	if code, out := r.call("GET", "/admin/api/members", nil); code != 401 || out["error"] != "unauthorized" {
 		t.Errorf("without signing in: %d %v", code, out)
 	}
-	if code, _ := r.call("POST", "/admin/api/signin", map[string]string{"username": "guillaume", "password": "not set yet!"}); code != 403 {
-		t.Errorf("before joining: %d", code)
+	if code, out := r.call("POST", "/admin/api/signin", map[string]string{"password": "not the password"}); code != 403 || out["error"] != "wrong" {
+		t.Errorf("a wrong password: %d %v", code, out)
+	}
+	if code, _ := r.call("POST", "/admin/api/signin", map[string]string{"username": "guillaume", "password": adminPassword}); code != 400 {
+		t.Errorf("a username is not taken: %d", code)
 	}
 	r.signIn()
-	if code, out := r.call("GET", "/admin/api/me", nil); code != 200 || out["member"].(map[string]any)["name"] != "guillaume" {
+	if code, out := r.call("GET", "/admin/api/me", nil); code != 200 || out["admin"] != true {
 		t.Errorf("me: %d %v", code, out)
 	}
 	if code, _ := r.call("POST", "/admin/api/signout", nil); code != 204 {
@@ -165,9 +163,9 @@ func TestCrossSiteWritesAreRefused(t *testing.T) {
 	}
 }
 
-// A non-admin person cannot sign in to the admin UI, even with the right
-// password.
-func TestOnlyAdminsSignIn(t *testing.T) {
+// A person's password never opens the admin UI, even a person who knows
+// their way in to the chat.
+func TestOnlyTheAdminPasswordOpens(t *testing.T) {
 	r := newRig(t)
 	r.signIn()
 	_, out := r.call("POST", "/admin/api/members", map[string]any{"kind": "person", "name": "camille"})
@@ -176,8 +174,11 @@ func TestOnlyAdminsSignIn(t *testing.T) {
 		t.Fatal("camille could not join")
 	}
 	other := &rig{t: t, adminSrv: r.adminSrv, client: &http.Client{}}
-	if code, out := other.call("POST", "/admin/api/signin", map[string]string{"username": "camille", "password": "camille's password"}); code != 403 || out["error"] != "not_admin" {
-		t.Errorf("camille into the admin UI: %d %v", code, out)
+	if code, _ := other.call("POST", "/admin/api/signin", map[string]string{"password": "camille's password"}); code != 403 {
+		t.Errorf("a person's password into the admin UI: %d", code)
+	}
+	if code, _ := other.call("GET", "/admin/api/members", nil); code != 401 {
+		t.Errorf("members without the admin password: %d", code)
 	}
 }
 
@@ -273,12 +274,12 @@ func TestPickerSetsMembership(t *testing.T) {
 	log, _ := r.st.Audit(ctx, 50)
 	found := false
 	for _, e := range log {
-		if e.Actor == "guillaume" && e.Action == "removed dev-code from" && e.Target == "be98" && strings.HasPrefix(e.Origin, "admin · ") {
+		if e.Actor == "admin" && e.Action == "removed dev-code from" && e.Target == "be98" && strings.HasPrefix(e.Origin, "admin · ") {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("the picker's change is not in the audit log under guillaume, from admin")
+		t.Error("the picker's change is not in the audit log under admin, from the admin UI")
 	}
 }
 

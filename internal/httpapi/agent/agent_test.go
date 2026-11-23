@@ -48,13 +48,13 @@ func newRig(t *testing.T) *rig {
 	t.Cleanup(func() { st.Close() })
 	bl, _ := blobs.Open(filepath.Join(dir, "files"))
 	acc := access.New(st)
-	g, _ := acc.CreateFirstAdmin(ctx, "guillaume", "Guillaume", "test")
-	admin := access.Who{Identity: g, Origin: "test"}
+	admin := access.Admin("test")
+	g, _ := acc.CreateIdentity(ctx, admin, access.NewIdentity{Kind: store.Person, Name: "guillaume", DisplayName: "Guillaume"})
 	be98, _ := acc.CreateProject(ctx, admin, "be98", 30, 5e9)
 	zeeos, _ := acc.CreateProject(ctx, admin, "zeeos", 30, 5e9)
 	acc.AddMember(ctx, admin, be98, g)
 	acc.AddMember(ctx, admin, zeeos, g)
-	r := &rig{acc: acc, admin: admin, guillaume: admin, chat: chat.New(st, bl, acc)}
+	r := &rig{acc: acc, admin: admin, guillaume: access.Who{Identity: g, Origin: "test"}, chat: chat.New(st, bl, acc)}
 	token := func(name string, kind store.Kind, ps ...store.Project) (string, store.Identity) {
 		i, err := acc.CreateIdentity(ctx, admin, access.NewIdentity{Kind: kind, Name: name, Description: "test " + name})
 		if err != nil {

@@ -21,7 +21,7 @@ import (
 const adminUsage = `cafard admin: manage people, agents, devices and projects from the box.
 
 Usage:
-  cafard admin [-config FILE] [-as NAME] COMMAND
+  cafard admin [-config FILE] COMMAND
 
 Commands:
   create person NAME [-name "Display Name"]       prints their join link
@@ -35,10 +35,9 @@ Commands:
   token  NAME                    a new token for a device; the old one stops working
   list                           everyone and every project
 
-The first person created on a new install becomes its admin: there is nobody
-yet to approve them. After that, every command acts as an admin: -as names
-which, and may be left out while there is only one. Everything is in the audit
-log, under that admin's name, from "cli".
+Every command acts as the admin, the box's operator, whose password opens
+the admin UI (cafard passwd). Everything is in the audit log, under "admin",
+from "cli".
 
 It works on the database directly, beside a running server. Run it as the
 service's user, or as root: it gives the database back to the owner of the
@@ -50,7 +49,6 @@ func adminCommand(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprint(stderr, adminUsage) }
 	path := fs.String("config", "", "configuration file (default "+defaultConfig+" if it exists)")
-	as := fs.String("as", "", "the admin to act as")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -69,7 +67,7 @@ func adminCommand(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "cafard:", err)
 		return 1
 	}
-	if err := runAdmin(context.Background(), cfg, *as, rest, stdout); err != nil {
+	if err := runAdmin(context.Background(), cfg, rest, stdout); err != nil {
 		var ref *access.Refusal
 		var usage usageError
 		switch {
@@ -90,34 +88,29 @@ type usageError string
 
 func (u usageError) Error() string { return string(u) }
 
-func runAdmin(ctx context.Context, cfg config.Config, as string, args []string, out io.Writer) error {
+// openState opens the service's database, and returns what to run when done
+// with it.
+func openState(ctx context.Context, cfg config.Config) (*store.Store, func(), error) {
 	// The state directory is the service's, created by it on its first
 	// start with its owner and mode. Creating it here, as whoever runs this,
 	// would leave the service unable to open its own database.
 	if _, err := os.Stat(cfg.StateDir); err != nil {
-		return fmt.Errorf("no state directory at %s: start cafard once first (rc-service cafard start), or check -config", cfg.StateDir)
+		return nil, nil, fmt.Errorf("no state directory at %s: start cafard once first (rc-service cafard start), or check -config", cfg.StateDir)
 	}
-	dbPath := filepath.Join(cfg.StateDir, "cafard.db")
-	st, err := store.Open(ctx, dbPath)
+	st, err := store.Open(ctx, filepath.Join(cfg.StateDir, "cafard.db"))
+	if err != nil {
+		return nil, nil, err
+	}
+	return st, func() { st.Close(); giveBack(cfg.StateDir) }, nil
+}
+
+func runAdmin(ctx context.Context, cfg config.Config, args []string, out io.Writer) error {
+	st, done, err := openState(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	defer giveBack(cfg.StateDir)
-	defer st.Close()
-	a := &adminCmd{st: st, acc: access.New(st), cfg: cfg, out: out}
-
-	if args[0] == "create" && len(args) >= 3 && args[1] == "person" {
-		admins, err := st.Admins(ctx)
-		if err != nil {
-			return err
-		}
-		if len(admins) == 0 {
-			return a.firstAdmin(ctx, args[2], args[3:])
-		}
-	}
-	if err := a.actAs(ctx, as); err != nil {
-		return err
-	}
+	defer done()
+	a := &adminCmd{st: st, acc: access.New(st), cfg: cfg, out: out, who: access.Admin("cli")}
 	switch args[0] {
 	case "create":
 		if len(args) < 3 {
@@ -159,52 +152,6 @@ type adminCmd struct {
 	cfg config.Config
 	out io.Writer
 	who access.Who
-}
-
-// actAs picks the admin the command acts as.
-func (a *adminCmd) actAs(ctx context.Context, name string) error {
-	admins, err := a.st.Admins(ctx)
-	if err != nil {
-		return err
-	}
-	if len(admins) == 0 {
-		return errors.New("cafard has no admin yet: create one first, with cafard admin create person NAME")
-	}
-	var me store.Identity
-	switch {
-	case name != "":
-		i, err := a.st.IdentityByName(ctx, name)
-		if err != nil || !i.Admin || i.Deleted() {
-			return fmt.Errorf("%s is not an admin", name)
-		}
-		me = i
-	case len(admins) == 1:
-		me = admins[0]
-	default:
-		var names []string
-		for _, ad := range admins {
-			names = append(names, ad.Name)
-		}
-		return fmt.Errorf("there are several admins (%s): say which with -as", strings.Join(names, ", "))
-	}
-	a.who = access.Who{Identity: me, Origin: "cli"}
-	return nil
-}
-
-func (a *adminCmd) firstAdmin(ctx context.Context, name string, args []string) error {
-	fs := flag.NewFlagSet("create person", flag.ContinueOnError)
-	display := fs.String("name", "", "display name")
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		return usageError(err.Error())
-	}
-	i, err := a.acc.CreateFirstAdmin(ctx, name, *display, "cli")
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(a.out, "created person %s, the first admin\n\n", i.Name)
-	a.who = access.Who{Identity: i, Origin: "cli"}
-	return a.printLink(ctx, i, 0)
 }
 
 // printLink makes a one-time link for i and prints it, with a QR code to
@@ -470,8 +417,6 @@ func (a *adminCmd) list(ctx context.Context) error {
 			state = "removed"
 		case !i.Enabled:
 			state = "paused"
-		case i.Admin:
-			state = "admin"
 		}
 		ps, _ := a.st.ProjectsOf(ctx, i.ID)
 		var names []string

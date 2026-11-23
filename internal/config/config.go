@@ -1,9 +1,9 @@
 // Package config reads cafard's configuration file.
 //
-// The file holds where cafard listens and where its state lives, and nothing
-// else: people, agents, projects and every setting the admin UI changes live
-// in the database, so that nothing needs a restart and a backup is the whole
-// of an install.
+// The file holds where cafard listens, where its state lives, and the hash
+// of the admin password, and nothing else: people, agents, projects and
+// every setting the admin UI changes live in the database, so that nothing
+// needs a restart and a backup is the whole of an install.
 package config
 
 import (
@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -36,7 +37,11 @@ type Config struct {
 	// at, as it appears in join links and in the MCP config the join script
 	// writes. Empty means http://<listen>.
 	PublicURL string `yaml:"public-url"`
-	Log       Log    `yaml:"log"`
+	// AdminPasswordHash opens the admin UI: argon2id, as `cafard passwd`
+	// writes it. Empty, nobody can sign in to the admin UI; `cafard admin` on
+	// the box still works.
+	AdminPasswordHash string `yaml:"admin-password-hash,omitempty"`
+	Log               Log    `yaml:"log"`
 }
 
 type Log struct {
@@ -85,6 +90,9 @@ func (c Config) Validate() error {
 	}
 	if c.StateDir == "" {
 		return errors.New("config: state-dir is empty")
+	}
+	if c.AdminPasswordHash != "" && !strings.HasPrefix(c.AdminPasswordHash, "$argon2id$") {
+		return errors.New("config: admin-password-hash is not an argon2id hash: set it with cafard passwd")
 	}
 	pub, err := splitAddr("listen", c.Listen)
 	if err != nil {

@@ -47,6 +47,7 @@ Usage:
   cafard serve [-config FILE]    run the public and the admin listener
   cafard config [-config FILE]   check the configuration, print it in full
   cafard admin  COMMAND          people, agents, devices and projects (cafard admin -h)
+  cafard passwd [-config FILE]   set the admin password, which opens the admin UI
   cafard version                 print the build
 
 The configuration is described in configs/config.example.yaml.
@@ -64,6 +65,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return showConfig(args[1:], stdout, stderr)
 	case "admin":
 		return adminCommand(args[1:], stdout, stderr)
+	case "passwd":
+		return passwdCommand(args[1:], os.Stdin, stdout, stderr)
 	case "version", "-version", "--version":
 		fmt.Fprintln(stdout, "cafard", version.String())
 		return 0
@@ -167,6 +170,7 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	}
 	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Attention: attention.New(st, acc), Hub: hub, Admin: admin.Config{
 		Listen: cfg.Listen, AdminListen: cfg.AdminListen, PublicURL: cfg.URL(), StateDir: cfg.StateDir, MaxUpload: api.MaxUpload,
+		PasswordHash: cfg.AdminPasswordHash,
 	}})
 
 	pubLn, err := net.Listen("tcp", cfg.Listen)

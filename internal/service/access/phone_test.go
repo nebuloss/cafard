@@ -23,7 +23,7 @@ func TestSignInAnotherPhone(t *testing.T) {
 	}
 	// A password link sent by an admin meanwhile is not cancelled by the code,
 	// nor the code by it.
-	pwCode, _, _ := w.svc.IssueLink(ctx, w.guillaume, camille.Identity, 0)
+	pwCode, _, _ := w.svc.IssueLink(ctx, w.admin, camille.Identity, 0)
 
 	id, cookie, err := w.svc.RedeemSigninLink(ctx, code, "10.0.50.130", "Mozilla/5.0 (iPhone) Safari/604")
 	if err != nil || id.Name != "camille" {
@@ -39,7 +39,7 @@ func TestSignInAnotherPhone(t *testing.T) {
 		t.Errorf("the password link after a sign-in code: %v", err)
 	}
 	// A join link is not a sign-in code.
-	other, _, _ := w.svc.IssueLink(ctx, w.guillaume, w.labBench.Identity, 0)
+	other, _, _ := w.svc.IssueLink(ctx, w.admin, w.labBench.Identity, 0)
 	if _, _, err := w.svc.RedeemSigninLink(ctx, other, "x", ""); !Is(err, NotAllowed) {
 		t.Errorf("an install link used to sign in: %v", err)
 	}
@@ -48,7 +48,6 @@ func TestSignInAnotherPhone(t *testing.T) {
 func TestWhoMayDeleteAFile(t *testing.T) {
 	w := newWorld(t)
 	wantCode(t, "the sender", w.svc.CanDeleteFile(ctx, w.devBuild, w.devBuild.ID), "")
-	wantCode(t, "an admin", w.svc.CanDeleteFile(ctx, w.guillaume, w.devBuild.ID), "")
 	wantCode(t, "another member", w.svc.CanDeleteFile(ctx, w.devCode, w.devBuild.ID), NotAllowed)
-	wantCode(t, "a non-admin person", w.svc.CanDeleteFile(ctx, w.camille, w.devBuild.ID), NotAllowed)
+	wantCode(t, "a person", w.svc.CanDeleteFile(ctx, w.camille, w.devBuild.ID), NotAllowed)
 }

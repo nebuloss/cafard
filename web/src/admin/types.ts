@@ -27,7 +27,6 @@ export interface Link {
 
 export interface Member extends MemberRef {
   description?: string;
-  admin?: boolean;
   enabled: boolean;
   removed?: boolean;
   joined: boolean;

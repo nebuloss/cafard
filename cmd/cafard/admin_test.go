@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"cafard/internal/config"
+	"cafard/internal/service/access"
 )
 
 type box struct {
@@ -66,17 +67,11 @@ var (
 func TestAdminFromAnEmptyInstall(t *testing.T) {
 	b := newBox(t)
 
-	// Nothing works before the first admin.
-	if out, code := b.admin("create", "project", "be98"); code == 0 || !strings.Contains(out, "no admin yet") {
-		t.Errorf("before the first admin: %d %s", code, out)
+	// The box acts as the admin from the start: people are members only.
+	if out := b.must("create", "person", "guillaume", "-name", "Guillaume"); !linkRE.MatchString(out) || !strings.Contains(out, "█") {
+		t.Errorf("a person, with a join link and its QR code: %s", out)
 	}
-	if out := b.must("create", "person", "guillaume", "-name", "Guillaume"); !strings.Contains(out, "the first admin") ||
-		!linkRE.MatchString(out) || !strings.Contains(out, "█") {
-		t.Errorf("first person, with a join link and its QR code: %s", out)
-	}
-	if out := b.must("create", "person", "camille"); strings.Contains(out, "first admin") {
-		t.Errorf("second person became admin: %s", out)
-	}
+	b.must("create", "person", "camille")
 	b.must("create", "project", "be98", "-quota", "2G", "-member", "guillaume")
 	b.must("create", "project", "zeeos")
 
@@ -107,7 +102,7 @@ func TestAdminFromAnEmptyInstall(t *testing.T) {
 	}
 
 	list := b.must("list")
-	for _, want := range []string{"guillaume", "admin", "dev-build", "device", "be98", "zeeos", "camille"} {
+	for _, want := range []string{"guillaume", "person", "dev-build", "device", "be98", "zeeos", "camille"} {
 		if !strings.Contains(list, want) {
 			t.Errorf("list lacks %q:\n%s", want, list)
 		}
@@ -162,19 +157,6 @@ func TestAdminFromAnEmptyInstall(t *testing.T) {
 	}
 }
 
-// -as names the admin to act as, and only an admin will do.
-func TestAdminActsAsAnAdminOnly(t *testing.T) {
-	b := newBox(t)
-	b.must("create", "person", "guillaume")
-	b.must("create", "person", "camille")
-	if out, code := b.admin("-as", "camille", "create", "project", "speedtest"); code != 1 || !strings.Contains(out, "camille is not an admin") {
-		t.Errorf("-as a non-admin: %d %s", code, out)
-	}
-	if out := b.must("-as", "guillaume", "create", "project", "speedtest"); !strings.Contains(out, "created project speedtest") {
-		t.Errorf("-as guillaume: %s", out)
-	}
-}
-
 func TestAdminNeedsTheStateDirectory(t *testing.T) {
 	b := newBox(t)
 	os.RemoveAll(b.cfg.StateDir)
@@ -225,4 +207,52 @@ func (b *box) serve() string {
 		b.t.Fatal("server did not start")
 	}
 	return ""
+}
+
+// passwd writes the hash into the configuration, in place of the example's
+// comment, and the server's check accepts the password.
+func TestPasswd(t *testing.T) {
+	b := newBox(t)
+	os.WriteFile(b.path, append(must(os.ReadFile(b.path)), []byte("# admin-password-hash: \"$argon2id$…\"\n")...), 0o600)
+	passwd := func(input string) (string, int) {
+		t.Helper()
+		f, err := os.CreateTemp(t.TempDir(), "stdin")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.WriteString(input)
+		f.Seek(0, 0)
+		defer f.Close()
+		var out, errOut strings.Builder
+		code := passwdCommand([]string{"-config", b.path}, f, &out, &errOut)
+		return out.String() + errOut.String(), code
+	}
+	if out, code := passwd("short\n"); code != 1 || !strings.Contains(out, "at least") {
+		t.Errorf("a short password: %d %s", code, out)
+	}
+	if out, code := passwd("Admin000\n"); code != 0 || !strings.Contains(out, "Restart cafard") {
+		t.Fatalf("passwd: %d %s", code, out)
+	}
+	cfg, err := config.Load(b.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !access.CheckAdminPassword(cfg.AdminPasswordHash, "Admin000") || access.CheckAdminPassword(cfg.AdminPasswordHash, "Admin001") {
+		t.Errorf("the hash written does not check: %q", cfg.AdminPasswordHash)
+	}
+	if n := strings.Count(string(must(os.ReadFile(b.path))), "admin-password-hash"); n != 1 {
+		t.Errorf("%d admin-password-hash lines", n)
+	}
+	// Again: the line is replaced, not added.
+	passwd("another password\n")
+	if n := strings.Count(string(must(os.ReadFile(b.path))), "admin-password-hash"); n != 1 {
+		t.Errorf("after a second passwd, %d admin-password-hash lines", n)
+	}
+}
+
+func must(b []byte, err error) []byte {
+	if err != nil {
+		panic(err)
+	}
+	return b
 }

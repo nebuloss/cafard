@@ -16,26 +16,13 @@ type fixture struct {
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	s, _ := open(t)
-	g, err := s.CreateFirstAdmin(ctx, Identity{Name: "guillaume"}, audit("bootstrap"))
+	g, err := s.CreateIdentity(ctx, Identity{Name: "guillaume", Kind: Person}, audit("create"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	dc, _ := s.CreateIdentity(ctx, Identity{Name: "dev-code", Kind: Agent}, audit("create"))
 	p, _ := s.CreateProject(ctx, Project{Name: "be98", RetentionDays: 30, QuotaBytes: 5e9}, audit("create"))
 	return fixture{s: s, guillaume: g, devCode: dc, be98: p}
-}
-
-func TestFirstAdminOnlyOnce(t *testing.T) {
-	f := newFixture(t)
-	if !f.guillaume.Admin || f.guillaume.Kind != Person {
-		t.Fatalf("first admin: %+v", f.guillaume)
-	}
-	if _, err := f.s.CreateFirstAdmin(ctx, Identity{Name: "intruder"}, audit("bootstrap")); !errors.Is(err, ErrHasAdmin) {
-		t.Errorf("a second first admin: %v, want ErrHasAdmin", err)
-	}
-	if _, err := f.s.IdentityByName(ctx, "intruder"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("the refused first admin was created anyway: %v", err)
-	}
 }
 
 func TestTokens(t *testing.T) {

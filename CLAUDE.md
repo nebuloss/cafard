@@ -121,9 +121,12 @@ them.
 `go doc ./internal/httpapi/api`, `./internal/httpapi/admin` and
 `./internal/httpapi/join` list the routes. To try a deployed box:
 `scripts/devdeploy.sh` puts the pushed branch in a Proxmox container;
-`cafard admin create person NAME` inside it makes the first admin and prints
-their join link with a QR code, and `cafard admin link NAME` makes a new one.
-The admin UI is then at the admin listener's address.
+`cafard passwd` inside it writes the admin password's hash into
+`/etc/cafard/config.yaml` (restart to apply), and the admin UI is then at the
+admin listener's address, opened with that password alone, as claudication's
+is. The admin is the box's operator, not a person: `cafard admin create
+person NAME` makes a member and prints their join link with a QR code, and
+`cafard admin link NAME` makes a new one.
 
 The tests need no credentials and no network. A package whose tests build an
 HTTP client calls `testenv.Offline` from its `TestMain`. Anything that talks to

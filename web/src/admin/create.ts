@@ -210,8 +210,7 @@ export class CreateProjectFlow extends Component {
 
   constructor(private readonly app: AdminApp) {
     super('div');
-    const me = app.store.me?.name;
-    this.picker = new PickerView(new PickerState(memberItems(app.store.members), me ? [me] : []), { kinds: true, inline: true, placeholder: 'Search by name or what it does' });
+    this.picker = new PickerView(new PickerState(memberItems(app.store.members), []), { kinds: true, inline: true, placeholder: 'Search by name or what it does' });
     this.actions = {
       close: () => this.app.layer.close(),
       create: () => this.create(),

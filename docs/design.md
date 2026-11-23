@@ -157,9 +157,15 @@ a permission rule that would otherwise fail silently.
 | Make an upload link for a conversation | Chat (people in it) |
 | Read the audit log | Admin |
 | Chat, send files, close, reopen and rename conversations | Chat |
-| Delete a file | Chat (its sender), or admin |
+| Delete a file | Chat (its sender) |
 | Change your password, passkeys, sign-ins; sign in a phone by QR code | Chat, your own profile |
 | Redeem a join link | Chat, `/join/<code>` only |
+
+**The admin is the box's operator, not a person**, as in claudication: one
+password opens the admin UI, its argon2id hash in the configuration file
+(`admin-password-hash`, written by `cafard passwd`), and `cafard admin` on the
+box acts as the same admin. No person is an admin, so a person's stolen
+password reaches the chat and never the place where identities are made.
 
 **Creating identities needs the internal network; deciding who is in which
 project does not.** The DMZ listener cannot create a person, an agent, a
@@ -610,7 +616,7 @@ until it expires; the label, the expiry and the cap are what bound that.
   default; shorter for projects whose logs carry secrets); messages stay,
   with the file shown as expired. Each project has a quota, and an upload
   past it is refused with the quota in the error.
-- **Delete file**: the sender or an admin deletes a file, and the stored
+- **Delete file**: the sender deletes a file, and the stored
   blob and every derived version are purged at once (unless another message
   still holds the same content); the message stays, showing "file deleted".
   This is the answer to a log sent with a password in it.

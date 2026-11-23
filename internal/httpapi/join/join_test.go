@@ -35,8 +35,7 @@ func newRig(t *testing.T) *rig {
 	}
 	t.Cleanup(func() { st.Close() })
 	acc := access.New(st)
-	g, _ := acc.CreateFirstAdmin(ctx, "guillaume", "", "test")
-	r := &rig{acc: acc, admin: access.Who{Identity: g, Origin: "test"}}
+	r := &rig{acc: acc, admin: access.Admin("test")}
 	r.camille, _ = acc.CreateIdentity(ctx, r.admin, access.NewIdentity{Kind: store.Person, Name: "camille", DisplayName: "Camille"})
 	r.devCode, _ = acc.CreateIdentity(ctx, r.admin, access.NewIdentity{Kind: store.Agent, Name: "dev-code"})
 	mux := http.NewServeMux()

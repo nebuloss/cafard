@@ -90,8 +90,7 @@ func (s *Service) Signins(ctx context.Context, who Who) ([]store.Signin, error) 
 	return s.st.Signins(ctx, who.ID)
 }
 
-// CanDeleteFile is whether who may delete a file: its sender, or an admin
-// (docs/design.md, "Files").
+// CanDeleteFile is whether who may delete a file: its sender.
 func (s *Service) CanDeleteFile(ctx context.Context, who Who, authorID int64) error {
 	if err := active(who.Identity); err != nil {
 		return err
@@ -99,8 +98,5 @@ func (s *Service) CanDeleteFile(ctx context.Context, who Who, authorID int64) er
 	if who.ID == authorID {
 		return nil
 	}
-	if who.Kind == store.Person && who.Admin {
-		return nil
-	}
-	return refuse(NotAllowed, "Only the member who sent a file, or an admin, can delete it.")
+	return refuse(NotAllowed, "Only the member who sent a file can delete it.")
 }

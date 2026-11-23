@@ -1,5 +1,5 @@
 import { ApiClient } from '@shared/api';
-import type { AuditEntry, Config, Link, Member, MemberRef, Project } from './types';
+import type { AuditEntry, Config, Link, Member, Project } from './types';
 
 /**
  * AdminStore holds what the admin UI shows, read from /admin/api. Every
@@ -7,7 +7,8 @@ import type { AuditEntry, Config, Link, Member, MemberRef, Project } from './typ
  * screen is what the server holds rather than what the page guessed.
  */
 export class AdminStore {
-  me: MemberRef | null = null;
+  /** Whether a sign-in is open. */
+  signedIn = false;
   members: Member[] = [];
   projects: Project[] = [];
   audit: AuditEntry[] = [];
@@ -16,24 +17,26 @@ export class AdminStore {
 
   constructor(readonly api: ApiClient) {}
 
-  async signIn(username: string, password: string): Promise<void> {
-    const r = await this.api.post<{ member: MemberRef }>('/signin', { username, password });
-    this.me = r.member;
+  /** Signs in with the admin password, the only one that opens this UI. */
+  async signIn(password: string): Promise<void> {
+    await this.api.post('/signin', { password });
+    this.signedIn = true;
   }
 
   async signOut(): Promise<void> {
     await this.api.post('/signout');
-    this.me = null;
+    this.signedIn = false;
   }
 
-  /** Who is signed in, or null; never throws for a signed-out page. */
-  async whoAmI(): Promise<MemberRef | null> {
+  /** Whether a sign-in is open; never throws for a signed-out page. */
+  async whoAmI(): Promise<boolean> {
     try {
-      this.me = (await this.api.get<{ member: MemberRef }>('/me')).member;
+      await this.api.get('/me');
+      this.signedIn = true;
     } catch {
-      this.me = null;
+      this.signedIn = false;
     }
-    return this.me;
+    return this.signedIn;
   }
 
   /** Reads what every view needs, and what the view named needs besides. */

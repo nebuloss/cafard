@@ -2,9 +2,12 @@
 // (docs/design.md, "Who manages what"). It is where people, agents, devices
 // and projects are created, and where membership is changed in one picker.
 //
-// Every route but sign-in needs an admin's sign-in, a cookie scoped to this
-// listener; access.Session refuses a person who is no longer an admin at the
-// next request. Writes refuse a cross-site request: the cookie is
+// The admin UI opens with the admin password alone, as claudication's does
+// (service/access, "The admin is the box's operator"): no username, and no
+// person's password. Its hash is the configuration's admin-password-hash.
+// Every route but sign-in needs an admin sign-in, a cookie scoped to this
+// listener, kept in memory: a restart, which a new password needs, signs
+// everyone out. Writes refuse a cross-site request: the cookie is
 // SameSite=Strict, and Sec-Fetch-Site or Origin is checked as well, because
 // a SameSite cookie alone does not cover every browser that will open this.
 //
@@ -12,12 +15,12 @@
 // admin's name in the audit log. It reads the store directly for what it
 // lists, which only admins reach.
 //
-//	POST   /admin/api/signin                  {username, password}
+//	POST   /admin/api/signin                  {password}
 //	POST   /admin/api/signout
 //	GET    /admin/api/me
 //	GET    /admin/api/members                 people, agents and devices
 //	POST   /admin/api/members                 create one; a person or an agent comes with its link
-//	PATCH  /admin/api/members/{name}          enabled, admin, description, projects (the full set)
+//	PATCH  /admin/api/members/{name}          enabled, description, projects (the full set)
 //	DELETE /admin/api/members/{name}
 //	POST   /admin/api/members/{name}/link     a new join, password or install link
 //	POST   /admin/api/members/{name}/token    a new token, for a device
@@ -62,16 +65,19 @@ const cookieName = "cafard_admin"
 type Config struct {
 	Listen, AdminListen, PublicURL, StateDir string
 	MaxUpload                                int64
+	// PasswordHash is the admin password's, from the configuration file.
+	PasswordHash string
 }
 
 type Admin struct {
-	log    *slog.Logger
-	st     *store.Store
-	acc    *access.Service
-	cfg    Config
-	ui     fs.FS
-	limit  *ratelimit.Limiter
-	secure bool
+	log      *slog.Logger
+	st       *store.Store
+	acc      *access.Service
+	cfg      Config
+	ui       fs.FS
+	limit    *ratelimit.Limiter
+	secure   bool
+	sessions *sessions
 }
 
 // New builds the admin surface. ui is the admin UI's files, served at /.
@@ -79,7 +85,7 @@ func New(log *slog.Logger, st *store.Store, acc *access.Service, cfg Config, ui 
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &Admin{log: log, st: st, acc: acc, cfg: cfg, ui: ui, limit: ratelimit.New(10, time.Minute),
+	return &Admin{log: log, st: st, acc: acc, cfg: cfg, ui: ui, limit: ratelimit.New(10, time.Minute), sessions: newSessions(),
 		secure: strings.HasPrefix(cfg.PublicURL, "https://")}
 }
 
@@ -131,13 +137,11 @@ func (a *Admin) auth(next handler) http.HandlerFunc {
 			value = c.Value
 		}
 		from := clientIP(r)
-		id, si, err := a.acc.Session(r.Context(), access.AdminSurface, value, from)
-		if err != nil {
-			a.fail(w, r, err)
+		if !a.sessions.valid(value) {
+			writeError(w, http.StatusUnauthorized, string(access.Unauthorized), "You are signed out. Sign in again.")
 			return
 		}
-		r = r.WithContext(withSignin(r.Context(), si))
-		next(w, r, access.Who{Identity: id, Origin: "admin · " + from})
+		next(w, r, access.Admin("admin · "+from))
 	}
 }
 
@@ -193,34 +197,40 @@ func (a *Admin) signin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "cross_site", "Writes from another site are refused.")
 		return
 	}
-	var in struct{ Username, Password string }
+	var in struct{ Password string }
 	if err := readJSON(r, &in); err != nil {
 		a.fail(w, r, err)
 		return
 	}
 	from := clientIP(r)
-	// Per address and per username: one guesser cannot try many names fast,
-	// and many addresses cannot try one name fast.
-	for _, key := range []string{"ip " + from, "user " + strings.ToLower(in.Username)} {
+	// Per address and overall: one guesser cannot try fast, and many
+	// addresses together cannot either, since there is one password to guess.
+	for _, key := range []string{"ip " + from, "admin"} {
 		if ok, wait := a.limit.Allow(key); !ok {
 			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 			writeError(w, http.StatusTooManyRequests, "slow_down", fmt.Sprintf("Too many attempts. Try again in %d seconds.", int(wait.Seconds())+1))
 			return
 		}
 	}
-	cookie, id, err := a.acc.SignIn(r.Context(), access.AdminSurface, in.Username, in.Password, from, r.UserAgent())
-	if err != nil {
-		a.fail(w, r, err)
+	if a.cfg.PasswordHash == "" {
+		access.CheckAdminPassword("", in.Password)
+		writeError(w, http.StatusForbidden, string(access.NotAdmin), "No admin password is set. Set one on the box with cafard passwd, then restart cafard.")
 		return
 	}
+	if !access.CheckAdminPassword(a.cfg.PasswordHash, in.Password) {
+		writeError(w, http.StatusForbidden, string(access.Wrong), "That is not the admin password.")
+		return
+	}
+	cookie := a.sessions.start()
+	a.log.Info("admin signed in", "from", from, "browser", access.DescribeAgent(r.UserAgent()))
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: cookie, Path: "/", HttpOnly: true, Secure: a.secure,
-		SameSite: http.SameSiteStrictMode, MaxAge: int((12 * time.Hour).Seconds())})
-	writeJSON(w, http.StatusOK, map[string]any{"member": memberOf(id)})
+		SameSite: http.SameSiteStrictMode, MaxAge: int(sessionLife.Seconds())})
+	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
 func (a *Admin) signout(w http.ResponseWriter, r *http.Request, who access.Who) {
-	if si, ok := signinFrom(r.Context()); ok {
-		a.acc.SignOut(r.Context(), who, si)
+	if c, err := r.Cookie(cookieName); err == nil {
+		a.sessions.end(c.Value)
 	}
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, Secure: a.secure,
 		SameSite: http.SameSiteStrictMode, MaxAge: -1})
@@ -228,7 +238,7 @@ func (a *Admin) signout(w http.ResponseWriter, r *http.Request, who access.Who) 
 }
 
 func (a *Admin) me(w http.ResponseWriter, r *http.Request, who access.Who) {
-	writeJSON(w, http.StatusOK, map[string]any{"member": memberOf(who.Identity), "version": version.Version})
+	writeJSON(w, http.StatusOK, map[string]any{"admin": true, "version": version.Version})
 }
 
 // Wire shapes.
@@ -275,7 +285,6 @@ func utc(t *time.Time) *time.Time {
 type memberJSON struct {
 	memberRef
 	Description string     `json:"description,omitempty"`
-	Admin       bool       `json:"admin,omitempty"`
 	Enabled     bool       `json:"enabled"`
 	Removed     bool       `json:"removed,omitempty"`
 	Joined      bool       `json:"joined"`
@@ -328,7 +337,7 @@ func (a *Admin) memberList(r *http.Request) ([]memberJSON, error) {
 		if err != nil {
 			return nil, err
 		}
-		m := memberJSON{memberRef: memberOf(i), Description: i.Description, Admin: i.Admin, Enabled: i.Enabled,
+		m := memberJSON{memberRef: memberOf(i), Description: i.Description, Enabled: i.Enabled,
 			Removed: i.Deleted(), Projects: []string{}, Signins: counts[i.ID]}
 		for _, p := range ps {
 			m.Projects = append(m.Projects, p.Name)
@@ -496,7 +505,6 @@ func sortedKeys(m map[string]bool) []string {
 func (a *Admin) patchMember(w http.ResponseWriter, r *http.Request, who access.Who) {
 	var in struct {
 		Enabled     *bool     `json:"enabled"`
-		Admin       *bool     `json:"admin"`
 		Description *string   `json:"description"`
 		Projects    *[]string `json:"projects"`
 	}
@@ -513,8 +521,6 @@ func (a *Admin) patchMember(w http.ResponseWriter, r *http.Request, who access.W
 	switch {
 	case in.Enabled != nil && *in.Enabled != i.Enabled:
 		err = a.acc.SetPaused(ctx, who, i, !*in.Enabled)
-	case in.Admin != nil && *in.Admin != i.Admin:
-		err = a.acc.SetAdmin(ctx, who, i, *in.Admin)
 	case in.Description != nil && strings.TrimSpace(*in.Description) != i.Description:
 		err = a.acc.SetDescription(ctx, who, i, strings.TrimSpace(*in.Description))
 	case in.Projects != nil:
@@ -599,13 +605,11 @@ func (a *Admin) signins(w http.ResponseWriter, r *http.Request, who access.Who) 
 		From     string    `json:"from"`
 		LastUsed time.Time `json:"last_used"`
 		Since    time.Time `json:"since"`
-		Current  bool      `json:"current,omitempty"`
 	}
-	cur, _ := signinFrom(r.Context())
 	out := []signinJSON{}
 	for _, s := range ss {
 		out = append(out, signinJSON{ID: s.ID, Surface: s.Surface, What: access.DescribeAgent(s.UserAgent), From: s.From,
-			LastUsed: s.LastUsed.UTC(), Since: s.CreatedAt.UTC(), Current: s.ID == cur.ID})
+			LastUsed: s.LastUsed.UTC(), Since: s.CreatedAt.UTC()})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"signins": out})
 }
