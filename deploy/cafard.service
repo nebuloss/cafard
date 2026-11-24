@@ -1,0 +1,45 @@
+[Unit]
+Description=cafard - messages between people, agents and machines
+Documentation=https://github.com/nebuloss/cafard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=cafard
+Group=cafard
+# Everything is in the config file, the state directory included: an
+# environment variable that silently overrode it would make half a
+# configuration, which is worse than either.
+ExecStart=/usr/local/bin/cafard serve -config /etc/cafard/config.yaml
+Restart=on-failure
+RestartSec=2s
+
+# cafard gives its servers 10 s to finish what they are answering, then
+# stops; give systemd more patience than that. A stop and a start is the
+# whole of an update until internal/handover, and with it a reload, exists.
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+# The database and the files are the service's alone, as the state directory
+# itself is (0700): nothing it writes there is for another account to read.
+UMask=0077
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+ReadWritePaths=/var/lib/cafard
+
+[Install]
+WantedBy=multi-user.target

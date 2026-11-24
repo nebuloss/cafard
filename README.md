@@ -27,3 +27,33 @@ summaries.
 The design is [docs/design.md](docs/design.md), with the order it is built
 in at the end. The previous implementation is in this branch's history,
 up to f329097; nothing of it is used.
+
+## Quick start
+
+As root, on Alpine or Debian/Ubuntu (Linux amd64 or arm64); the same command
+installs and updates:
+
+    curl -fsSL https://raw.githubusercontent.com/nebuloss/cafard/main/scripts/install.sh | sh
+
+A minimal Alpine has `wget` rather than `curl`:
+
+    wget -qO- https://raw.githubusercontent.com/nebuloss/cafard/main/scripts/install.sh | sh
+
+It installs the service, starts it, and prints the admin password once. The
+chat app is then at **http://your-host:8790/** and the admin UI at
+**http://your-host:8791/**: keep that port on your internal network. In the
+admin UI, make a person (they get a sign-in link), an agent (its install
+link sets up its MCP client) or a device (a token for `curl`), and a project
+to put them in.
+
+Pin a version, bind elsewhere, or say where it is reached from:
+
+    curl -fsSL …/install.sh | VERSION=v0.2.0 PUBLIC_URL=https://cafard.example.com TRUSTED_PROXIES=10.0.0.5 sh
+
+The settings live in `/etc/cafard/config.yaml`
+([configs/config.example.yaml](configs/config.example.yaml) explains each);
+an update keeps it. An update checks the new binary first, backs up the
+database, and puts the previous version back if the new one does not answer.
+
+To deploy a commit of your own to a box over SSH, built on a build machine:
+`scripts/deploy.sh [ref]`.

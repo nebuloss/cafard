@@ -84,8 +84,9 @@ Writes that change access take a `store.AuditEntry` and record it in the same
 transaction; add a new one the same way.
 
 Still to copy from claudication rather than rewrite, as the steps need them:
-`internal/handover`, `internal/secret` and `scripts/install.sh`
-(`internal/mcp` and the image fitting, `internal/imagefit`, are in). Adapt their comments to cafard;
+`internal/handover` and `internal/secret` (`internal/mcp`, the image
+fitting in `internal/imagefit`, and `scripts/install.sh` are in; until the
+handover is, an update stops and starts). Adapt their comments to cafard;
 keep the measurements that still apply.
 
 What a screen shows reaches it through `internal/live`: every write marks a
@@ -121,7 +122,8 @@ them.
 
 `go doc ./internal/httpapi/api`, `./internal/httpapi/admin` and
 `./internal/httpapi/join` list the routes. To try a deployed box:
-`scripts/devdeploy.sh` puts the pushed branch in a Proxmox container;
+`scripts/deploy.sh [ref]` builds a pushed commit on dev-build and installs it
+through `scripts/install.sh` (dmz-cafard, CT 409, by default);
 `cafard passwd` inside it writes the admin password's hash into
 `/etc/cafard/config.yaml` (restart to apply), and the admin UI is then at the
 admin listener's address, opened with that password alone, as claudication's

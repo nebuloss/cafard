@@ -22,17 +22,16 @@ DATE ?= $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" +%Y-%m-%dT%H:%M:%SZ 2>/dev/nu
 LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
 GOFLAGS := -trimpath -buildvcs=false
 
-# What a release is built for, as claudication's: the binary is pure Go
-# (modernc's SQLite), so every platform cross-compiles from one machine.
-PLATFORMS ?= linux/amd64 linux/arm64 linux/arm linux/riscv64 \
-             darwin/amd64 darwin/arm64 \
-             windows/amd64 windows/arm64 \
-             freebsd/amd64
+# What a release is built for: cafard is a server, run as a Linux service
+# (scripts/install.sh), on a PC or a container (amd64) or an ARM board
+# (arm64). The binary is pure Go, so another platform is one more word here
+# when someone needs it.
+PLATFORMS ?= linux/amd64 linux/arm64
 
 # gofmt from the pinned toolchain, not whichever is first on PATH.
 GOFMT = $(shell go env GOROOT)/bin/gofmt
 
-.PHONY: help build dist repro web web-deps typecheck test-web test test-norace vet fmt fmt-check tidy-check check clean
+.PHONY: help build dist repro unit web web-deps typecheck test-web test test-norace vet fmt fmt-check tidy-check check clean
 
 help:
 	@echo "make check        fmt-check, vet, tidy-check, typecheck, test-web, test: what CI runs"
@@ -117,6 +116,11 @@ repro: web
 	  echo; echo "NOT reproducible: the two builds differ"; \
 	  ls -l $(DIST)/repro/first $(DIST)/repro/second; exit 1; \
 	fi
+
+# deploy/cafard.service is what scripts/install.sh writes, generated from it
+# so the two cannot drift: run this after changing the unit in the script.
+unit:
+	env -i PATH="$$PATH" INSTALL_SH_SOURCED=1 sh -c '. scripts/install.sh; systemd_unit' > deploy/cafard.service
 
 test:
 	CGO_ENABLED=1 go test -race -count=1 ./...
