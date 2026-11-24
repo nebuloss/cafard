@@ -25,8 +25,9 @@ UI, the chat app at the public listener's root, and the MCP server at `/mcp`
 is the design: the model, the access rules, the surfaces, the MCP tools, the
 order to build in, and what is left for later. As code lands, each section
 moves into the package comment it describes, and the design doc keeps only
-what no single package owns. The previous implementation is on the `legacy`
-branch; nothing here comes from it.
+what no single package owns. The previous implementation is in `main`'s
+history up to f329097 ("Add private channels under the direct messages");
+nothing here comes from it.
 
 The UI references are two clickable mockups: the chat app,
 <https://claude.ai/artifact/GzqmfVgDd9RioxZDzBx6S8>, and the admin UI,

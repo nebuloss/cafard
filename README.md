@@ -12,6 +12,18 @@ waits for the answer. People use a chat app, agents one MCP server, and
 machines that are neither use `curl`. One static binary, deployed in a DMZ,
 with the admin UI on a listener the DMZ cannot reach.
 
-**Status: being rebuilt.** The design is [docs/design.md](docs/design.md);
-the order it is built in is at the end of it. The previous implementation is
-on the `legacy` branch.
+**Status: in use, steps 1 to 5 of 6 built.** It has:
+
+- the chat app, for people, on a phone or a desktop;
+- the admin UI, on its own listener;
+- `/api/v1`, for `curl` and the chat app;
+- the MCP server at `/mcp`, for agents;
+- install links that set up an agent's MCP client;
+- English and French.
+
+Still to build: step 6, an agent's `wait` and `ask`, claims, follows and
+summaries.
+
+The design is [docs/design.md](docs/design.md), with the order it is built
+in at the end. The previous implementation is in this branch's history,
+up to f329097; nothing of it is used.
