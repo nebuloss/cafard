@@ -34,7 +34,7 @@ export const ui = {
   iconBtn: 'state-layer grid size-10 shrink-0 place-items-center rounded-full text-on-surface-variant',
 
   /** A card: a tonal surface, its title and actions on one line (claudication's Card). */
-  card: 'flex min-w-0 flex-col gap-4 rounded-md3-xl bg-surface-container p-4 sm:p-6',
+  card: 'flex min-w-0 flex-col gap-5 rounded-md3-xl bg-surface-container p-5 sm:p-7',
   cardHead: 'flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-3',
   cardTitle: 'mr-auto text-xl leading-7 font-normal text-on-surface',
   cardAside: 'flex flex-wrap items-center gap-2 lg:flex-nowrap',
@@ -90,7 +90,7 @@ export const ui = {
   overline: 'text-[11px] font-semibold tracking-wider text-on-surface-variant uppercase',
 
   /** A screen's body: one column of full-width cards, a step apart (claudication's Page). */
-  page: 'flex flex-col gap-5',
+  page: 'flex flex-col gap-6',
   /** A figure on a tile (claudication's Stat): its label, the value, a hint. */
   stat: 'flex min-w-0 flex-col rounded-md3-xl bg-surface-container px-5 py-4 text-inherit no-underline',
   statValue: 'mt-1 truncate text-2xl leading-8 font-normal tabular-nums',
