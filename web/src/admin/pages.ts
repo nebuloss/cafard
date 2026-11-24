@@ -157,11 +157,17 @@ export class MemberPage extends ItemPage {
       return this.card(t('Sign-ins'), html`<div class="signins">${this.signinRows()}</div>`,
         html`<button class="${ui.btn('tonal', 'sm')}" data-act="relink" title="${t('Signs in the device that opens it')}">${t('New sign-in link')}</button>`);
     }
-    return this.card(t('Token'), html`<dl class="${ui.kv}"><dt>${t('Last used')}</dt><dd>${m.joined ? time.ago(m.last_used) : t('never')}</dd><dt>${t('From')}</dt><dd class="font-mono text-xs">${m.last_from || '-'}</dd></dl>`,
-      m.kind === 'agent'
+    // Until the machine has used its link, the link's own card above has
+    // the button that makes another; here it would be the same button twice.
+    const relink = !m.joined ? ''
+      : m.kind === 'agent'
         ? html`<button class="${ui.btn('tonal', 'sm')}" data-act="relink" title="${t('Run on the machine, it replaces the token')}">${t('New install link')}</button>`
-        : html`<button class="${ui.btn('tonal', 'sm')}" data-act="relink" title="${t('Run on the machine: it configures a new token for mouchard')}">${t('New setup link')}</button>
-          <button class="${ui.btn('tonal', 'sm')}" data-act="regen" title="${t('For a board with curl alone; the current token stops working at once')}">${t('Regenerate token')}</button>`);
+        : html`<button class="${ui.btn('tonal', 'sm')}" data-act="relink" title="${t('Run on the machine: it configures a new token for mouchard')}">${t('New setup link')}</button>`;
+    const regen = m.kind === 'device'
+      ? html`<button class="${ui.btn('tonal', 'sm')}" data-act="regen" title="${t('For a board with curl alone; the current token stops working at once')}">${t('Regenerate token')}</button>`
+      : '';
+    return this.card(t('Token'), html`<dl class="${ui.kv}"><dt>${t('Last used')}</dt><dd>${m.joined ? time.ago(m.last_used) : t('never')}</dd><dt>${t('From')}</dt><dd class="font-mono text-xs">${m.last_from || '-'}</dd></dl>`,
+      html`${relink}${regen}`);
   }
 
   private removeCard(m: Member): Html {
