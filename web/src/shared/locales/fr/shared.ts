@@ -37,6 +37,9 @@ export const shared: Record<string, string> = {
   '{add} to add, {remove} to remove.': '{add} à ajouter, {remove} à retirer.',
   'No change yet. Tick to add, untick to remove.': "Aucun changement pour l'instant. Cochez pour ajouter, décochez pour retirer.",
   // widgets.ts
+  'Theme: automatic': 'Thème : automatique',
+  'Theme: light': 'Thème : clair',
+  'Theme: dark': 'Thème : sombre',
   person: 'personne',
   agent: 'agent',
   device: 'appareil',

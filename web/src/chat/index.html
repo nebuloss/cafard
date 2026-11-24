@@ -4,7 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#8f4c33">
+<meta name="color-scheme" content="light dark">
+<!-- cafard has its own dark theme: Dark Reader stands back instead of
+     inverting it (its documented lock), and the reader picks the theme. -->
+<meta name="darkreader-lock">
+<meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141312" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="../shared/favicon.svg" type="image/svg+xml">
 <title>cafard</title>
 <script type="module" src="./main.ts"></script>

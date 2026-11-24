@@ -1,6 +1,8 @@
 import { Bytes } from './format';
 import { Html, html } from './html';
-import { LANGS, i18n, n, t } from './i18n';
+import { LANGS, i18n, n, t, type Lang } from './i18n';
+import { Theme, type ThemeName } from './theme';
+import { ui } from './ui';
 import { Icon } from './icons';
 
 /** Who something is, as far as drawing it goes. */
@@ -19,23 +21,89 @@ const AV_KIND: Record<string, string> = {
 };
 
 /**
- * The language switch at the top right of both UIs: one short code per
- * language, the current one filled. A click on another calls i18n.choose,
- * which reloads the page in it. The page that draws it maps the
- * "lang" action to LangToggle.choose.
+ * The language, as agendouille has it at the top right: a small dropdown
+ * showing the current flag and code, then the languages, each with its flag
+ * and its name in itself. Choosing another reloads the page in it. A native
+ * <details>, so it opens without script; a click elsewhere or Escape closes
+ * it. The page that draws it maps the "lang" action to LangMenu.choose.
+ *
+ * A flag stands for a language beside its name, never alone: French is not
+ * only France's, but the flag is what people scan for.
  */
-export class LangToggle {
+export class LangMenu {
+  private static readonly FLAGS: Record<Lang, string> = {
+    fr: '<rect width="10" height="20" fill="#002654"/><rect x="10" width="10" height="20" fill="#fff"/><rect x="20" width="10" height="20" fill="#ce1126"/>',
+    // The Union flag, simplified to read at 20 px: the saltires, then the cross.
+    en: '<rect width="30" height="20" fill="#012169"/><path d="M0 0L30 20M30 0L0 20" stroke="#fff" stroke-width="4"/><path d="M0 0L30 20M30 0L0 20" stroke="#c8102e" stroke-width="1.6"/><path d="M15 0v20M0 10h30" stroke="#fff" stroke-width="6"/><path d="M15 0v20M0 10h30" stroke="#c8102e" stroke-width="3.4"/>',
+  };
+
+  /** A language's flag, 3:2, rounded by the element's own radius. */
+  static flag(l: Lang, height = 14): Html {
+    return Html.raw(`<svg class="shrink-0 overflow-hidden rounded-[3px] ring-1 ring-on-surface/20" viewBox="0 0 30 20" width="${Math.round(height * 1.5)}" height="${height}" aria-hidden="true">${LangMenu.FLAGS[l]}</svg>`);
+  }
+
   static view(): Html {
-    const one = (l: (typeof LANGS)[number]) => {
-      const on = l.id === i18n.lang;
-      return html`<button type="button" class="grid h-7 min-w-8 place-items-center rounded-full px-2 text-[11.5px] font-bold tracking-wide uppercase ${on ? 'bg-secondary-container text-on-secondary-container' : 'state-layer text-on-surface-variant'}" data-act="lang" data-v="${l.id}" lang="${l.id}" aria-pressed="${String(on)}" title="${l.name}">${l.id}</button>`;
+    const cur = i18n.lang;
+    const name = LANGS.find((l) => l.id === cur)?.name ?? cur;
+    const item = (l: (typeof LANGS)[number]) => {
+      const on = l.id === cur;
+      return html`<button type="button" class="state-layer flex items-center gap-3 rounded-md3-m px-3 py-2 text-left text-sm whitespace-nowrap ${on ? 'font-semibold' : ''}" role="menuitemradio" aria-checked="${String(on)}" lang="${l.id}" data-act="lang" data-v="${l.id}">${LangMenu.flag(l.id, 15)}<span class="flex-1">${l.name}</span>${on ? Icon.of('check') : ''}</button>`;
     };
-    return html`<div class="inline-flex shrink-0 items-center gap-0.5 rounded-full p-0.5 ring-1 ring-outline-variant ring-inset" role="group" aria-label="${t('Language')}">${LANGS.map(one)}</div>`;
+    return html`<details class="lang-menu relative shrink-0" data-menu>
+      <summary class="state-layer inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-md3-full border border-outline-variant px-2.5 text-[13px] font-semibold text-on-surface-variant [&::-webkit-details-marker]:hidden [&_.ic]:size-4" title="${t('Language')}" aria-label="${t('Language')}: ${name}">${LangMenu.flag(cur, 13)}<span class="uppercase">${cur}</span>${Icon.of('chevDown')}</summary>
+      <div class="absolute right-0 z-50 mt-1.5 flex min-w-44 flex-col rounded-md3-l bg-surface-high p-1.5 text-on-surface elevation-2 [&_.ic]:size-4" role="menu">${LANGS.map(item)}</div></details>`;
   }
 
   static choose(el: HTMLElement): void {
     const l = LANGS.find((x) => x.id === el.dataset['v']);
+    el.closest('details')?.removeAttribute('open');
     if (l && l.id !== i18n.lang) i18n.choose(l.id);
+  }
+}
+
+// An open menu closes on a click outside it, or on Escape.
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    for (const d of Array.from(document.querySelectorAll<HTMLDetailsElement>('details[data-menu][open]'))) {
+      if (!d.contains(e.target as Node)) d.open = false;
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    for (const d of Array.from(document.querySelectorAll<HTMLDetailsElement>('details[data-menu][open]'))) {
+      d.open = false;
+      d.querySelector('summary')?.focus();
+    }
+  });
+}
+
+/**
+ * The theme, as agendouille has it: one button that cycles through
+ * following the system, light and dark, its icon saying which is on. The
+ * page maps the "theme" action to ThemeButton.cycle.
+ */
+export class ThemeButton {
+  private static label(th: ThemeName): string {
+    if (th === 'light') return t('Theme: light');
+    if (th === 'dark') return t('Theme: dark');
+    return t('Theme: automatic');
+  }
+
+  private static icon(th: ThemeName): Html {
+    return Icon.of(th === 'light' ? 'sun' : th === 'dark' ? 'moon' : 'contrast');
+  }
+
+  static view(): Html {
+    const th = Theme.current();
+    return html`<button type="button" class="${ui.iconBtn} shrink-0" data-act="theme" title="${ThemeButton.label(th)}" aria-label="${ThemeButton.label(th)}">${ThemeButton.icon(th)}</button>`;
+  }
+
+  static cycle(el: HTMLElement): void {
+    const th = Theme.next(Theme.current());
+    Theme.set(th);
+    el.title = ThemeButton.label(th);
+    el.setAttribute('aria-label', ThemeButton.label(th));
+    el.innerHTML = ThemeButton.icon(th).value;
   }
 }
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"cafard/internal/httpapi/httpx"
 	"cafard/internal/i18n"
 )
 
@@ -23,9 +24,10 @@ type pageData struct {
 	Sh, PS1 string
 	Clients []pageClient
 
-	// Filled in by page, in the request's language.
-	Lang i18n.Lang
-	Text pageText
+	// Filled in by page, in the request's language and the reader's theme.
+	Lang  i18n.Lang
+	Theme string
+	Text  pageText
 }
 
 // pageText is what the template says, in the page's language. The template
@@ -44,6 +46,7 @@ type pageClient struct {
 
 func page(w http.ResponseWriter, r *http.Request, status int, d pageData) {
 	d.Lang = i18n.FromRequest(r)
+	d.Theme = httpx.ThemeOf(r)
 	d.Text = pageText{
 		RunOn:    say(r, "Run on its machine, as the user its agents run as."),
 		OnDevice: say(r, "On this device, as"),
@@ -77,18 +80,27 @@ func until(l i18n.Lang, t time.Time) string {
 // do, so a person meets the same look on their phone before they have
 // signed in.
 var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
-<html lang="{{.Lang}}">
+<html lang="{{.Lang}}"{{with .Theme}} data-theme="{{.}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<!-- cafard has its own dark theme: Dark Reader stands back instead of
+     inverting it (its documented lock), and the reader picks the theme. -->
+<meta name="darkreader-lock">
+<meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141312" media="(prefers-color-scheme: dark)">
 <title>{{.Title}} · cafard</title>
 <style>
 :root { --primary:#8f4c33; --on-primary:#fff; --surface:#faf9f7; --on-surface:#1c1b19; --on-surface-variant:#4a4643;
   --surface-lowest:#fff; --outline-variant:#cbc5bf; --error:#ba1a1a; --error-container:#ffdad6; --success-container:#bcf0b4; --on-success-container:#002105; color-scheme: light; }
-@media (prefers-color-scheme: dark) { :root { --primary:#ffb59d; --on-primary:#55200a; --surface:#141312; --on-surface:#e9e5e1;
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) { --primary:#ffb59d; --on-primary:#55200a; --surface:#141312; --on-surface:#e9e5e1;
   --on-surface-variant:#c9c4be; --surface-lowest:#0f0e0d; --outline-variant:#4c4743; --error:#ffb4ab; --error-container:#93000a;
   --success-container:#235024; --on-success-container:#bcf0b4; color-scheme: dark; } }
+:root[data-theme=dark] { --primary:#ffb59d; --on-primary:#55200a; --surface:#141312; --on-surface:#e9e5e1;
+  --on-surface-variant:#c9c4be; --surface-lowest:#0f0e0d; --outline-variant:#4c4743; --error:#ffb4ab; --error-container:#93000a;
+  --success-container:#235024; --on-success-container:#bcf0b4; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--surface); color:var(--on-surface);
   font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:24px max(16px, env(safe-area-inset-left)); }
