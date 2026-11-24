@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"cafard/internal/client"
 )
 
 // agentOn makes an agent in project be98 on a served box and returns its
@@ -65,11 +67,11 @@ func messages(t *testing.T, addr, tok, conv string) []msg {
 func helper(t *testing.T, stdin string, args ...string) (string, string, int) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code := clientCommand(args[0], args[1:], strings.NewReader(stdin), &out, &errOut)
+	code := client.Command(args[0], args[1:], strings.NewReader(stdin), &out, &errOut)
 	return out.String(), errOut.String(), code
 }
 
-// say, send and log, against a real server, with the credentials the
+// cafard-client's say, send and log, against a real server, with the credentials the
 // environment gives.
 func TestHelpersSend(t *testing.T) {
 	b := newBox(t)
@@ -178,17 +180,5 @@ func TestCredentialsFromHome(t *testing.T) {
 	}
 	if _, errOut, code := helper(t, "", "say", "be98", "hi"); code != 2 || !strings.Contains(errOut, "project/conversation") {
 		t.Errorf("a bad address: %d %q", code, errOut)
-	}
-}
-
-func TestPartName(t *testing.T) {
-	for _, c := range []struct {
-		name string
-		part int
-		want string
-	}{{"build.log", 1, "build.log"}, {"build.log", 2, "build.2.log"}, {"console", 3, "console.3"}} {
-		if got := partName(c.name, c.part); got != c.want {
-			t.Errorf("partName(%q, %d) = %q", c.name, c.part, got)
-		}
 	}
 }

@@ -45,7 +45,8 @@ var layers = map[string]int{
 
 	"internal/httpapi": 6,
 
-	"cmd/cafard": 7,
+	"cmd/cafard-server": 7,
+	"cmd/cafard-client": 7,
 }
 
 // onlyImportedBy names packages that a lower layer is not enough to make

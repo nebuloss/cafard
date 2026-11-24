@@ -129,7 +129,7 @@ func (a *API) auth(next handler) http.HandlerFunc {
 		if cookie == "" {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="cafard"`)
 			writeError(w, http.StatusUnauthorized, string(access.Unauthorized),
-				say(r, `Sign in, or send a token: -H "Authorization: Bearer cfd_…". An admin makes one with cafard admin create agent or device.`))
+				say(r, `Sign in, or send a token: -H "Authorization: Bearer cfd_…". An admin makes one with cafard-server admin create agent or device.`))
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && !httpx.SameOrigin(r) {

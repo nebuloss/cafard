@@ -68,8 +68,8 @@ ssh "$BUILD_HOST" "set -e; . ~/.profile 2>/dev/null || true
   $BUILD_WRAP make $targets"
 
 # shellcheck disable=SC2029
-sum=$(ssh "$BUILD_HOST" "cd '$BUILD_DIR' && sha256sum dist/cafard" | awk '{print $1}')
-version=$(ssh "$BUILD_HOST" "cd '$BUILD_DIR' && ./dist/cafard version")
+sum=$(ssh "$BUILD_HOST" "cd '$BUILD_DIR' && sha256sum dist/cafard-server" | awk '{print $1}')
+version=$(ssh "$BUILD_HOST" "cd '$BUILD_DIR' && ./dist/cafard-server version")
 echo "== built $version"
 echo "   sha256 $sum"
 
@@ -78,16 +78,16 @@ echo "   sha256 $sum"
 tmp="/tmp/cafard-deploy-$commit"
 echo "== copy to $TARGET${PCT:+ (container $PCT)}"
 # shellcheck disable=SC2029
-ssh "$BUILD_HOST" "cd '$BUILD_DIR' && tar -c dist/cafard scripts/install.sh" |
+ssh "$BUILD_HOST" "cd '$BUILD_DIR' && tar -c dist/cafard-server scripts/install.sh" |
   ssh "$TARGET" "rm -rf '$tmp' && mkdir -p '$tmp' && tar -x -C '$tmp'"
 
-install="BINARY_FILE=/tmp/cafard-deploy/dist/cafard BINARY_SHA256=$sum QUIET=1 sh /tmp/cafard-deploy/scripts/install.sh"
+install="BINARY_FILE=/tmp/cafard-deploy/dist/cafard-server BINARY_SHA256=$sum QUIET=1 sh /tmp/cafard-deploy/scripts/install.sh"
 echo "== install"
 if [ -n "$PCT" ]; then
   # shellcheck disable=SC2029
   ssh "$TARGET" "set -e
     pct exec $PCT -- mkdir -p /tmp/cafard-deploy/dist /tmp/cafard-deploy/scripts
-    pct push $PCT '$tmp/dist/cafard' /tmp/cafard-deploy/dist/cafard --perms 0755
+    pct push $PCT '$tmp/dist/cafard-server' /tmp/cafard-deploy/dist/cafard-server --perms 0755
     pct push $PCT '$tmp/scripts/install.sh' /tmp/cafard-deploy/scripts/install.sh
     rm -rf '$tmp'
     status=0

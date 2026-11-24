@@ -21,7 +21,7 @@ func TestMain(m *testing.M) { testenv.Offline(m) }
 
 func TestVersionAndUsage(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if code := run([]string{"version"}, &out, &errOut); code != 0 || !strings.HasPrefix(out.String(), "cafard dev") {
+	if code := run([]string{"version"}, &out, &errOut); code != 0 || !strings.HasPrefix(out.String(), "cafard-server dev") {
 		t.Errorf("version: %d %q", code, out.String())
 	}
 	out.Reset()

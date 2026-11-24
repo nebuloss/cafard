@@ -39,7 +39,7 @@ type Notice struct {
 
 // Hub fans notices out to subscribers. The zero value is not usable; New
 // makes one. A nil *Hub ignores everything, so code that runs without one
-// (cafard admin on the box, tests) publishes into nothing.
+// (cafard-server admin on the box, tests) publishes into nothing.
 type Hub struct {
 	mu     sync.Mutex
 	subs   map[*Sub]struct{}

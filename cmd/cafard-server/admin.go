@@ -20,10 +20,10 @@ import (
 	"cafard/internal/store"
 )
 
-const adminUsage = `cafard admin: manage people, agents, devices and projects from the box.
+const adminUsage = `cafard-server admin: manage people, agents, devices and projects from the box.
 
 Usage:
-  cafard admin [-config FILE] COMMAND
+  cafard-server admin [-config FILE] COMMAND
 
 Commands:
   create person NAME [-name "Display Name"]       prints their join link
@@ -39,7 +39,7 @@ Commands:
   list                           everyone and every project
 
 Every command acts as the admin, the box's operator, whose password opens
-the admin UI (cafard passwd). Everything is in the audit log, under "admin",
+the admin UI (cafard-server passwd). Everything is in the audit log, under "admin",
 from "cli".
 
 It works on the database directly, beside a running server. Run it as the
@@ -75,12 +75,12 @@ func adminCommand(args []string, stdout, stderr io.Writer) int {
 		var usage usageError
 		switch {
 		case errors.As(err, &usage):
-			fmt.Fprintf(stderr, "cafard admin: %s\n\n%s", usage, adminUsage)
+			fmt.Fprintf(stderr, "cafard-server admin: %s\n\n%s", usage, adminUsage)
 			return 2
 		case errors.As(err, &ref):
-			fmt.Fprintln(stderr, "cafard admin:", ref.Message)
+			fmt.Fprintln(stderr, "cafard-server admin:", ref.Message)
 		default:
-			fmt.Fprintln(stderr, "cafard admin:", err)
+			fmt.Fprintln(stderr, "cafard-server admin:", err)
 		}
 		return 1
 	}
@@ -236,7 +236,7 @@ func (a *adminCmd) projects(ctx context.Context, names []string) ([]store.Projec
 	for _, n := range names {
 		p, err := a.st.ProjectByName(ctx, n)
 		if errors.Is(err, store.ErrNotFound) {
-			return nil, fmt.Errorf("no project %q: create it first, with cafard admin create project %s", n, n)
+			return nil, fmt.Errorf("no project %q: create it first, with cafard-server admin create project %s", n, n)
 		}
 		if err != nil {
 			return nil, err
@@ -409,7 +409,7 @@ func (a *adminCmd) token(ctx context.Context, name string) error {
 		return fmt.Errorf("no member %q", name)
 	}
 	if i.Kind == store.Agent {
-		return errors.New(name + " is an agent: its token is never shown. Make it a new install link: cafard admin link " + name)
+		return errors.New(name + " is an agent: its token is never shown. Make it a new install link: cafard-server admin link " + name)
 	}
 	tok, err := a.acc.IssueToken(ctx, a.who, i)
 	if err != nil {

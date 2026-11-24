@@ -11,7 +11,7 @@ Group=cafard
 # Everything is in the config file, the state directory included: an
 # environment variable that silently overrode it would make half a
 # configuration, which is worse than either.
-ExecStart=/usr/local/bin/cafard serve -config /etc/cafard/config.yaml
+ExecStart=/usr/local/bin/cafard-server serve -config /etc/cafard/config.yaml
 Restart=on-failure
 RestartSec=2s
 

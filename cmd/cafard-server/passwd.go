@@ -17,13 +17,13 @@ import (
 	"cafard/internal/service/access"
 )
 
-const passwdUsage = `cafard passwd: set the admin password, which opens the admin UI.
+const passwdUsage = `cafard-server passwd: set the admin password, which opens the admin UI.
 
 Usage:
-  cafard passwd [-config FILE]
+  cafard-server passwd [-config FILE]
 
 It reads the password from the terminal, twice, or from the first line of
-stdin when that is not a terminal (echo 'secret' | cafard passwd), and
+stdin when that is not a terminal (echo 'secret' | cafard-server passwd), and
 writes its argon2id hash to the configuration file as admin-password-hash.
 Restart cafard for it to take effect; the restart signs every admin out.
 
@@ -47,7 +47,7 @@ func passwdCommand(args []string, stdin *os.File, stdout, stderr io.Writer) int 
 		if errors.As(err, &ref) {
 			err = errors.New(ref.Message)
 		}
-		fmt.Fprintln(stderr, "cafard passwd:", err)
+		fmt.Fprintln(stderr, "cafard-server passwd:", err)
 		return 1
 	}
 	return 0
@@ -103,7 +103,7 @@ func writeHash(path, hash string) error {
 		if text != "" && !strings.HasSuffix(text, "\n") {
 			text += "\n"
 		}
-		text += "\n# The admin password's hash, written by cafard passwd.\n" + line + "\n"
+		text += "\n# The admin password's hash, written by cafard-server passwd.\n" + line + "\n"
 	}
 	info, err := os.Stat(path)
 	if err != nil {

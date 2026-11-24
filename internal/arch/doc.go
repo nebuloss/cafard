@@ -12,7 +12,7 @@
 //	4  HTTP plumbing  httpapi/httpx
 //	5  HTTP surfaces  httpapi/api httpapi/admin httpapi/join httpapi/agent
 //	6  composition    httpapi
-//	7  binary         cmd/cafard
+//	7  binaries       cmd/cafard-server cmd/cafard-client
 //
 // The surfaces do not import one another; the composition root hands across
 // what one needs from another, and httpx holds what they share (the client's
