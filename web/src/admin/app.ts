@@ -6,7 +6,9 @@ import { Icon } from '@shared/icons';
 import { Layer } from '@shared/overlay';
 import { Toaster } from '@shared/toast';
 import { ui } from '@shared/ui';
-import { LangMenu, ThemeButton } from '@shared/widgets';
+import { LangMenu, OfflineChip, ThemeSwitch } from '@shared/widgets';
+import { LiveStream, Serial } from '@shared/live';
+import { UpdateBar } from '@shared/toast';
 import { AdminStore } from './store';
 import { NoticeCenter, bell } from './notices';
 import { MemberPage, ProjectPage } from './pages';
@@ -31,8 +33,24 @@ export class AdminApp {
   /** What the lists remember across pages: the search and the filters. */
   readonly ui = { query: '', kind: 'all', audit: 'all' };
   private shell: Shell | null = null;
+  /**
+   * What changed, from /admin/api/events: the page reads again, as
+   * claudication's admin UI does, instead of every minute.
+   */
+  readonly live = new LiveStream('/admin/api/events', ['changed'], {
+    event: () => void this.reread.run(),
+    resync: () => void this.reread.run(),
+    updated: () => UpdateBar.show(),
+  });
+  private readonly reread = new Serial(() => this.liveRefresh());
+  private readonly listeners = new Set<() => void>();
+  private redrawDue = false;
 
   constructor(private readonly root: HTMLElement) {
+    OfflineChip.bind(this.live);
+    document.addEventListener('focusout', () => setTimeout(() => this.drawIfDue(), 0));
+    document.addEventListener('scrollend', () => this.drawIfDue(), true);
+    document.addEventListener('click', () => setTimeout(() => this.drawIfDue(), 0));
     this.api = new ApiClient('/admin/api', () => this.showSignIn(t('You were signed out. Sign in again.')));
     this.store = new AdminStore(this.api);
     this.layer = new Layer(document.getElementById('overlay') as HTMLElement);
@@ -87,6 +105,48 @@ export class AdminApp {
     this.watchNotices();
     this.root.replaceChildren(this.shell.root);
     await this.refresh();
+    this.live.start();
+  }
+
+  /** Has fn called after each read the stream caused; returns what stops it. */
+  onLive(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  /**
+   * Reads again after a notice. The bell is redrawn at once; the page only
+   * when the admin is not in the middle of something: typing in a field,
+   * a dialog open, the audit log scrolled down. Then it waits for them to
+   * leave the field or close the dialog.
+   */
+  private async liveRefresh(): Promise<void> {
+    if (!this.store.signedIn || !this.shell) return;
+    try {
+      await this.store.load(this.place.tab);
+    } catch {
+      return; // the stream will tell again, or the floor read will
+    }
+    this.redrawBell();
+    for (const fn of this.listeners) fn();
+    if (this.quiet()) this.shell.render();
+    else this.redrawDue = true;
+  }
+
+  private quiet(): boolean {
+    if (this.layer.isOpen || this.layer2.isOpen) return false;
+    const a = document.activeElement;
+    if (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement || a instanceof HTMLSelectElement) return false;
+    if (document.querySelector('details[data-menu][open]')) return false;
+    return !Array.from(document.querySelectorAll<HTMLElement>('#root .overflow-auto')).some((el) => el.scrollTop > 0);
+  }
+
+  /** A redraw that waited for the admin is done when they are done. */
+  private drawIfDue(): void {
+    if (this.redrawDue && this.shell && this.quiet()) {
+      this.redrawDue = false;
+      this.shell.render();
+    }
   }
 
   /** Reads the store again and redraws the page. */
@@ -106,7 +166,7 @@ export class AdminApp {
   private watchNotices(): void {
     clearInterval(this.noticeTimer);
     this.noticeTimer = setInterval(async () => {
-      if (!this.store.signedIn || !this.shell) return;
+      if (!this.store.signedIn || !this.shell || document.visibilityState !== 'visible') return;
       try {
         await this.store.loadNotices();
       } catch {
@@ -188,7 +248,7 @@ class Shell extends Component {
       },
       notices: () => this.app.openNotices(),
       lang: (el) => LangMenu.choose(el),
-      theme: (el) => ThemeButton.cycle(el),
+      theme: (el) => ThemeSwitch.choose(el),
     };
   }
 
@@ -223,7 +283,7 @@ class Shell extends Component {
     // Two rows, as claudication's header: the name and the controls, then
     // the trail across the whole width.
     return html`<header class="shrink-0 px-3 pt-2 pb-3 md:px-4"><div class="flex min-h-10 items-center gap-3"><a class="mr-auto flex shrink-0 items-center gap-2 text-[17px] font-bold text-inherit no-underline [&_svg]:size-[26px] [&_svg]:text-primary" href="/" title="cafard admin">${Icon.logo}<span>cafard</span><small class="text-[13px] font-semibold text-on-surface-variant">admin</small></a>
-      ${LangMenu.view()}${ThemeButton.view()}
+      <span class="live-slot contents"></span>${LangMenu.view()}${ThemeSwitch.view()}
       <span class="bell-slot contents">${bell(this.app.store.unread())}</span>
       <button class="${ui.btn('text', 'sm')}" data-act="signout">${t('Sign out')}</button></div>
       <nav class="trail mt-2 flex w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-md3-full bg-primary-container p-1 text-on-primary-container [scrollbar-width:none]" aria-label="${t('Breadcrumb')}">${crumbs}</nav></header>

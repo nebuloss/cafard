@@ -37,9 +37,15 @@ export const shared: Record<string, string> = {
   '{add} to add, {remove} to remove.': '{add} à ajouter, {remove} à retirer.',
   'No change yet. Tick to add, untick to remove.': "Aucun changement pour l'instant. Cochez pour ajouter, décochez pour retirer.",
   // widgets.ts
-  'Theme: automatic': 'Thème : automatique',
-  'Theme: light': 'Thème : clair',
-  'Theme: dark': 'Thème : sombre',
+  Light: 'Clair',
+  'Follow the system': 'Suivre le système',
+  Dark: 'Sombre',
+  'Colour theme': 'Thème',
+  Offline: 'Hors ligne',
+  'Changes show within half a minute until the connection is back.': "Les changements s'affichent en une demi-minute jusqu'au retour de la connexion.",
+  // toast.ts
+  'A new version of cafard is ready.': 'Une nouvelle version de cafard est prête.',
+  Reload: 'Recharger',
   person: 'personne',
   agent: 'agent',
   device: 'appareil',

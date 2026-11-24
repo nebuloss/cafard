@@ -12,6 +12,9 @@
 //	p:<project id>                     the project: its conversations, members, settings
 //	c:<project id>:<conversation id>   a conversation: messages, files, reads, title
 //	m:<identity id>                    a member: their projects, their access
+//	admin                              anything the audit log records, and
+//	                                   the admin's notices read: what the
+//	                                   admin UI shows beyond the keys above
 //
 // The store publishes on every write that changes one of these; a
 // subscriber chooses the keys it may hear.
@@ -138,6 +141,11 @@ func (h *Hub) Publish(keys ...string) {
 }
 
 // Keys.
+
+// AdminKey is published with every write the audit log records: links made,
+// used and cancelled, tokens, settings, members and projects. Only the
+// admin's stream hears it.
+const AdminKey = "admin"
 
 func ProjectKey(projectID int64) string { return "p:" + strconv.FormatInt(projectID, 10) }
 

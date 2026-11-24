@@ -62,7 +62,13 @@ func New(d Deps) *Server {
 	if d.Admin.PublicURL == nil {
 		d.Admin.PublicURL = httpx.NewPublicURL("")
 	}
-	return &Server{public: httpx.Proxied(d.TrustedProxies, publicMux(d)), admin: httpx.Proxied(d.TrustedProxies, adminMux(d))}
+	d.Admin.Hub = d.Hub
+	// ETag: a page told something changed reads again, and an unchanged
+	// answer costs a 304 rather than its bytes.
+	return &Server{
+		public: httpx.Proxied(d.TrustedProxies, httpx.ETag(publicMux(d))),
+		admin:  httpx.Proxied(d.TrustedProxies, httpx.ETag(adminMux(d))),
+	}
 }
 
 // Public is the handler for the public listener.

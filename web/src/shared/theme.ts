@@ -29,10 +29,23 @@ export class Theme {
       root.dataset['theme'] = theme;
       doc.cookie = `${COOKIE}=${theme}; Path=/; Max-Age=${400 * 24 * 3600}; SameSite=Lax${secure}`;
     }
+    Theme.paintBar(doc);
   }
 
-  /** The next theme, for the one button that cycles through them. */
-  static next(t: ThemeName): ThemeName {
-    return t === 'auto' ? 'light' : t === 'light' ? 'dark' : 'auto';
+  /**
+   * The <meta theme-color> pair answers the system's preference only, so an
+   * explicit choice drives the browser's bar from the palette itself, once
+   * the change has landed; following the system again, the pair answers.
+   */
+  static paintBar(doc: Document = document): void {
+    const metas = Array.from(doc.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]'));
+    requestAnimationFrame(() => {
+      const explicit = Theme.current(doc) !== 'auto';
+      const bg = getComputedStyle(doc.documentElement).getPropertyValue('--color-surface').trim();
+      for (const m of metas) {
+        m.dataset['system'] ??= m.content;
+        m.content = explicit && bg ? bg : (m.dataset['system'] ?? m.content);
+      }
+    });
   }
 }

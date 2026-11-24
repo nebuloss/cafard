@@ -240,7 +240,13 @@ func (s *Store) change(ctx context.Context, a AuditEntry, fn func(tx *sql.Tx) er
 		a.At.UnixMilli(), a.Actor, a.Action, a.Target, a.Origin); err != nil {
 		return fmt.Errorf("write audit: %w", err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// Whatever the audit log records, the admin UI shows: one key for it,
+	// beside the narrower keys the write publishes itself.
+	s.publish(live.AdminKey)
+	return nil
 }
 
 // Audit returns the newest entries first, at most limit.

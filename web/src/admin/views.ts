@@ -4,7 +4,7 @@ import { Html, escape, html } from '@shared/html';
 import { LANGS, i18n, n, t } from '@shared/i18n';
 import { Icon } from '@shared/icons';
 import { ui } from '@shared/ui';
-import { Avatar, KindName, LangMenu, Meter, Switch, ThemeButton } from '@shared/widgets';
+import { Avatar, KindName, LangMenu, Meter, Switch, ThemeSwitch } from '@shared/widgets';
 import type { AdminApp } from './app';
 import { CreateMemberFlow, CreateProjectFlow } from './create';
 import { pathOf } from './route';
@@ -236,7 +236,7 @@ export class SignInView extends Component {
     private readonly message?: string,
   ) {
     super('div', 'grid min-h-full place-items-center px-4 py-6');
-    this.actions = { lang: (el) => LangMenu.choose(el), theme: (el) => ThemeButton.cycle(el) };
+    this.actions = { lang: (el) => LangMenu.choose(el), theme: (el) => ThemeSwitch.choose(el) };
     this.root.addEventListener('submit', (e) => {
       e.preventDefault();
       void this.submit();
@@ -244,8 +244,9 @@ export class SignInView extends Component {
   }
 
   protected view(): Html {
-    return html`<form class="${ui.card} w-full max-w-sm gap-4 p-6" novalidate>
-      <div class="flex items-center gap-2 text-lg font-bold [&_svg]:size-7 [&_svg]:text-primary">${Icon.logo} cafard <small class="mr-auto text-[13px] font-semibold text-on-surface-variant">admin</small>${LangMenu.view()}${ThemeButton.view()}</div>
+    return html`<div class="fixed top-3 right-3 flex items-center gap-2">${LangMenu.view()}${ThemeSwitch.view()}</div>
+    <form class="${ui.card} w-full max-w-sm gap-4 p-6" novalidate>
+      <div class="flex items-center gap-2 text-lg font-bold [&_svg]:size-7 [&_svg]:text-primary">${Icon.logo} cafard <small class="text-[13px] font-semibold text-on-surface-variant">admin</small></div>
       ${this.message ? html`<p class="${ui.error}" role="alert">${this.message}</p>` : ''}
       <input type="text" name="username" value="admin" autocomplete="username" hidden>
       <div class="${ui.field}"><label class="${ui.label}" for="p">${t('Admin password')}</label><input class="${ui.input}" id="p" type="password" autocomplete="current-password" required></div>

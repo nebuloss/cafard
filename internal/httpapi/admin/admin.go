@@ -57,6 +57,7 @@ import (
 	"cafard/internal/config"
 	"cafard/internal/httpapi/httpx"
 	"cafard/internal/i18n"
+	"cafard/internal/live"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -73,6 +74,8 @@ type Config struct {
 	MaxUpload int64
 	// PasswordHash is the admin password's, from the configuration file.
 	PasswordHash string
+	// Hub is where /admin/api/events hears what changed; nil hears nothing.
+	Hub *live.Hub
 }
 
 type Admin struct {
@@ -116,6 +119,7 @@ func (a *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/notices", a.auth(a.noticeList))
 	mux.HandleFunc("POST /admin/api/notices/read", a.auth(a.noticesRead))
 	mux.HandleFunc("GET /admin/api/config", a.auth(a.config))
+	mux.HandleFunc("GET /admin/api/events", a.auth(a.events))
 	mux.HandleFunc("PUT /admin/api/settings/public-url", a.auth(a.setPublicURL))
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", say(r, "No route %s %s.", r.Method, r.URL.Path))

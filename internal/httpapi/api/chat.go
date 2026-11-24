@@ -233,9 +233,14 @@ func (a *API) deleteFile(w http.ResponseWriter, r *http.Request, who access.Who)
 // Event stream timing: notices are gathered for batchWindow so a burst of
 // writes (a live log growing, a dozen reads) is one event per thing, and a
 // comment line every keepAlive keeps proxies from closing a quiet stream.
+//
+// A stream ends after maxStream, and the browser opens the next at once: the
+// sign-in is checked again then, so one signed out elsewhere stops hearing
+// within the half hour, as claudication's streams do.
 const (
 	batchWindow = 250 * time.Millisecond
 	keepAlive   = 25 * time.Second
+	maxStream   = 30 * time.Minute
 )
 
 // events is the page's one stream of what changed (docs/design.md, "What
@@ -277,11 +282,15 @@ func (a *API) events(w http.ResponseWriter, r *http.Request, who access.Who) {
 
 	alive := time.NewTicker(keepAlive)
 	defer alive.Stop()
+	end := time.NewTimer(maxStream)
+	defer end.Stop()
 	var batch <-chan time.Time
 	pending := map[string]bool{}
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-end.C:
 			return
 		case <-alive.C:
 			fmt.Fprint(w, ": still here\n\n")

@@ -1,4 +1,5 @@
 import { Component, mayAutofocus } from '@shared/component';
+import { Serial } from '@shared/live';
 import { time } from '@shared/format';
 import { Html, escape, html } from '@shared/html';
 import { n, t } from '@shared/i18n';
@@ -186,6 +187,7 @@ export class CreateMemberFlow extends Component {
  */
 export class GiveScreen extends Component {
   private timer: ReturnType<typeof setInterval> | undefined;
+  private unlisten: (() => void) | undefined;
   private state: Link['state'] = 'waiting';
   private usedAt = '';
   private usedFrom = '';
@@ -248,10 +250,20 @@ export class GiveScreen extends Component {
       <div class="${ui.dialogFoot}"><button class="${ui.btn('filled')}" data-act="done">${t('Done')}</button></div>`;
   }
 
-  /** Watches the link on the server until it is used or ends. */
+  /**
+   * Watches the link on the server until it is used or ends: the admin's
+   * event stream says when something changed, and a slow timer catches the
+   * link expiring, which nothing writes.
+   */
   private watch(id: number): void {
-    this.timer = setInterval(async () => {
-      if (!this.root.isConnected) return this.stop();
+    const check = new Serial(() => this.check(id));
+    this.unlisten = this.app.onLive(() => void check.run());
+    this.timer = setInterval(() => void check.run(), 30_000);
+  }
+
+  private async check(id: number): Promise<void> {
+    {
+      if (!this.root.isConnected || this.timer === undefined) return this.stop();
       let members: Member[];
       try {
         members = (await this.app.store.api.get<{ members: Member[] }>('/members')).members;
@@ -278,12 +290,14 @@ export class GiveScreen extends Component {
       this.usedFrom = l.used_from ?? '';
       this.render();
       await this.app.refresh();
-    }, 3000);
+    }
   }
 
   private stop(): void {
     clearInterval(this.timer);
     this.timer = undefined;
+    this.unlisten?.();
+    this.unlisten = undefined;
   }
 }
 

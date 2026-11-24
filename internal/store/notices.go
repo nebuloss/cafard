@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+
+	"cafard/internal/live"
 	"time"
 )
 
@@ -29,6 +31,8 @@ func (s *Store) NoticesRead(ctx context.Context) (map[string]time.Time, error) {
 // MarkNotices marks notices read, or unread with read false. Marking one
 // read again keeps when it was first read.
 func (s *Store) MarkNotices(ctx context.Context, ids []string, read bool) error {
+	// The bell of the admin's other tabs counts them.
+	defer s.publish(live.AdminKey)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

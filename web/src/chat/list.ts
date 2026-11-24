@@ -4,7 +4,7 @@ import { Html, html } from '@shared/html';
 import { i18n, n, t } from '@shared/i18n';
 import { Icon } from '@shared/icons';
 import { ui } from '@shared/ui';
-import { Avatar, LangMenu, ThemeButton } from '@shared/widgets';
+import { Avatar, LangMenu, ThemeSwitch } from '@shared/widgets';
 import type { ChatApp } from './app';
 import { pathOf } from './route';
 import { Address } from './store';
@@ -37,7 +37,7 @@ export class ConversationList extends Component {
       new: () => this.app.go('/new'),
       profile: () => this.app.openProfile(),
       lang: (el) => LangMenu.choose(el),
-      theme: (el) => ThemeButton.cycle(el),
+      theme: (el) => ThemeSwitch.choose(el),
       open: (el) => {
         const a = Address.parse(el.dataset['v'] ?? '');
         if (a) this.app.go(pathOf({ kind: 'conversation', project: a.project, name: a.name }));
@@ -54,8 +54,8 @@ export class ConversationList extends Component {
 
   protected view(): Html {
     const me = this.app.store.me;
-    return html`<div class="flex shrink-0 items-center gap-2.5 px-4 pt-3 pb-2"><div class="flex flex-1 items-center gap-2 text-lg font-bold tracking-[-.01em] [&_svg]:size-[26px] [&_svg]:text-primary">${Icon.logo} cafard</div>
-        ${LangMenu.view()}${ThemeButton.view()}
+    return html`<div class="flex shrink-0 items-center gap-2 px-4 pt-3 pb-2"><div class="flex flex-1 items-center gap-2 text-lg font-bold tracking-[-.01em] [&_svg]:size-[26px] [&_svg]:text-primary" title="cafard">${Icon.logo}<span class="sr-only">cafard</span></div>
+        <span class="live-slot contents"></span>${LangMenu.view(true)}${ThemeSwitch.view('sm')}
         <button class="${ui.iconBtn}" data-act="profile" aria-label="${t('Your profile')}" title="${me?.display_name || me?.name || ''}">${me ? Avatar.of(me, 'sm') : ''}</button>
         <button class="${look.iconBtnFilled}" data-act="new" aria-label="${t('New conversation')}" title="${t('New conversation')}">${Icon.of('plus')}</button></div>
       <label class="${look.search} mx-4 mb-2 h-[38px] shrink-0">${Icon.of('search')}<input class="list-q" type="search" placeholder="${t('Search conversations')}" value="${this.query}" autocomplete="off"></label>

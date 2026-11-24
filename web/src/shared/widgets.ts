@@ -2,7 +2,6 @@ import { Bytes } from './format';
 import { Html, html } from './html';
 import { LANGS, i18n, n, t, type Lang } from './i18n';
 import { Theme, type ThemeName } from './theme';
-import { ui } from './ui';
 import { Icon } from './icons';
 
 /** Who something is, as far as drawing it goes. */
@@ -42,7 +41,8 @@ export class LangMenu {
     return Html.raw(`<svg class="shrink-0 overflow-hidden rounded-[3px] ring-1 ring-on-surface/20" viewBox="0 0 30 20" width="${Math.round(height * 1.5)}" height="${height}" aria-hidden="true">${LangMenu.FLAGS[l]}</svg>`);
   }
 
-  static view(): Html {
+  /** compact shows the flag alone, for a narrow header (the chat's list); the menu still names each language. */
+  static view(compact = false): Html {
     const cur = i18n.lang;
     const name = LANGS.find((l) => l.id === cur)?.name ?? cur;
     const item = (l: (typeof LANGS)[number]) => {
@@ -50,7 +50,7 @@ export class LangMenu {
       return html`<button type="button" class="state-layer flex items-center gap-3 rounded-md3-m px-3 py-2 text-left text-sm whitespace-nowrap ${on ? 'font-semibold' : ''}" role="menuitemradio" aria-checked="${String(on)}" lang="${l.id}" data-act="lang" data-v="${l.id}">${LangMenu.flag(l.id, 15)}<span class="flex-1">${l.name}</span>${on ? Icon.of('check') : ''}</button>`;
     };
     return html`<details class="lang-menu relative shrink-0" data-menu>
-      <summary class="state-layer inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-md3-full border border-outline-variant px-2.5 text-[13px] font-semibold text-on-surface-variant [&::-webkit-details-marker]:hidden [&_.ic]:size-4" title="${t('Language')}" aria-label="${t('Language')}: ${name}">${LangMenu.flag(cur, 13)}<span class="uppercase">${cur}</span>${Icon.of('chevDown')}</summary>
+      <summary class="state-layer inline-flex h-10 cursor-pointer list-none items-center gap-1.5 rounded-md3-full border border-outline-variant px-2.5 text-[13px] font-semibold text-on-surface-variant [&::-webkit-details-marker]:hidden [&_.ic]:size-4" title="${t('Language')}" aria-label="${t('Language')}: ${name}">${LangMenu.flag(cur, 13)}${compact ? '' : html`<span class="uppercase">${cur}</span>${Icon.of('chevDown')}`}</summary>
       <div class="absolute right-0 z-50 mt-1.5 flex min-w-44 flex-col rounded-md3-l bg-surface-high p-1.5 text-on-surface elevation-2 [&_.ic]:size-4" role="menu">${LANGS.map(item)}</div></details>`;
   }
 
@@ -78,32 +78,69 @@ if (typeof document !== 'undefined') {
 }
 
 /**
- * The theme, as agendouille has it: one button that cycles through
- * following the system, light and dark, its icon saying which is on. The
- * page maps the "theme" action to ThemeButton.cycle.
+ * The theme, as claudication has it: three states rather than a switch,
+ * light, the system's and dark, as a segmented control. "The system's" is a
+ * standing instruction to keep following the machine, which a two-way
+ * toggle cannot express. The page maps the "theme" action to
+ * ThemeSwitch.choose.
  */
-export class ThemeButton {
-  private static label(th: ThemeName): string {
-    if (th === 'light') return t('Theme: light');
-    if (th === 'dark') return t('Theme: dark');
-    return t('Theme: automatic');
+export class ThemeSwitch {
+  private static options(): { id: ThemeName; label: string; icon: Html }[] {
+    return [
+      { id: 'light', label: t('Light'), icon: Icon.of('sun') },
+      { id: 'auto', label: t('Follow the system'), icon: Icon.of('monitor') },
+      { id: 'dark', label: t('Dark'), icon: Icon.of('moon') },
+    ];
   }
 
-  private static icon(th: ThemeName): Html {
-    return Icon.of(th === 'light' ? 'sun' : th === 'dark' ? 'moon' : 'contrast');
+  /** md is the header's 40px, beside its other controls; sm the sign-in card's. */
+  static view(size: 'sm' | 'md' = 'md'): Html {
+    const cur = Theme.current();
+    const box = size === 'md' ? 'h-10 min-w-10 px-3' : 'h-9 min-w-9 px-2';
+    const one = (o: { id: ThemeName; label: string; icon: Html }, i: number) =>
+      html`<button type="button" class="state-layer grid ${box} place-items-center [&_.ic]:size-4 ${i > 0 ? 'border-l border-outline' : ''} ${o.id === cur ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant'}" role="radio" aria-checked="${String(o.id === cur)}" data-act="theme" data-v="${o.id}" title="${o.label}" aria-label="${o.label}">${o.icon}</button>`;
+    return html`<div class="theme-switch inline-flex shrink-0 overflow-hidden rounded-md3-full border border-outline" role="radiogroup" aria-label="${t('Colour theme')}">${ThemeSwitch.options().map(one)}</div>`;
   }
 
+  static choose(el: HTMLElement): void {
+    const v = el.dataset['v'];
+    if (v !== 'light' && v !== 'dark' && v !== 'auto') return;
+    Theme.set(v);
+    // Every switch on the page shows the choice, not only the one clicked.
+    for (const b of Array.from(document.querySelectorAll<HTMLElement>('.theme-switch [data-act="theme"]'))) {
+      const on = b.dataset['v'] === v;
+      b.setAttribute('aria-checked', String(on));
+      b.classList.toggle('bg-secondary-container', on);
+      b.classList.toggle('text-on-secondary-container', on);
+      b.classList.toggle('text-on-surface-variant', !on);
+    }
+  }
+}
+
+/**
+ * The header's word for a stream that is down, as claudication's
+ * freshness says "offline": a page that cannot hear changes says so, and
+ * reads every half minute meanwhile.
+ */
+export class OfflineChip {
   static view(): Html {
-    const th = Theme.current();
-    return html`<button type="button" class="${ui.iconBtn} shrink-0" data-act="theme" title="${ThemeButton.label(th)}" aria-label="${ThemeButton.label(th)}">${ThemeButton.icon(th)}</button>`;
+    return html`<span class="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-warning-container px-2.5 text-[12px] font-semibold text-on-warning-container [&_.ic]:size-3.5" role="status" title="${t('Changes show within half a minute until the connection is back.')}">${Icon.of('wifiOff')}${t('Offline')}</span>`;
   }
 
-  static cycle(el: HTMLElement): void {
-    const th = Theme.next(Theme.current());
-    Theme.set(th);
-    el.title = ThemeButton.label(th);
-    el.setAttribute('aria-label', ThemeButton.label(th));
-    el.innerHTML = ThemeButton.icon(th).value;
+  /**
+   * Shows the chip in every .live-slot while stream is down, after a grace
+   * period: a stream reopening after a deploy is not worth a flash.
+   */
+  static bind(stream: { live: boolean; watch(fn: () => void): () => void }): void {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const draw = () => {
+      for (const slot of Array.from(document.querySelectorAll<HTMLElement>('.live-slot'))) slot.innerHTML = stream.live ? '' : OfflineChip.view().value;
+    };
+    stream.watch(() => {
+      clearTimeout(timer);
+      if (stream.live) draw();
+      else timer = setTimeout(draw, 4000);
+    });
   }
 }
 

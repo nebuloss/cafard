@@ -6,7 +6,9 @@ import { Toaster } from '@shared/toast';
 import { ConversationView } from './conversation';
 import { ConversationList } from './list';
 import { look } from './look';
-import { LiveFeed } from './live';
+import { LiveStream, Serial } from '@shared/live';
+import { UpdateBar } from '@shared/toast';
+import { OfflineChip } from '@shared/widgets';
 import { LogViewer, ProfileSheet, SignInView } from './sheets';
 import { fromHash, pathOf, placeOf } from './route';
 import { Address, ChatStore } from './store';
@@ -26,7 +28,10 @@ export class ChatApp {
   readonly list: ConversationList;
   private view: ConversationView | null = null;
   private log: LogViewer | null = null;
-  private readonly live: LiveFeed;
+  private readonly live: LiveStream;
+  /** Notices waiting for the read before them to end. */
+  private heard: Changed[] = [];
+  private readonly drain = new Serial(() => this.drainHeard());
   private frame: HTMLElement | null = null;
   /** Projects whose list is due to be read again, gathered for a moment. */
   private readonly staleProjects = new Set<string>();
@@ -38,7 +43,12 @@ export class ChatApp {
     this.layer = new Layer(document.getElementById('overlay') as HTMLElement);
     this.layer2 = new Layer(document.getElementById('overlay2') as HTMLElement);
     this.list = new ConversationList(this);
-    this.live = new LiveFeed((c) => void this.changed(c));
+    this.live = new LiveStream('/api/v1/events', ['changed'], {
+      event: (_name, data) => this.hear(data as Changed),
+      resync: () => this.hear({ topic: 'resync' }),
+      updated: () => UpdateBar.show(),
+    });
+    OfflineChip.bind(this.live);
     window.addEventListener('popstate', () => void this.route());
   }
 
@@ -112,6 +122,23 @@ export class ChatApp {
       this.frame.append(empty);
     }
     this.list.drawRows();
+  }
+
+  /**
+   * Takes a notice, read in turn: never two reads at once, and a resync
+   * among those waiting stands for all of them.
+   */
+  private hear(c: Changed): void {
+    this.heard.push(c);
+    void this.drain.run();
+  }
+
+  private async drainHeard(): Promise<void> {
+    while (this.heard.length) {
+      const batch: Changed[] = this.heard.some((c) => c.topic === 'resync') ? [{ topic: 'resync' }] : this.heard;
+      this.heard = [];
+      for (const c of batch) await this.changed(c);
+    }
   }
 
   /** What the event stream said changed: read it again. */
