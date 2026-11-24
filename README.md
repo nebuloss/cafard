@@ -62,8 +62,8 @@ To deploy a commit of your own to a box over SSH, built on a build machine:
 
 *mouchard*, n. — an informer. It tells cafard what happens on a machine.
 
-A device's or an agent's link, made in the admin UI, installs mouchard and
-its token with one command, on Linux, macOS or Windows:
+A device's or an agent's link, made in the admin UI, configures its token
+for mouchard with one command, on Linux, macOS or Windows:
 
     curl -fsSL 'https://cafard.example/join/…?shell=sh' | sh      # Linux, macOS
     irm 'https://cafard.example/join/…?shell=ps1' | iex           # Windows
@@ -71,8 +71,7 @@ its token with one command, on Linux, macOS or Windows:
 `mouchard` sends to cafard from any machine, Linux, macOS or Windows
 ([releases](https://github.com/nebuloss/cafard/releases): one file, no
 install), with an agent's or a device's token in `CAFARD_URL` and
-`CAFARD_TOKEN` (or `~/.config/cafard`, which an agent's install link
-writes):
+`CAFARD_TOKEN`, or in `~/.config/cafard` as the link above writes them:
 
     mouchard say  be98/wifi-drops "flash done, rebooting"
     mouchard send be98/wifi-drops boot.log dmesg.txt -m "after the reset"

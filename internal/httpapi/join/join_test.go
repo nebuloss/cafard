@@ -2,8 +2,6 @@ package join
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -13,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -206,9 +203,6 @@ func TestAgentScriptRuns(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(fake), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// curl stands in for the release, so the script installs mouchard with
-	// no network: a fake binary, and SHA256SUMS that names it.
-	asset, mouchard := fakeRelease(t, bin)
 	cmd := exec.Command(sh)
 	cmd.Stdin = strings.NewReader(body)
 	cmd.Env = []string{"HOME=" + home, "PATH=" + bin + ":/usr/bin:/bin"}
@@ -230,38 +224,10 @@ func TestAgentScriptRuns(t *testing.T) {
 	if !strings.Contains(string(out), "Claude Code: set up") {
 		t.Errorf("output:\n%s", out)
 	}
-	if got, err := os.ReadFile(filepath.Join(home, ".local/bin/mouchard")); err != nil || string(got) != mouchard {
-		t.Errorf("mouchard (%s): %q %v\n%s", asset, got, err, out)
-	}
-	if fi, err := os.Stat(filepath.Join(home, ".local/bin/mouchard")); err != nil || fi.Mode().Perm() != 0o755 {
-		t.Errorf("mouchard's mode: %v", err)
-	}
 }
 
-// fakeRelease puts a curl in bin that answers as a release would: the
-// mouchard for this system, and a SHA256SUMS that names it. It returns the
-// asset's name and its content.
-func fakeRelease(t *testing.T, bin string) (string, string) {
-	t.Helper()
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
-		t.Skip("the script is for Linux and macOS")
-	}
-	asset := "mouchard-" + runtime.GOOS + "-" + runtime.GOARCH
-	body := "#!/bin/sh\necho mouchard\n"
-	sum := sha256.Sum256([]byte(body))
-	sums := hex.EncodeToString(sum[:]) + "  " + asset + "\n"
-	curl := "#!/bin/sh\n# curl -fsSL URL -o FILE\nurl=$2 out=$4\ncase \"$url\" in\n" +
-		"  */SHA256SUMS) printf '%s' '" + sums + "' > \"$out\" ;;\n" +
-		"  */" + asset + ") printf '%s' '" + body + "' > \"$out\" ;;\n" +
-		"  *) exit 22 ;;\nesac\n"
-	if err := os.WriteFile(filepath.Join(bin, "curl"), []byte(curl), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return asset, body
-}
-
-// A device's script writes its token and installs mouchard, and sets up no
-// MCP client.
+// A device's script writes its token and the address where mouchard reads
+// them, and installs nothing: no MCP client, and no program.
 func TestDeviceScriptRuns(t *testing.T) {
 	sh, err := exec.LookPath("sh")
 	if err != nil {
@@ -273,19 +239,21 @@ func TestDeviceScriptRuns(t *testing.T) {
 	if strings.Contains(body, "claude") || !strings.Contains(body, "cfd_dv_") {
 		t.Fatalf("script:\n%s", body)
 	}
-	home, bin := t.TempDir(), t.TempDir()
-	_, mouchard := fakeRelease(t, bin)
+	home := t.TempDir()
 	cmd := exec.Command(sh)
 	cmd.Stdin = strings.NewReader(body)
-	cmd.Env = []string{"HOME=" + home, "PATH=" + bin + ":/usr/bin:/bin"}
+	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("script: %v\n%s", err, out)
 	}
-	if got, _ := os.ReadFile(filepath.Join(home, ".config/cafard/config")); !strings.Contains(string(got), "device=dev-build") {
+	if got, _ := os.ReadFile(filepath.Join(home, ".config/cafard/config")); !strings.Contains(string(got), "url=https://cafard.example") || !strings.Contains(string(got), "device=dev-build") {
 		t.Errorf("config: %q", got)
 	}
-	if got, _ := os.ReadFile(filepath.Join(home, ".local/bin/mouchard")); string(got) != mouchard {
-		t.Errorf("mouchard: %q", got)
+	if got, _ := os.ReadFile(filepath.Join(home, ".config/cafard/token")); !strings.HasPrefix(string(got), "cfd_dv_") {
+		t.Errorf("token: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".local")); err == nil {
+		t.Error("the script installed something")
 	}
 }
 

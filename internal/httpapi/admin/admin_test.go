@@ -213,14 +213,14 @@ func TestCreatePeopleAgentsAndDevices(t *testing.T) {
 	if code != 201 || out["token"] != nil || out["link"] == nil {
 		t.Fatalf("create device: %d %v", code, out)
 	}
-	// A device's setup link, fetched the way curl does: a device token, and
-	// mouchard, but no MCP client.
+	// A device's setup link, fetched the way curl does: a device token for
+	// mouchard, and no MCP client.
 	req, _ := http.NewRequest("GET", out["link"].(map[string]any)["url"].(string)+"?shell=sh", nil)
 	req.Header.Set("User-Agent", "curl/8.5.0")
 	resp, _ := http.DefaultClient.Do(req)
 	setup, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if !strings.Contains(string(setup), "cfd_dv_") || !strings.Contains(string(setup), "install_tool 'mouchard'") || strings.Contains(string(setup), "mcp") {
+	if !strings.Contains(string(setup), "cfd_dv_") || strings.Contains(string(setup), "mcp") {
 		t.Errorf("setup script:\n%s", setup)
 	}
 	// A board with curl alone is given its token instead.

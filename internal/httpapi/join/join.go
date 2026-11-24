@@ -195,8 +195,7 @@ func (j *Join) signInPerson(w http.ResponseWriter, r *http.Request) {
 
 // script redeems a machine's link and serves the script that sets the
 // machine up with its token: the token exists from this moment, and only in
-// this response. An agent's sets up its MCP client and mouchard; a
-// device's, mouchard alone.
+// this response. An agent's also sets up its MCP client.
 func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string) {
 	if shell != "sh" && shell != "ps1" {
 		shellError(w, "sh", "shell="+shell+" is not one cafard writes for: use sh or ps1.")

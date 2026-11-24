@@ -35,7 +35,7 @@ Commands:
   link   NAME [-hours N] [-client claude-code|codex|crush|opencode]
                                  a new one-time link: a person's sign-in link, an
                                  agent's install link, a device's setup link (its
-                                 token and mouchard); the old one stops working
+                                 token, for mouchard); the old one stops working
   token  NAME                    a new token for a device; the old one stops working
   list                           everyone and every project
 
@@ -172,11 +172,11 @@ func (a *adminCmd) printLink(ctx context.Context, i store.Identity, life time.Du
 	switch l.Kind {
 	case store.AgentLink:
 		if i.Kind == store.Device {
-			// A device's setup link: its token and mouchard, no MCP client.
+			// A device's setup link: its token for mouchard, no MCP client.
 			client = join.Client{}
-			fmt.Fprintf(a.out, "Run this once on %s, as the user that will send, to install mouchard with its token (works once, until %s):\n\n", i.Name, until)
+			fmt.Fprintf(a.out, "Run this once on %s, as the user that will send, to configure mouchard's token (works once, until %s):\n\n", i.Name, until)
 		} else {
-			fmt.Fprintf(a.out, "Run this once on %s's machine, as the user its agents run as, to set up %s and mouchard (works once, until %s):\n\n", i.Name, client.Name, until)
+			fmt.Fprintf(a.out, "Run this once on %s's machine, as the user its agents run as, to set up %s (works once, until %s):\n\n", i.Name, client.Name, until)
 		}
 		fmt.Fprintf(a.out, "  Linux / macOS:         %s\n", install.Command(url, false, client.ID))
 		fmt.Fprintf(a.out, "  Windows (PowerShell):  %s\n", install.Command(url, true, client.ID))

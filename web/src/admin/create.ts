@@ -236,7 +236,7 @@ export class GiveScreen extends Component {
     const right = m.kind === 'device'
       ? html`<div class="${ui.field}"><span class="${ui.label}">Linux / macOS</span>${copyBox(installCommand(l.url ?? '', false, ''))}</div>
         <div class="${ui.field}"><span class="${ui.label}">Windows (PowerShell)</span>${copyBox(installCommand(l.url ?? '', true, ''))}</div>
-        <p class="${FIELD_HELP}">${t('Run on {name}: it installs mouchard with its token, so it sends with mouchard say, send, log and run.', { name: m.name })}</p>`
+        <p class="${FIELD_HELP}">${t('Run on {name}, as the user that sends: it configures its token for mouchard.', { name: m.name })}</p>`
       : m.kind === 'agent'
       ? html`<div class="${ui.field}"><span class="${ui.label}">${t('Client')}</span><div class="flex flex-wrap gap-2 [&_.ic]:size-4" role="radiogroup">${CLIENTS.map(chip)}</div></div>
         <div class="${ui.field}"><span class="${ui.label}">Linux / macOS</span>${copyBox(installCommand(l.url ?? '', false, this.client))}</div>
