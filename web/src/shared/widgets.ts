@@ -1,6 +1,6 @@
 import { Bytes } from './format';
 import { Html, html } from './html';
-import { n, t } from './i18n';
+import { LANGS, i18n, n, t } from './i18n';
 import { Icon } from './icons';
 
 /** Who something is, as far as drawing it goes. */
@@ -17,6 +17,27 @@ const AV_KIND: Record<string, string> = {
   agent: 'rounded-md3-s bg-(--color-accent-teal) font-mono font-semibold',
   device: 'rounded-md3-s bg-(--color-accent-sand) font-mono font-semibold',
 };
+
+/**
+ * The language switch at the top right of both UIs: one short code per
+ * language, the current one filled. A click on another calls i18n.choose,
+ * which reloads the page in it. The page that draws it maps the
+ * "lang" action to LangToggle.choose.
+ */
+export class LangToggle {
+  static view(): Html {
+    const one = (l: (typeof LANGS)[number]) => {
+      const on = l.id === i18n.lang;
+      return html`<button type="button" class="grid h-7 min-w-8 place-items-center rounded-full px-2 text-[11.5px] font-bold tracking-wide uppercase ${on ? 'bg-secondary-container text-on-secondary-container' : 'state-layer text-on-surface-variant'}" data-act="lang" data-v="${l.id}" lang="${l.id}" aria-pressed="${String(on)}" title="${l.name}">${l.id}</button>`;
+    };
+    return html`<div class="inline-flex shrink-0 items-center gap-0.5 rounded-full p-0.5 ring-1 ring-outline-variant ring-inset" role="group" aria-label="${t('Language')}">${LANGS.map(one)}</div>`;
+  }
+
+  static choose(el: HTMLElement): void {
+    const l = LANGS.find((x) => x.id === el.dataset['v']);
+    if (l && l.id !== i18n.lang) i18n.choose(l.id);
+  }
+}
 
 /** What a kind of member is called on screen: its pill, its line under a name. */
 export class KindName {

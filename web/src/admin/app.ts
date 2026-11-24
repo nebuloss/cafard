@@ -6,6 +6,7 @@ import { Icon } from '@shared/icons';
 import { Layer } from '@shared/overlay';
 import { Toaster } from '@shared/toast';
 import { ui } from '@shared/ui';
+import { LangToggle } from '@shared/widgets';
 import { AdminStore } from './store';
 import { NoticeCenter, bell } from './notices';
 import { MemberPage, ProjectPage } from './pages';
@@ -186,6 +187,7 @@ class Shell extends Component {
         this.app.showSignIn(t('You are signed out.'));
       },
       notices: () => this.app.openNotices(),
+      lang: (el) => LangToggle.choose(el),
     };
   }
 
@@ -220,6 +222,7 @@ class Shell extends Component {
     // Two rows, as claudication's header: the name and the controls, then
     // the trail across the whole width.
     return html`<header class="shrink-0 px-3 pt-2 pb-3 md:px-4"><div class="flex min-h-10 items-center gap-3"><a class="mr-auto flex shrink-0 items-center gap-2 text-[17px] font-bold text-inherit no-underline [&_svg]:size-[26px] [&_svg]:text-primary" href="/" title="cafard admin">${Icon.logo}<span>cafard</span><small class="text-[13px] font-semibold text-on-surface-variant">admin</small></a>
+      ${LangToggle.view()}
       <span class="bell-slot contents">${bell(this.app.store.unread())}</span>
       <button class="${ui.btn('text', 'sm')}" data-act="signout">${t('Sign out')}</button></div>
       <nav class="trail mt-2 flex w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-md3-full bg-primary-container p-1 text-on-primary-container [scrollbar-width:none]" aria-label="${t('Breadcrumb')}">${crumbs}</nav></header>
