@@ -5,7 +5,7 @@
 // Lowest first:
 //
 //	0  leaves         version logging testenv arch config blobs ratelimit webui live
-//	                  mcp imagefit uploads install i18n
+//	                  mcp imagefit uploads install i18n client
 //	1  records        store
 //	2  rules          service/access
 //	3  services       service/chat service/attention

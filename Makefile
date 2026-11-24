@@ -22,11 +22,11 @@ DATE ?= $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" +%Y-%m-%dT%H:%M:%SZ 2>/dev/nu
 LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
 GOFLAGS := -trimpath -buildvcs=false
 
-# What a release is built for: cafard is a server, run as a Linux service
-# (scripts/install.sh), on a PC or a container (amd64) or an ARM board
-# (arm64). The binary is pure Go, so another platform is one more word here
-# when someone needs it.
-PLATFORMS ?= linux/amd64 linux/arm64
+# What a release is built for. The server runs as a Linux service
+# (scripts/install.sh); the helpers (cafard send, say, log, run) run on any
+# machine next to the work, Windows and macOS included. amd64 and arm64
+# each; the binary is pure Go, so another platform is one more word here.
+PLATFORMS ?= linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
 # gofmt from the pinned toolchain, not whichever is first on PATH.
 GOFMT = $(shell go env GOROOT)/bin/gofmt

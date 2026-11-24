@@ -57,3 +57,19 @@ database, and puts the previous version back if the new one does not answer.
 
 To deploy a commit of your own to a box over SSH, built on a build machine:
 `scripts/deploy.sh [ref]`.
+
+## Sending from a machine
+
+The same binary sends to cafard from any machine, Linux, macOS or Windows
+([releases](https://github.com/nebuloss/cafard/releases)), with an agent's or
+a device's token in `CAFARD_URL` and `CAFARD_TOKEN` (or `~/.config/cafard`,
+which an agent's install link writes):
+
+    cafard say  be98/wifi-drops "flash done, rebooting"
+    cafard send be98/wifi-drops boot.log dmesg.txt -m "after the reset"
+    logread -f | cafard log be98/wifi-drops console.log
+    cafard run  be98/signed-ota-rc3 -- make firmware
+
+`run` streams the command's output as it runs, then says how it ended and
+exits with its code. A board with only busybox uses `curl`:
+[docs/design.md](docs/design.md#sending-with-curl) has the lines.

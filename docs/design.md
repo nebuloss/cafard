@@ -593,6 +593,43 @@ ssh dev-build 'cd gt-be98-firmware && git pull && rtk make 2>&1 \
 The person watches it on their phone; the agent reads only its end, or greps
 it.
 
+### Helpers
+
+The curl lines above, made one short command each, for a machine next to the
+work: a build host, a lab bench beside a board's serial console, a laptop.
+They are subcommands of the same `cafard` binary, released for Linux, macOS
+and Windows on amd64 and arm64, and they call `/api/v1` like any client,
+adding no ability of their own.
+
+```sh
+cafard say  be98/wifi-drops "flash done, rebooting"
+cafard send be98/wifi-drops boot.log dmesg.txt -m "after the reset"
+logread -f | cafard log be98/wifi-drops console.log
+cafard run  be98/signed-ota-rc3 -name build.log -- make firmware
+```
+
+- **say** posts its arguments, or stdin, as a message.
+- **send** sends files in one message; every file is opened before anything
+  is sent, so a typo sends nothing.
+- **log** sends stdin as a live file. A log longer than one upload (256 MB)
+  goes on in `console.2.log`, `console.3.log`, rather than being cut off.
+- **run** runs a command, shows its output and sends it (stdout and stderr
+  together) as a live file, with the command line as the message's text;
+  then posts how it ended (`` `make` exited 2 after 3 min 12 s ``) and exits
+  with the command's code, so a script can go on from it. Sending never holds
+  the command up: if cafard cannot be reached, the output still reaches the
+  terminal and the command runs to its end.
+
+Credentials come from `CAFARD_URL` and `CAFARD_TOKEN`, or else from
+`~/.config/cafard` (`url=` in `config`, the token alone in `token`), the
+layout an agent's install link writes, on Windows too. Boards that run
+busybox keep the curl lines.
+
+Next: `cafard serial` (a serial console as a log that starts a new file each
+time the device comes back), `cafard tail` (a conversation in a terminal),
+and a setup link for a device, as an agent has, so a device's token is never
+pasted into a script.
+
 ### Upload links from the chat
 
 For "send me the log from that board" when the board has no token — a

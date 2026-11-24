@@ -116,9 +116,11 @@ so a plain `go` command may resolve a different compiler than `make` does;
 `web/package-lock.json` pins the web compilers the same way.
 
 Subcommands today: `serve`, `config` (check and print the configuration),
-`admin` (people, agents, devices, projects, tokens; `cafard admin -h`) and
-`version`. `backup`, `restore` and `vacuum` come with the steps that need
-them.
+`admin` (people, agents, devices, projects, tokens; `cafard admin -h`),
+`passwd`, `version`, and the helpers that send to a cafard from any machine
+with an agent's or device's token: `say`, `send`, `log`, `run`
+(`cmd/cafard/client.go` over `internal/client`; docs/design.md, "Helpers").
+`backup`, `restore` and `vacuum` come with the steps that need them.
 
 `go doc ./internal/httpapi/api`, `./internal/httpapi/admin` and
 `./internal/httpapi/join` list the routes. To try a deployed box:
