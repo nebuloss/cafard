@@ -22,25 +22,32 @@ import (
 // macOS and Windows. cmd/mouchard only calls Command.
 
 // Usage is mouchard's help.
-const Usage = `mouchard: send to cafard from this machine, with its agent's or
-device's token (CAFARD_URL and CAFARD_TOKEN, or ~/.config/cafard):
+const Usage = `mouchard: send to cafard from this machine, with its agent's or device's
+token (CAFARD_URL and CAFARD_TOKEN, or ~/.config/cafard, which its setup link writes).
 
-  mouchard say  PROJECT/CONVERSATION TEXT...     a message (TEXT, or stdin)
-  mouchard send PROJECT/CONVERSATION FILE... [-m TEXT]
-                                                      files, in one message
-  mouchard log  PROJECT/CONVERSATION NAME [-tee] stdin as a live file:
-                                                      tail -f x | mouchard log …
-  mouchard run  PROJECT/CONVERSATION [-name F] -- COMMAND [ARGS...]
-                                                      run COMMAND, its output as a live
-                                                      file, then how it ended; exits as it did
-  mouchard version                               print the build
+  mouchard say    PROJECT/CONVERSATION TEXT...
+        a message: TEXT, or stdin
+  mouchard send   PROJECT/CONVERSATION FILE... [-m TEXT]
+        files, in one message
+  mouchard log    PROJECT/CONVERSATION NAME [-tee]
+        stdin as a live file: tail -f build.log | mouchard log be98/x build.log
+  mouchard run    PROJECT/CONVERSATION [-name F] -- COMMAND [ARGS...]
+        run COMMAND, its output as a live file, then say how it ended;
+        exits as it did
+  mouchard serial PROJECT/CONVERSATION PORT [BAUDS] [-name F] [-time] [-quiet] [-once]
+        a serial console as a live log, 115200 bauds unless told: COM3 on
+        Windows, /dev/ttyUSB0 on Linux, /dev/cu.usbserial-… on macOS. A new
+        log each time the device comes back (console-14h02.log); -time
+        stamps each line; Ctrl-C stops
+  mouchard version
+        print the build
 
 The conversation is created by the first thing sent to it.
 `
 
 // IsCommand reports whether name is one of the commands Command runs.
 func IsCommand(name string) bool {
-	return name == "say" || name == "send" || name == "log" || name == "run"
+	return name == "say" || name == "send" || name == "log" || name == "run" || name == "serial"
 }
 
 // partSize is how much one upload carries before a log goes on in a new
@@ -53,7 +60,7 @@ const partSize = 240 << 20
 func Command(name string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	c, err := FromEnv()
 	if err != nil {
-		fmt.Fprintln(stderr, "cafard:", err)
+		fmt.Fprintln(stderr, "mouchard:", err)
 		return 1
 	}
 	c.Agent = "mouchard/" + name
@@ -66,6 +73,8 @@ func Command(name string, args []string, stdin io.Reader, stdout, stderr io.Writ
 		return send(ctx, c, args, stdout, stderr)
 	case "log":
 		return logCommand(ctx, c, args, stdin, stdout, stderr)
+	case "serial":
+		return serialCommand(ctx, c, args, stdout, stderr)
 	default:
 		return runCommand(c, args, stdout, stderr)
 	}
@@ -108,20 +117,20 @@ func sayCommand(ctx context.Context, c *Client, args []string, stdin io.Reader, 
 	}
 	to, err := ParseAddress(args[0])
 	if err != nil {
-		fmt.Fprintln(stderr, "cafard:", err)
+		fmt.Fprintln(stderr, "mouchard:", err)
 		return 2
 	}
 	text := strings.Join(args[1:], " ")
 	if text == "" {
 		b, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
 		if err != nil {
-			fmt.Fprintln(stderr, "cafard:", err)
+			fmt.Fprintln(stderr, "mouchard:", err)
 			return 1
 		}
 		text = strings.TrimRight(string(b), "\n")
 	}
 	if strings.TrimSpace(text) == "" {
-		fmt.Fprintln(stderr, "cafard: nothing to say")
+		fmt.Fprintln(stderr, "mouchard: nothing to say")
 		return 2
 	}
 	sent, err := c.Say(ctx, to, text)
@@ -142,7 +151,7 @@ func send(ctx context.Context, c *Client, args []string, stdout, stderr io.Write
 	}
 	to, err := ParseAddress(pos[0])
 	if err != nil {
-		fmt.Fprintln(stderr, "cafard:", err)
+		fmt.Fprintln(stderr, "mouchard:", err)
 		return 2
 	}
 	// Every file is opened first: a typo in the third name sends nothing,
@@ -151,12 +160,12 @@ func send(ctx context.Context, c *Client, args []string, stdout, stderr io.Write
 	for _, p := range pos[1:] {
 		f, err := os.Open(p)
 		if err != nil {
-			fmt.Fprintln(stderr, "cafard:", err)
+			fmt.Fprintln(stderr, "mouchard:", err)
 			return 1
 		}
 		defer f.Close()
 		if st, err := f.Stat(); err != nil || st.IsDir() {
-			fmt.Fprintf(stderr, "cafard: %s is not a file\n", p)
+			fmt.Fprintf(stderr, "mouchard: %s is not a file\n", p)
 			return 1
 		}
 		files = append(files, f)
@@ -172,14 +181,14 @@ func send(ctx context.Context, c *Client, args []string, stdout, stderr io.Write
 		}
 		sent, err := c.Send(ctx, to, file)
 		if err != nil {
-			fmt.Fprintf(stderr, "cafard: %s: %v\n", file.Name, err)
+			fmt.Fprintf(stderr, "mouchard: %s: %v\n", file.Name, err)
 			return 1
 		}
 		if i == 0 {
 			first = sent
 		}
 		if sent.Stopped != "" {
-			fmt.Fprintf(stderr, "cafard: %s: %s\n", file.Name, sent.Stopped)
+			fmt.Fprintf(stderr, "mouchard: %s: %s\n", file.Name, sent.Stopped)
 			return 1
 		}
 	}
@@ -200,7 +209,7 @@ func logCommand(ctx context.Context, c *Client, args []string, stdin io.Reader, 
 	}
 	to, err := ParseAddress(pos[0])
 	if err != nil {
-		fmt.Fprintln(stderr, "cafard:", err)
+		fmt.Fprintln(stderr, "mouchard:", err)
 		return 2
 	}
 	in := stdin
@@ -209,7 +218,7 @@ func logCommand(ctx context.Context, c *Client, args []string, stdin io.Reader, 
 	}
 	first, err := stream(ctx, c, to, pos[1], "", in, stderr)
 	if err != nil {
-		fmt.Fprintln(stderr, "cafard:", err)
+		fmt.Fprintln(stderr, "mouchard:", err)
 		return 1
 	}
 	if !*tee {
@@ -250,7 +259,7 @@ func stream(ctx context.Context, c *Client, to Address, name, text string, r io.
 		if n.n < partSize {
 			return first, nil
 		}
-		fmt.Fprintf(stderr, "cafard: %s reached %d MB, going on in %s\n", f.Name, partSize>>20, partName(name, part+1))
+		fmt.Fprintf(stderr, "mouchard: %s reached %d MB, going on in %s\n", f.Name, partSize>>20, partName(name, part+1))
 	}
 }
 
@@ -298,7 +307,7 @@ func runCommand(c *Client, args []string, stdout, stderr io.Writer) int {
 	}
 	to, err := ParseAddress(pos[0])
 	if err != nil {
-		fmt.Fprintln(stderr, "cafard:", err)
+		fmt.Fprintln(stderr, "mouchard:", err)
 		return 2
 	}
 	argv := pos[2:]
@@ -320,7 +329,7 @@ func runCommand(c *Client, args []string, stdout, stderr io.Writer) int {
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
 		_, _ = c.Say(ctx, to, fmt.Sprintf("`%s` could not start: %v", shown, err))
-		fmt.Fprintln(stderr, "cafard:", err)
+		fmt.Fprintln(stderr, "mouchard:", err)
 		return 127
 	}
 	done := make(chan error, 1)
@@ -353,11 +362,11 @@ func runCommand(c *Client, args []string, stdout, stderr io.Writer) int {
 		verdict = fmt.Sprintf("`%s` was stopped after %s: %v", shown, took, waitErr)
 	}
 	if sendErr != nil {
-		fmt.Fprintln(stderr, "cafard: the output was not all sent:", sendErr)
+		fmt.Fprintln(stderr, "mouchard: the output was not all sent:", sendErr)
 		verdict += " (its output was not all sent: " + sendErr.Error() + ")"
 	}
 	if _, err := c.Say(ctx, to, verdict); err != nil {
-		fmt.Fprintln(stderr, "cafard: could not say how it ended:", err)
+		fmt.Fprintln(stderr, "mouchard: could not say how it ended:", err)
 	}
 	return code
 }
@@ -377,7 +386,7 @@ func commandLine(argv []string) string {
 // report prints where something was sent, or why it was not.
 func report(sent Sent, err error, stdout, stderr io.Writer) int {
 	if err != nil {
-		fmt.Fprintln(stderr, "cafard:", err)
+		fmt.Fprintln(stderr, "mouchard:", err)
 		return 1
 	}
 	if sent.Created {

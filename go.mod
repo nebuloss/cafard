@@ -3,6 +3,7 @@ module cafard
 go 1.26.0
 
 require (
+	go.bug.st/serial v1.8.0
 	golang.org/x/crypto v0.56.0
 	golang.org/x/image v0.48.0
 	golang.org/x/term v0.48.0

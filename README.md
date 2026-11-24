@@ -77,6 +77,7 @@ install), with an agent's or a device's token in `CAFARD_URL` and
     mouchard send be98/wifi-drops boot.log dmesg.txt -m "after the reset"
     logread -f | mouchard log be98/wifi-drops console.log
     mouchard run  be98/signed-ota-rc3 -- make firmware
+    mouchard serial be98/wifi-drops COM3 115200          # or /dev/ttyUSB0
 
 `run` streams the command's output as it runs, then says how it ended and
 exits with its code. A board with only busybox uses `curl`:

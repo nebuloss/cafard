@@ -631,10 +631,15 @@ Credentials come from `CAFARD_URL` and `CAFARD_TOKEN`, or else from
 layout an agent's install link writes, on Windows too. Boards that run
 busybox keep the curl lines.
 
-Next: `cafard serial` (a serial console as a log that starts a new file each
-time the device comes back), `cafard tail` (a conversation in a terminal),
-and a setup link for a device, as an agent has, so a device's token is never
-pasted into a script.
+- **serial** sends a serial console as a live log, on Linux, macOS and
+  Windows alike (`COM3`, `/dev/ttyUSB0`), 115200 bauds unless told. Each
+  connection of the device is a log of its own, named for when it started
+  (`console-14h02.log`): unplugged or reset, the log ends, and the next
+  begins when the port comes back. `-time` stamps each line.
+
+A device's setup link writes its token where mouchard reads it, so a
+device's token is never pasted into a script. Next: `mouchard tail`, a
+conversation in a terminal.
 
 ### Upload links from the chat
 
