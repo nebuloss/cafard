@@ -39,10 +39,9 @@ var fr = map[string]string{
 	"Use at most %d characters.":  "Utilisez au plus %d caractères.",
 
 	// service/access/links.go
-	"A link waits 7 days at most.":                                                                       "Un lien attend 7 jours au plus.",
-	"%s is a device: give it a token instead (it has no link to open).":                                  "%s est un appareil\u00a0: donnez-lui plutôt un jeton (il n'a pas de lien à ouvrir).",
+	"A link waits 7 days at most.": "Un lien attend 7 jours au plus.",
 	"This link no longer works: it was used, cancelled, or waited too long. Ask an admin for a new one.": "Ce lien ne fonctionne plus\u00a0: il a servi, a été annulé, ou a trop attendu. Demandez-en un nouveau à un admin.",
-	"This link connects an agent: run it with curl on the agent's machine.":                              "Ce lien connecte un agent\u00a0: exécutez-le avec curl sur la machine de l'agent.",
+	"This link sets up a machine: run the command it shows on that machine.":                             "Ce lien configure une machine\u00a0: exécutez la commande qu'il affiche sur cette machine.",
 	"This link is a person's: open it in a browser.":                                                     "Ce lien est celui d'une personne\u00a0: ouvrez-le dans un navigateur.",
 	"This link was used a moment ago. Ask an admin for a new one.":                                       "Ce lien vient de servir. Demandez-en un nouveau à un admin.",
 	"That link no longer works already.":                                                                 "Ce lien ne fonctionne déjà plus.",

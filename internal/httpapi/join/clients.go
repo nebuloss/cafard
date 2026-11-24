@@ -3,11 +3,13 @@ package join
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
 	"cafard/internal/install"
+	"cafard/internal/version"
 )
 
 // The MCP clients an agent's link sets up, and how: each registers cafard's
@@ -71,15 +73,42 @@ func ParseClient(id string) (Client, error) {
 }
 
 // agentBundle is what an agent's link installs on its machine: the token, in
-// ~/.config/cafard/token for anything else on the machine that wants it, and
-// the one MCP client chosen, if the machine has it.
+// ~/.config/cafard/token where mouchard reads it, the one MCP client chosen
+// if the machine has it, and mouchard.
 func agentBundle(base, name, token string, c Client) install.Bundle {
 	b := everyClient(base, name, token)
 	keep := func(client string) bool { return client == "cafard" || client == c.Name }
 	b.Files = slices.DeleteFunc(b.Files, func(f install.File) bool { return !keep(f.Client) })
 	b.Runs = slices.DeleteFunc(b.Runs, func(r install.Run) bool { return !keep(r.Client) })
+	b.Kind = "agent"
+	b.Tools = []install.Tool{mouchard()}
 	return b
 }
+
+// deviceBundle is what a device's setup link installs: its token and the
+// address, where mouchard reads them, and mouchard, so the machine sends
+// with `mouchard say …` from the next command on.
+func deviceBundle(base, name, token string) install.Bundle {
+	return install.Bundle{Name: name, Kind: "device", Files: []install.File{
+		{Client: "cafard", Path: ".config/cafard/token", Private: true, Body: token + "\n"},
+		{Client: "cafard", Path: ".config/cafard/config", Body: "url=" + base + "\ndevice=" + name + "\n"},
+	}, Tools: []install.Tool{mouchard()}}
+}
+
+// mouchard is the client, from the release this server is: a client that
+// speaks the API it was released with. A build that is not a release (a
+// branch deployed with scripts/deploy.sh) takes the newest release.
+func mouchard() install.Tool {
+	base := "https://github.com/nebuloss/cafard/releases/latest/download"
+	if releaseTag.MatchString(version.Version) {
+		base = "https://github.com/nebuloss/cafard/releases/download/" + version.Version
+	}
+	return install.Tool{Name: "mouchard", Base: base}
+}
+
+// releaseTag is a version made by `git describe` on a tag itself: v0.3.0,
+// not v0.3.0-2-g5653a67.
+var releaseTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
 func everyClient(base, name, token string) install.Bundle {
 	mcp := base + mcpPath

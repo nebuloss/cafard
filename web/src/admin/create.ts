@@ -70,7 +70,8 @@ const CLIENTS: { id: string; name: string }[] = [
 
 /** The command that runs an agent's link for one client, as internal/install's Command writes it. */
 function installCommand(link: string, windows: boolean, client: string): string {
-  const q = `&client=${client}`;
+  // A device's link sets up no MCP client: no client in its query.
+  const q = client ? `&client=${client}` : '';
   return windows ? `irm '${link}?shell=ps1${q}' | iex` : `curl -fsSL '${link}?shell=sh${q}' | sh`;
 }
 
@@ -232,7 +233,11 @@ export class GiveScreen extends Component {
       const on = this.client === c.id;
       return html`<button type="button" class="state-layer inline-flex h-8 items-center gap-1.5 rounded-md3-s px-3 text-[13px] font-medium ${on ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant ring-1 ring-outline-variant ring-inset'}" role="radio" aria-checked="${String(on)}" data-act="client" data-v="${c.id}">${on ? Icon.of('check') : ''}${c.name}</button>`;
     };
-    const right = m.kind === 'agent'
+    const right = m.kind === 'device'
+      ? html`<div class="${ui.field}"><span class="${ui.label}">Linux / macOS</span>${copyBox(installCommand(l.url ?? '', false, ''))}</div>
+        <div class="${ui.field}"><span class="${ui.label}">Windows (PowerShell)</span>${copyBox(installCommand(l.url ?? '', true, ''))}</div>
+        <p class="${FIELD_HELP}">${t('Run on {name}: it installs mouchard with its token, so it sends with mouchard say, send, log and run.', { name: m.name })}</p>`
+      : m.kind === 'agent'
       ? html`<div class="${ui.field}"><span class="${ui.label}">${t('Client')}</span><div class="flex flex-wrap gap-2 [&_.ic]:size-4" role="radiogroup">${CLIENTS.map(chip)}</div></div>
         <div class="${ui.field}"><span class="${ui.label}">Linux / macOS</span>${copyBox(installCommand(l.url ?? '', false, this.client))}</div>
         <div class="${ui.field}"><span class="${ui.label}">Windows (PowerShell)</span>${copyBox(installCommand(l.url ?? '', true, this.client))}</div>
@@ -245,7 +250,7 @@ export class GiveScreen extends Component {
       : this.state === 'waiting'
         ? html`<div class="${STATUS} bg-surface-container">${dot(false)}${t('Waiting · {until}', { until: time.until(l.expires_at) })}</div>`
         : html`<div class="${STATUS} bg-surface-container">${Icon.of('warn')}${this.state === 'expired' ? t('The link expired.') : t('The link was cancelled.')}</div>`;
-    return html`${head(m.kind === 'agent' ? t('Connect {name}', { name: who }) : t('Send this to {name}', { name: who }), t('One-time link. Never paste it in a conversation.'))}
+    return html`${head(m.kind !== 'person' ? t('Connect {name}', { name: who }) : t('Send this to {name}', { name: who }), t('One-time link. Never paste it in a conversation.'))}
       <div class="${ui.dialogBody}"><div class="grid items-start gap-5 sm:grid-cols-[180px_minmax(0,1fr)]"><div class="relative grid aspect-square w-[180px] max-w-full place-items-center justify-self-center rounded-md3-m border border-outline-variant bg-white p-2.5 [&_img]:w-full">${l.qr ? html`<img src="${l.qr}" alt="${t('QR code of the link')}">` : ''}${this.state === 'used' ? html`<span class="absolute inset-0 grid place-items-center rounded-md3-m bg-white/85 text-lg font-bold text-[#1c1b19]">${t('Used')}</span>` : ''}</div><div class="flex min-w-0 flex-col gap-3">${right}</div></div>${status}</div>
       <div class="${ui.dialogFoot}"><button class="${ui.btn('filled')}" data-act="done">${t('Done')}</button></div>`;
   }
@@ -278,9 +283,9 @@ export class GiveScreen extends Component {
       if (l.state === 'used') {
         this.app.layer.close();
         await this.app.refresh();
-        const name = this.member.kind === 'agent' ? this.member.name : this.member.display_name || this.member.name;
+        const name = this.member.kind !== 'person' ? this.member.name : this.member.display_name || this.member.name;
         const from = l.used_from ?? '';
-        Toaster.show(this.member.kind === 'agent'
+        Toaster.show(this.member.kind !== 'person'
           ? from ? t('{name} is connected from {from}.', { name, from }) : t('{name} is connected.', { name })
           : from ? t('{name} is signed in from {from}.', { name, from }) : t('{name} is signed in.', { name }));
         return;

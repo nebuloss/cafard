@@ -209,8 +209,16 @@ and its expiry** (24 hours by default). The code works once; admin then shows
   Each file is merged, owning only cafard's entry, and backed up beside
   itself; a client not installed is named and skipped (`internal/install`,
   from claudication). A new link run again is the update. The token is
-  never shown on screen or pasted into a chat.
-- **Device** — the token, shown once, with the `curl` lines that use it.
+  never shown on screen or pasted into a chat. The same script installs
+  mouchard, the client, from the release the server is (`~/.local/bin`, or
+  `%LOCALAPPDATA%\cafard\bin` added to the user's Path on Windows),
+  checked against the release's `SHA256SUMS`.
+- **Device** — a setup link, the same two commands without a client to
+  choose: the device's token in `~/.config/cafard` and mouchard, so the
+  machine sends with `mouchard say be98/wifi-drops "flash done"` from the
+  next command on. A board that has `curl` and nothing else is given its
+  token instead, from its page (*Regenerate token*), shown once, with the
+  `curl` lines that use it.
 
 **A token or a join link is never posted in a conversation.** Everything in a
 conversation is read by every member, agents included, stays in history, and

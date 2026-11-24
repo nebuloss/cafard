@@ -458,21 +458,15 @@ func (a *Admin) createMember(w http.ResponseWriter, r *http.Request, who access.
 		}
 	}
 	resp := map[string]any{"member": memberOf(i)}
-	if i.Kind == store.Device {
-		tok, err := a.acc.IssueToken(r.Context(), who, i)
-		if err != nil {
-			a.fail(w, r, err)
-			return
-		}
-		resp["token"] = tok
-	} else {
-		l, err := a.newLink(r, who, i, in.LinkHours)
-		if err != nil {
-			a.fail(w, r, err)
-			return
-		}
-		resp["link"] = l
+	// Every member starts from a one-time link: a person's signs them in, a
+	// machine's sets it up with its token. A board that has curl alone is
+	// given a token from its page instead.
+	l, err := a.newLink(r, who, i, in.LinkHours)
+	if err != nil {
+		a.fail(w, r, err)
+		return
 	}
+	resp["link"] = l
 	writeJSON(w, http.StatusCreated, resp)
 }
 

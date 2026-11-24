@@ -1,5 +1,6 @@
-// Package install writes the setup scripts an agent's join link serves: an
-// MCP client on a machine pointed at cafard, by one pasted command.
+// Package install writes the setup scripts a machine's link serves, by one
+// pasted command: for an agent, an MCP client pointed at cafard; for an agent
+// or a device, its token and mouchard, the client that sends (Tool).
 //
 // What goes where is decided elsewhere (internal/httpapi/join, which knows
 // the clients); this turns it into a script for one shell, the query of the
@@ -167,20 +168,43 @@ func (m *Merge) validate(env bool) error {
 	return nil
 }
 
-// Bundle is what one command installs: an agent's files and commands.
+// Bundle is what one command installs: a machine's files, commands and
+// tools.
 type Bundle struct {
-	// Name is the agent's, for the script's first line.
+	// Name is the machine's, for the script's first line, and Kind what it
+	// is: "agent" or "device".
 	Name  string
+	Kind  string
 	Files []File
 	Runs  []Run
+	Tools []Tool
+}
+
+// Tool is a program the script downloads from a release and puts on the
+// user's PATH: mouchard. Its file in the release is Name-<os>-<arch>, .exe
+// on Windows, for linux, darwin and windows on amd64 and arm64; it is
+// checked against the release's SHA256SUMS, and not installed if it does
+// not match. Under the user's home, so no root: ~/.local/bin, or
+// %LOCALAPPDATA%\cafard\bin on Windows, which is added to the user's Path.
+type Tool struct {
+	Name string
+	// Base is where the release's files are: an https address such as
+	// https://github.com/nebuloss/cafard/releases/download/v0.3.0.
+	Base string
 }
 
 // Command is the line that runs a join link's script: curl into sh on Linux
 // and macOS, irm into iex on Windows.
 //
 // client is the id of the MCP client the script sets up.
+//
+// A device's link sets up no client: client is empty, and the query says
+// only which shell.
 func Command(link string, windows bool, client string) string {
-	q := "&client=" + client
+	q := ""
+	if client != "" {
+		q = "&client=" + client
+	}
 	if windows {
 		return "irm '" + link + "?shell=ps1" + q + "' | iex"
 	}
@@ -194,6 +218,10 @@ const (
 	maxBytes = 4 << 20
 )
 
+// safeBase is an https address made of characters that need no quoting in
+// either script: a tool's release.
+var safeBase = regexp.MustCompile(`^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~%-]+)*$`)
+
 // safePath is a home-relative path made of ordinary names: no absolute paths,
 // no "..", nothing a shell or PowerShell would read as anything but text.
 var safePath = regexp.MustCompile(`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
@@ -202,8 +230,16 @@ var safePath = regexp.MustCompile(`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
 // directory, run anything but a program by its name, or that is larger than
 // any real configuration.
 func (b Bundle) Validate() error {
-	if len(b.Files)+len(b.Runs) == 0 {
+	if len(b.Files)+len(b.Runs)+len(b.Tools) == 0 {
 		return errors.New("nothing to install")
+	}
+	for _, t := range b.Tools {
+		if !program.MatchString(t.Name) {
+			return fmt.Errorf("%q is not a program's name", t.Name)
+		}
+		if !safeBase.MatchString(t.Base) {
+			return fmt.Errorf("%q is not an https address to download from", t.Base)
+		}
 	}
 	if len(b.Files) > maxFiles || len(b.Runs) > maxFiles {
 		return fmt.Errorf("at most %d files and %d commands", maxFiles, maxFiles)
@@ -311,7 +347,7 @@ const profileMarker = "# cafard"
 // there keeps its mode, but for a Private one.
 func Shell(b Bundle) string {
 	var s strings.Builder
-	fmt.Fprintf(&s, "#!/bin/sh\n# cafard: connect this machine as the agent %s.\n", shQuote(b.Name))
+	fmt.Fprintf(&s, "#!/bin/sh\n# cafard: connect this machine as the %s %s.\n", b.kind(), shQuote(b.Name))
 	s.WriteString(`set -eu
 umask 077
 stamp=$(date +%Y%m%d%H%M%S)
@@ -352,6 +388,12 @@ failed=""
 		}
 		if len(g.detect) > 0 {
 			fmt.Fprintf(&s, "else\n  echo %s\nfi\n", shQuote("cafard: "+g.client+": not installed"))
+		}
+	}
+	if len(b.Tools) > 0 {
+		s.WriteString(shellToolHelper)
+		for _, t := range b.Tools {
+			fmt.Fprintf(&s, "\n# %s\nif ! install_tool %s %s; then failed=1; fi\n", t.Name, shQuote(t.Name), shQuote(t.Base))
 		}
 	}
 	s.WriteString(`
@@ -569,7 +611,7 @@ var exportLine = regexp.MustCompile(`^export ([A-Za-z_][A-Za-z0-9_]*)=(.*)$`)
 // user instead, which is what every new terminal then has, and for this one.
 func PowerShell(b Bundle) string {
 	var s strings.Builder
-	fmt.Fprintf(&s, "# cafard: connect this machine as the agent %s.\n", psQuote(b.Name))
+	fmt.Fprintf(&s, "# cafard: connect this machine as the %s %s.\n", b.kind(), psQuote(b.Name))
 	s.WriteString(`$ErrorActionPreference = 'Stop'
 $stamp = Get-Date -Format 'yyyyMMddHHmmss'
 $cafardFailed = $false
@@ -623,6 +665,12 @@ function Merge-CafardFile([string]$rel, [string]$format, [string]$b64, [string[]
 		}
 		if len(g.detect) > 0 {
 			fmt.Fprintf(&s, "} else {\n  Write-Host %s\n}\n", psQuote("cafard: "+g.client+": not installed"))
+		}
+	}
+	if len(b.Tools) > 0 {
+		s.WriteString(psToolHelper)
+		for _, t := range b.Tools {
+			fmt.Fprintf(&s, "\n# %s\nif (-not (Install-CafardTool %s %s)) { $cafardFailed = $true }\n", t.Name, psQuote(t.Name), psQuote(t.Base))
 		}
 	}
 	s.WriteString(`
@@ -737,6 +785,109 @@ func unquote(v string) string {
 	}
 	return v
 }
+
+func (b Bundle) kind() string {
+	if b.Kind == "" {
+		return "agent"
+	}
+	return b.Kind
+}
+
+// shellToolHelper downloads a tool for this system, checks it against the
+// release's SHA256SUMS (sha256sum on Linux, shasum on macOS), and puts it in
+// ~/.local/bin. A failure is said and counted, and the rest of the script
+// still runs: the token is written either way.
+const shellToolHelper = `
+fetch() {
+  if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"; else wget -qO "$2" "$1"; fi
+}
+install_tool() {
+  case "$(uname -s)" in
+    Linux) os=linux ;;
+    Darwin) os=darwin ;;
+    *) echo "cafard: $1: no build for $(uname -s)"; return 1 ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64) arch=amd64 ;;
+    aarch64|arm64) arch=arm64 ;;
+    *) echo "cafard: $1: no build for $(uname -m)"; return 1 ;;
+  esac
+  asset="$1-$os-$arch"
+  dir="$HOME/.local/bin"
+  mkdir -p "$dir"
+  tmp="$dir/.$1.download"
+  if ! fetch "$2/$asset" "$tmp" || ! fetch "$2/SHA256SUMS" "$tmp.sums"; then
+    rm -f "$tmp" "$tmp.sums"
+    echo "cafard: $1: could not download $2/$asset"
+    return 1
+  fi
+  want=$(awk -v a="$asset" '$2 == a || $2 == "*" a {print $1; exit}' "$tmp.sums")
+  if command -v sha256sum >/dev/null 2>&1; then
+    have=$(sha256sum "$tmp" | cut -d' ' -f1)
+  else
+    have=$(shasum -a 256 "$tmp" | cut -d' ' -f1)
+  fi
+  rm -f "$tmp.sums"
+  if [ -z "$want" ] || [ "$want" != "$have" ]; then
+    rm -f "$tmp"
+    echo "cafard: $1: the download does not match the release's SHA256SUMS; not installed"
+    return 1
+  fi
+  chmod 755 "$tmp"
+  mv -f "$tmp" "$dir/$1"
+  echo "cafard: installed $dir/$1"
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *) echo "cafard: $dir is not on your PATH: add it, or run $dir/$1" ;;
+  esac
+}
+`
+
+// psToolHelper is shellToolHelper for Windows. TLS 1.2 is asked for
+// explicitly: Windows PowerShell 5.1 may offer only older versions, which
+// GitHub refuses.
+const psToolHelper = `
+function Install-CafardTool([string]$name, [string]$base) {
+  $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'amd64' }
+  $asset = "$name-windows-$arch.exe"
+  $dir = Join-Path $env:LOCALAPPDATA 'cafard\bin'
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  $tmp = Join-Path $dir ".$name.download"
+  $sums = Join-Path $dir ".$name.sums"
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile $tmp
+    Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS" -OutFile $sums
+  } catch {
+    Remove-Item $tmp, $sums -ErrorAction SilentlyContinue
+    Write-Warning "cafard: ${name}: could not download $base/$asset"
+    return $false
+  }
+  $want = ''
+  foreach ($line in Get-Content $sums) {
+    $f = $line -split '\s+'
+    if ($f.Count -ge 2 -and ($f[1] -eq $asset -or $f[1] -eq "*$asset")) { $want = $f[0]; break }
+  }
+  Remove-Item $sums -ErrorAction SilentlyContinue
+  $have = (Get-FileHash -Algorithm SHA256 -Path $tmp).Hash.ToLower()
+  if (-not $want -or $want -ne $have) {
+    Remove-Item $tmp -ErrorAction SilentlyContinue
+    Write-Warning "cafard: ${name}: the download does not match the release's SHA256SUMS; not installed"
+    return $false
+  }
+  $exe = Join-Path $dir "$name.exe"
+  Move-Item -Force $tmp $exe
+  Write-Host "cafard: installed $exe"
+  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  if (-not (($userPath -split ';') -contains $dir)) {
+    [Environment]::SetEnvironmentVariable('Path', ((@($userPath, $dir) | Where-Object { $_ }) -join ';'), 'User')
+    $env:Path = "$env:Path;$dir"
+    Write-Host "cafard: added $dir to your Path"
+  }
+  return $true
+}
+`
 
 // Failure is the script sent instead when there is nothing to install — a
 // link spent or unknown, or a person's: it fails loudly rather than as an

@@ -29,9 +29,11 @@ const (
 const Spent Code = "spent"
 
 // IssueLink makes a one-time link for target and returns its code with the
-// link. A person's signs in the browser that opens it. An agent's is
-// exchanged by the install script for the agent's token. Devices have no
-// link: an admin gives their token to the script that sends. Admins only.
+// link. A person's signs in the browser that opens it. A machine's (an
+// agent's install link, a device's setup link) is exchanged by the script it
+// serves for the machine's token: one pasted command, and the token is never
+// copied by hand. A device can still be given its token instead, for a board
+// that has curl and nothing else. Admins only.
 func (s *Service) IssueLink(ctx context.Context, who Who, target store.Identity, life time.Duration) (code string, l store.Link, err error) {
 	if err := requireAdmin(who); err != nil {
 		return "", store.Link{}, err
@@ -45,14 +47,17 @@ func (s *Service) IssueLink(ctx context.Context, who Who, target store.Identity,
 	if life > MaxLinkLife {
 		return "", store.Link{}, refuse(BadValue, "A link waits 7 days at most.")
 	}
+	// A machine's link is stored as an agent link whichever machine it is
+	// for: the redeemed token's prefix follows the identity's kind.
 	kind := store.AgentLink
-	action := "made an install link for"
+	var action string
 	switch target.Kind {
 	case store.Agent:
-	case store.Person:
-		kind, action = store.PersonLink, "made a sign-in link for"
+		action = "made an install link for"
+	case store.Device:
+		action = "made a setup link for"
 	default:
-		return "", store.Link{}, refuse(NotAllowed, "%s is a device: give it a token instead (it has no link to open).", target.Name)
+		kind, action = store.PersonLink, "made a sign-in link for"
 	}
 	code, err = randomToken()
 	if err != nil {
@@ -101,14 +106,14 @@ func (s *Service) SignInWithLink(ctx context.Context, code, from, userAgent stri
 		return store.Identity{}, "", err
 	}
 	if l.Kind != store.PersonLink {
-		return store.Identity{}, "", refuse(NotAllowed, "This link connects an agent: run it with curl on the agent's machine.")
+		return store.Identity{}, "", refuse(NotAllowed, "This link sets up a machine: run the command it shows on that machine.")
 	}
 	return s.redeemSignin(ctx, l, id, from, userAgent, "signed in with their link on")
 }
 
-// RedeemAgentLink exchanges an agent's install link for its token, which is
-// returned once. The agent's previous token stops working.
-func (s *Service) RedeemAgentLink(ctx context.Context, code, from string) (store.Identity, string, error) {
+// RedeemInstallLink exchanges a machine's link, an agent's or a device's,
+// for its token, which is returned once. Its previous token stops working.
+func (s *Service) RedeemInstallLink(ctx context.Context, code, from string) (store.Identity, string, error) {
 	l, id, err := s.LinkFor(ctx, code)
 	if err != nil {
 		return store.Identity{}, "", err
@@ -120,9 +125,12 @@ func (s *Service) RedeemAgentLink(ctx context.Context, code, from string) (store
 	if err != nil {
 		return store.Identity{}, "", err
 	}
-	token := agentPrefix + raw
+	token, action := agentPrefix+raw, "redeemed its install link"
+	if id.Kind == store.Device {
+		token, action = devicePrefix+raw, "redeemed its setup link"
+	}
 	err = s.st.RedeemAgentLink(ctx, l, hashToken(token), from,
-		store.AuditEntry{Actor: id.Name, Action: "redeemed its install link", Target: id.Name, Origin: "join · " + from})
+		store.AuditEntry{Actor: id.Name, Action: action, Target: id.Name, Origin: "join · " + from})
 	if errors.Is(err, store.ErrLinkSpent) {
 		return store.Identity{}, "", refuse(Spent, "This link was used a moment ago. Ask an admin for a new one.")
 	}

@@ -99,32 +99,36 @@ export class MemberPage extends ItemPage {
     const kindTxt = m.kind === 'person' ? t('Person') : m.kind === 'agent' ? t('Agent') : t('Device · sends only');
     const state = !m.enabled
       ? html`<span class="${ui.pill.muted}">${t('paused')}</span>`
-      : m.kind !== 'device' && !m.joined ? html`<span class="${ui.pill.warn}">${t('not joined')}</span>` : html`<span class="${ui.pill.ok}">${t('active')}</span>`;
+      : !m.joined ? html`<span class="${ui.pill.warn}">${t('not joined')}</span>` : html`<span class="${ui.pill.ok}">${t('active')}</span>`;
     const head = this.itemHead(Avatar.of(m), m.display_name || m.name, `${kindTxt} · @${m.name}`,
       html`${state}${Switch.of(m.enabled, 'pause', m.name, m.enabled ? t('Pause {name}', { name: m.name }) : t('Resume {name}', { name: m.name }))}`);
-    const used = m.joined || m.kind === 'device' ? time.ago(m.last_used) : t('never');
+    const used = m.joined ? time.ago(m.last_used) : t('never');
     const stats = this.stats([
       { label: t('Projects'), value: m.projects.length, hint: m.projects.length ? m.projects.slice(0, 3).join(', ') + (m.projects.length > 3 ? '…' : '') : t('reaches nothing') },
       { label: m.kind === 'person' ? t('Last sign-in') : t('Last used'), value: used, hint: m.last_from ?? '' },
       m.kind === 'person'
         ? { label: t('Sign-ins'), value: m.signins ?? 0, hint: t('chat app') }
-        : { label: t('Token'), value: m.joined ? t('in use') : m.kind === 'agent' ? t('not yet') : t('issued'), hint: m.kind === 'agent' ? t('from its install link') : t('shown once') },
+        : { label: t('Token'), value: m.joined ? t('in use') : t('not yet'), hint: m.kind === 'agent' ? t('from its install link') : t('from its setup link') },
     ]);
     return html`${head}${stats}${this.linkCard(m)}${this.descriptionCard(m)}${this.projectsCard(m)}${this.accessCard(m)}${this.removeCard(m)}`;
   }
 
-  /** A person or an agent that has not joined: its link, and a new one. */
+  /** A member that has not joined: its link, and a new one. */
   private linkCard(m: Member): Html {
-    if (m.kind === 'device' || m.joined) return Html.empty;
+    if (m.joined) return Html.empty;
     const l = m.link;
-    const agent = m.kind === 'agent';
     const until = l ? time.until(l.expires_at) : '';
+    const waiting = m.kind === 'agent' ? t('The install link is waiting · {until}.', { until })
+      : m.kind === 'device' ? t('The setup link is waiting · {until}.', { until })
+      : t('The sign-in link is waiting · {until}.', { until });
     const msg = !l ? t('No link yet.')
-      : l.state === 'waiting' ? (agent ? t('The install link is waiting · {until}.', { until }) : t('The sign-in link is waiting · {until}.', { until }))
+      : l.state === 'waiting' ? waiting
       : l.state === 'expired' ? t('The link expired before it was used.')
       : t('The link was cancelled.');
-    return this.card(agent ? t('Install link') : t('Sign-in link'), html`<p class="text-sm text-on-surface-variant">${msg}</p>`,
-      html`<button class="${ui.btn('filled', 'sm')}" data-act="relink">${agent ? t('New install link') : t('New sign-in link')}</button>`);
+    const title = m.kind === 'agent' ? t('Install link') : m.kind === 'device' ? t('Setup link') : t('Sign-in link');
+    const button = m.kind === 'agent' ? t('New install link') : m.kind === 'device' ? t('New setup link') : t('New sign-in link');
+    return this.card(title, html`<p class="text-sm text-on-surface-variant">${msg}</p>`,
+      html`<button class="${ui.btn('filled', 'sm')}" data-act="relink">${button}</button>`);
   }
 
   private descriptionCard(m: Member): Html {
@@ -156,7 +160,8 @@ export class MemberPage extends ItemPage {
     return this.card(t('Token'), html`<dl class="${ui.kv}"><dt>${t('Last used')}</dt><dd>${m.joined ? time.ago(m.last_used) : t('never')}</dd><dt>${t('From')}</dt><dd class="font-mono text-xs">${m.last_from || '-'}</dd></dl>`,
       m.kind === 'agent'
         ? html`<button class="${ui.btn('tonal', 'sm')}" data-act="relink" title="${t('Run on the machine, it replaces the token')}">${t('New install link')}</button>`
-        : html`<button class="${ui.btn('tonal', 'sm')}" data-act="regen" title="${t('The current token stops working at once')}">${t('Regenerate token')}</button>`);
+        : html`<button class="${ui.btn('tonal', 'sm')}" data-act="relink" title="${t('Run on the machine: it installs mouchard and replaces the token')}">${t('New setup link')}</button>
+          <button class="${ui.btn('tonal', 'sm')}" data-act="regen" title="${t('For a board with curl alone; the current token stops working at once')}">${t('Regenerate token')}</button>`);
   }
 
   private removeCard(m: Member): Html {

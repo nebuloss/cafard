@@ -89,7 +89,11 @@ dist: web
 	      -o $(DIST)/release/$$bin-$$os-$$arch$$ext ./cmd/$$bin; \
 	  done; \
 	done
-	@cd $(DIST)/release && sha256sum cafard-* > SHA256SUMS
+	@cd $(DIST)/release && sha256sum $(SERVER)-* $(CLIENT)-* > SHA256SUMS
+	@# Every file shipped is in SHA256SUMS: v0.3.0's named the server's alone,
+	@# and the setup scripts, which check mouchard against it, refused it.
+	@cd $(DIST)/release && for f in $(SERVER)-* $(CLIENT)-*; do \
+	  grep -q "  $$f$$" SHA256SUMS || { echo "$$f is not in SHA256SUMS"; exit 1; }; done
 	@echo; ls -1 $(DIST)/release
 
 # Two builds of the same commit must be the same bytes, or the checksums a

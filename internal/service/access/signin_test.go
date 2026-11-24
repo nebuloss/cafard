@@ -91,14 +91,33 @@ func TestANewLinkCancelsTheOld(t *testing.T) {
 	}
 }
 
+// A device's setup link gives it a device's token, which sends and reads
+// nothing: the link is how it is set up, not more access.
+func TestDeviceSetupLink(t *testing.T) {
+	w := newWorld(t)
+	code, l, err := w.svc.IssueLink(ctx, w.admin, w.devBuild.Identity, 0)
+	if err != nil || l.Kind != store.AgentLink {
+		t.Fatalf("issue: %v %v", l, err)
+	}
+	id, token, err := w.svc.RedeemInstallLink(ctx, code, "10.0.50.21")
+	if err != nil || id.Name != w.devBuild.Name || !strings.HasPrefix(token, devicePrefix) {
+		t.Fatalf("redeem: %v %q %v", id.Name, token, err)
+	}
+	who, err := w.svc.Authenticate(ctx, token, "x")
+	if err != nil || who.Kind != store.Device {
+		t.Errorf("the token: %v %v", who, err)
+	}
+	if _, _, err := w.svc.RedeemInstallLink(ctx, code, "x"); !Is(err, Spent) {
+		t.Errorf("used twice: %v", err)
+	}
+}
+
 func TestLinksThatMustNotWork(t *testing.T) {
 	w := newWorld(t)
 	_, _, err := w.svc.IssueLink(ctx, w.devCode, w.camille.Identity, 0)
 	wantCode(t, "an agent makes a link", err, NotAllowed)
 	_, _, err = w.svc.IssueLink(ctx, w.camille, w.labBench.Identity, 0)
 	wantCode(t, "a non-admin makes a link", err, NotAdmin)
-	_, _, err = w.svc.IssueLink(ctx, w.admin, w.devBuild.Identity, 0)
-	wantCode(t, "a link for a device", err, NotAllowed)
 	_, _, err = w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 8*24*time.Hour)
 	wantCode(t, "a link for 8 days", err, BadValue)
 
@@ -115,7 +134,7 @@ func TestLinksThatMustNotWork(t *testing.T) {
 	_, _, err = w.svc.SignInWithLink(ctx, agentCode, "x", "")
 	wantCode(t, "an agent's link used to sign in", err, NotAllowed)
 	personCode, _, _ := w.svc.IssueLink(ctx, w.admin, w.camille.Identity, 0)
-	_, _, err = w.svc.RedeemAgentLink(ctx, personCode, "x")
+	_, _, err = w.svc.RedeemInstallLink(ctx, personCode, "x")
 	wantCode(t, "a person's link used for a token", err, NotAllowed)
 }
 
@@ -123,7 +142,7 @@ func TestAgentLinkGivesItsTokenOnce(t *testing.T) {
 	w := newWorld(t)
 	before, _ := w.svc.IssueToken(ctx, w.admin, w.devCode.Identity)
 	code, _, _ := w.svc.IssueLink(ctx, w.admin, w.devCode.Identity, 0)
-	id, token, err := w.svc.RedeemAgentLink(ctx, code, "10.0.50.20")
+	id, token, err := w.svc.RedeemInstallLink(ctx, code, "10.0.50.20")
 	if err != nil || id.Name != "dev-code" || !strings.HasPrefix(token, "cfd_ag_") {
 		t.Fatalf("redeem: %v", err)
 	}
@@ -133,7 +152,7 @@ func TestAgentLinkGivesItsTokenOnce(t *testing.T) {
 	if _, err := w.svc.Authenticate(ctx, before, "x"); !Is(err, Unauthorized) {
 		t.Errorf("the token before the link still works: %v", err)
 	}
-	if _, _, err := w.svc.RedeemAgentLink(ctx, code, "x"); !Is(err, Spent) {
+	if _, _, err := w.svc.RedeemInstallLink(ctx, code, "x"); !Is(err, Spent) {
 		t.Errorf("redeemed twice: %v", err)
 	}
 }
@@ -149,7 +168,7 @@ func TestALinkIsUsedOnceUnderARace(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, _, err := w.svc.RedeemAgentLink(ctx, code, "x"); err == nil {
+			if _, _, err := w.svc.RedeemInstallLink(ctx, code, "x"); err == nil {
 				mu.Lock()
 				won++
 				mu.Unlock()

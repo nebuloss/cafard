@@ -97,7 +97,7 @@ export class MembersView extends View {
     const rows = this.rows().map((m) => {
       const tags = html`${m.kind !== 'person' ? html`<span class="${ui.kind[m.kind] ?? ''}">${KindName.of(m.kind)}</span>` : ''}${linkPill(m)}`;
       const chips = m.projects.length ? m.projects.map((p) => html`<span class="${ui.chip}">${p}</span>`) : html`<span class="${ui.dim}">${t('none')}</span>`;
-      const used = m.joined || m.kind === 'device' ? time.ago(m.last_used) : t('not joined');
+      const used = m.joined ? time.ago(m.last_used) : t('not joined');
       return html`<tr class="${ui.trLink} ${m.enabled ? '' : 'opacity-55'}" role="button" tabindex="0" data-act="open" data-v="${m.name}">
         <td class="${TD}"><span class="${WHO}">${Avatar.of(m, 'sm')}<span class="nm">${m.display_name || m.name}</span>${m.display_name && m.display_name !== m.name ? html`<span class="${ui.dim}">@${m.name}</span>` : ''}${tags}</span>${m.description ? html`<span class="mt-0.5 ml-9 block max-w-[60ch] truncate text-[12.5px] text-on-surface-variant">${m.description}</span>` : ''}</td>
         <td class="${TD}"><span class="flex flex-wrap gap-1">${chips}</span></td><td class="${TD} whitespace-nowrap text-[13px]">${used}</td><td class="${TD} font-mono text-xs text-on-surface-variant">${m.last_from ?? ''}</td>

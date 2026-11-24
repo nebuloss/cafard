@@ -210,14 +210,28 @@ func TestCreatePeopleAgentsAndDevices(t *testing.T) {
 	}
 
 	code, out = r.call("POST", "/admin/api/members", map[string]any{"kind": "device", "name": "dev-build", "projects": []string{"be98"}})
-	if code != 201 || !strings.HasPrefix(out["token"].(string), "cfd_dv_") || out["link"] != nil {
+	if code != 201 || out["token"] != nil || out["link"] == nil {
 		t.Fatalf("create device: %d %v", code, out)
+	}
+	// A device's setup link, fetched the way curl does: a device token, and
+	// mouchard, but no MCP client.
+	req, _ := http.NewRequest("GET", out["link"].(map[string]any)["url"].(string)+"?shell=sh", nil)
+	req.Header.Set("User-Agent", "curl/8.5.0")
+	resp, _ := http.DefaultClient.Do(req)
+	setup, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(setup), "cfd_dv_") || !strings.Contains(string(setup), "install_tool 'mouchard'") || strings.Contains(string(setup), "mcp") {
+		t.Errorf("setup script:\n%s", setup)
+	}
+	// A board with curl alone is given its token instead.
+	if code, out := r.call("POST", "/admin/api/members/dev-build/token", nil); code != 201 || !strings.HasPrefix(out["token"].(string), "cfd_dv_") {
+		t.Errorf("a device's token: %d %v", code, out)
 	}
 
 	// The install script, fetched the way curl does, carries the token.
-	req, _ := http.NewRequest("GET", agentLink["url"].(string)+"?shell=sh", nil)
+	req, _ = http.NewRequest("GET", agentLink["url"].(string)+"?shell=sh", nil)
 	req.Header.Set("User-Agent", "curl/8.5.0")
-	resp, _ := http.DefaultClient.Do(req)
+	resp, _ = http.DefaultClient.Do(req)
 	script, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if !strings.HasPrefix(string(script), "#!/bin/sh") || !strings.Contains(string(script), "cfd_ag_") {

@@ -109,16 +109,23 @@ func (j *Join) open(w http.ResponseWriter, r *http.Request) {
 	shell := shellOf(r)
 	if l.Kind == store.AgentLink {
 		if shell == "" {
+			link := j.publicURL.String() + "/join/" + code
+			title := say(r, "Set up %s", id.Name)
+			d := pageData{Title: title, Heading: title, Expires: l.ExpiresAt, Agent: true}
+			if id.Kind == store.Device {
+				// A device's link sets up no MCP client: there is nothing
+				// to choose.
+				d.Sh, d.PS1 = install.Command(link, false, ""), install.Command(link, true, "")
+				page(w, r, http.StatusOK, d)
+				return
+			}
 			// The client is chosen by following a link to this page with
 			// ?client=: the page has no script.
 			c, err := ParseClient(r.URL.Query().Get("client"))
 			if err != nil {
 				c = Clients[0]
 			}
-			link := j.publicURL.String() + "/join/" + code
-			title := say(r, "Set up %s", id.Name)
-			d := pageData{Title: title, Heading: title, Expires: l.ExpiresAt, Agent: true,
-				Sh: install.Command(link, false, c.ID), PS1: install.Command(link, true, c.ID)}
+			d.Sh, d.PS1 = install.Command(link, false, c.ID), install.Command(link, true, c.ID)
 			for _, o := range Clients {
 				d.Clients = append(d.Clients, pageClient{Name: o.Name, Href: "?client=" + o.ID, On: o == c})
 			}
@@ -186,9 +193,10 @@ func (j *Join) signInPerson(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// script redeems an agent's link and serves the script that sets the
+// script redeems a machine's link and serves the script that sets the
 // machine up with its token: the token exists from this moment, and only in
-// this response.
+// this response. An agent's sets up its MCP client and mouchard; a
+// device's, mouchard alone.
 func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string) {
 	if shell != "sh" && shell != "ps1" {
 		shellError(w, "sh", "shell="+shell+" is not one cafard writes for: use sh or ps1.")
@@ -201,13 +209,19 @@ func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string
 		shellError(w, shell, err.Error())
 		return
 	}
-	id, token, err := j.acc.RedeemAgentLink(r.Context(), code, clientIP(r))
+	id, token, err := j.acc.RedeemInstallLink(r.Context(), code, clientIP(r))
 	if err != nil {
 		j.refused(w, r, err)
 		return
 	}
-	j.log.Info("agent link redeemed", "agent", id.Name, "from", clientIP(r), "shell", shell, "client", client.ID)
-	b := agentBundle(j.publicURL.String(), id.Name, token, client)
+	var b install.Bundle
+	if id.Kind == store.Device {
+		j.log.Info("setup link redeemed", "device", id.Name, "from", clientIP(r), "shell", shell)
+		b = deviceBundle(j.publicURL.String(), id.Name, token)
+	} else {
+		j.log.Info("install link redeemed", "agent", id.Name, "from", clientIP(r), "shell", shell, "client", client.ID)
+		b = agentBundle(j.publicURL.String(), id.Name, token, client)
+	}
 	if err := b.Validate(); err != nil {
 		// What agentBundle writes is fixed, so this is a bug; the link is
 		// spent, and an admin makes another once it is fixed.
@@ -227,7 +241,7 @@ func (j *Join) script(w http.ResponseWriter, r *http.Request, code, shell string
 // token is the exchange the scripts served before this one made: they post
 // the code and keep what comes back.
 func (j *Join) token(w http.ResponseWriter, r *http.Request) {
-	id, token, err := j.acc.RedeemAgentLink(r.Context(), r.PathValue("code"), clientIP(r))
+	id, token, err := j.acc.RedeemInstallLink(r.Context(), r.PathValue("code"), clientIP(r))
 	if err != nil {
 		var msg string
 		if ref, ok := err.(*access.Refusal); ok {
