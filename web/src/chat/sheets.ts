@@ -2,18 +2,19 @@ import { Refused } from '@shared/api';
 import { Component } from '@shared/component';
 import { Bytes, time } from '@shared/format';
 import { Html, html } from '@shared/html';
+import { i18n, LANGS, n, t } from '@shared/i18n';
 import { Icon } from '@shared/icons';
 import { PickerState, PickerView } from '@shared/picker';
 import { Toaster } from '@shared/toast';
 import { ui } from '@shared/ui';
-import { Avatar } from '@shared/widgets';
+import { Avatar, KindName } from '@shared/widgets';
 import type { ChatApp } from './app';
 import { look } from './look';
 import type { Address } from './store';
 import type { FileInfo, LinesPage, Member, Message, Signin } from './types';
 
 function closeButton(cls: string = ui.iconBtn): Html {
-  return html`<button class="${cls}" data-act="close" aria-label="Close">${Icon.of('close')}</button>`;
+  return html`<button class="${cls}" data-act="close" aria-label="${t('Close')}">${Icon.of('close')}</button>`;
 }
 
 /** Errors as people read them. */
@@ -54,17 +55,17 @@ export class LogViewer extends Component {
       more: () => this.more(),
     };
     this.root.addEventListener('input', (e) => {
-      const t = e.target as HTMLInputElement;
-      if (t.classList.contains('log-q')) {
-        this.query = t.value;
+      const el = e.target as HTMLInputElement;
+      if (el.classList.contains('log-q')) {
+        this.query = el.value;
         clearTimeout(this.searchTimer);
         this.searchTimer = setTimeout(() => void this.show(this.query.trim() ? 'search' : 'start'), 250);
       }
     });
     this.root.addEventListener('change', (e) => {
-      const t = e.target as HTMLInputElement;
-      if (t.classList.contains('log-follow')) {
-        this.follow = t.checked;
+      const el = e.target as HTMLInputElement;
+      if (el.classList.contains('log-follow')) {
+        this.follow = el.checked;
         if (this.follow) void this.show('end');
       }
     });
@@ -77,17 +78,20 @@ export class LogViewer extends Component {
   protected view(): Html {
     const f = this.file;
     return html`<div class="${look.sheetHead}"><div class="min-w-0 flex-1"><h3>${f.name}</h3><p class="log-meta">${this.meta()}</p></div>${closeButton()}</div>
-      <div class="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-outline-variant px-4 py-2"><label class="${look.search} h-9 flex-[1_1_200px]">${Icon.of('search')}<input class="log-q" type="search" placeholder="Search in this log" value="${this.query}" autocomplete="off"></label>
+      <div class="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-outline-variant px-4 py-2"><label class="${look.search} h-9 flex-[1_1_200px]">${Icon.of('search')}<input class="log-q" type="search" placeholder="${t('Search in this log')}" value="${this.query}" autocomplete="off"></label>
         <span class="log-count text-[12.5px] text-on-surface-variant tabular-nums"></span>
-        <button class="${ui.btn('tonal', 'sm')}" data-act="start">Start</button><button class="${ui.btn('tonal', 'sm')}" data-act="end">End</button>
-        ${f.state === 'live' ? html`<label class="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-semibold"><input type="checkbox" class="log-follow size-4 accent-primary" ${Html.raw(this.follow ? 'checked' : '')}> Follow live</label>` : ''}</div>
-      <div class="logbody min-h-0 flex-1 overflow-auto bg-(--log-bg) pt-2 pb-6 font-mono text-[12.5px]/[1.6] text-(--log-fg)"><p class="p-4">Loading…</p></div>`;
+        <button class="${ui.btn('tonal', 'sm')}" data-act="start">${t('Start')}</button><button class="${ui.btn('tonal', 'sm')}" data-act="end">${t('End')}</button>
+        ${f.state === 'live' ? html`<label class="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-semibold"><input type="checkbox" class="log-follow size-4 accent-primary" ${Html.raw(this.follow ? 'checked' : '')}> ${t('Follow live')}</label>` : ''}</div>
+      <div class="logbody min-h-0 flex-1 overflow-auto bg-(--log-bg) pt-2 pb-6 font-mono text-[12.5px]/[1.6] text-(--log-fg)"><p class="p-4">${t('Loading…')}</p></div>`;
   }
 
   private meta(): string {
     const f = this.file;
-    const total = this.page ? `${this.page.total.toLocaleString()} lines · ` : '';
-    return `${total}${Bytes.format(f.size)}${f.state === 'live' ? ' · live' : ''}`;
+    return [
+      this.page ? n(this.page.total, '{n} line', '{n} lines', { n: this.page.total.toLocaleString(i18n.locale) }) : '',
+      Bytes.format(f.size),
+      f.state === 'live' ? t('live') : '',
+    ].filter(Boolean).join(' · ');
   }
 
   protected override afterRender(): void {
@@ -135,9 +139,9 @@ export class LogViewer extends Component {
       const cls = ERR.test(l.text) ? 'text-(--log-err)' : WARN.test(l.text) ? 'text-(--log-warn)' : '';
       return html`<div class="flex pr-4 whitespace-pre"><span class="w-16 shrink-0 pr-3.5 text-right text-(--log-num) tabular-nums select-none">${String(l.n)}</span><span class="${cls}">${q ? this.highlight(l.text, q) : l.text || ' '}${l.cut ? ' …' : ''}</span></div>`;
     });
-    const more = this.page.next ? html`<button class="${ui.btn('tonal', 'sm')} mx-4 my-3" data-act="more">More</button>` : Html.empty;
-    body.innerHTML = html`${rows.length ? rows : html`<p class="${LOG_EMPTY}">${this.mode === 'search' ? 'No line matches.' : 'Empty.'}</p>`}${more}`.value;
-    this.$('.log-count').textContent = this.mode === 'search' ? `${this.page.matches ?? 0} matching line${this.page.matches === 1 ? '' : 's'}` : '';
+    const more = this.page.next ? html`<button class="${ui.btn('tonal', 'sm')} mx-4 my-3" data-act="more">${t('More')}</button>` : Html.empty;
+    body.innerHTML = html`${rows.length ? rows : html`<p class="${LOG_EMPTY}">${this.mode === 'search' ? t('No line matches.') : t('Empty.')}</p>`}${more}`.value;
+    this.$('.log-count').textContent = this.mode === 'search' ? n(this.page.matches ?? 0, '{n} matching line', '{n} matching lines') : '';
     this.$('.log-meta').textContent = this.meta();
     if (toEnd) body.scrollTop = body.scrollHeight;
   }
@@ -189,12 +193,12 @@ export class ImageViewer extends Component {
   protected view(): Html {
     const f = this.images[this.index];
     if (!f) return Html.empty;
-    const by = `${this.message.author.display_name || this.message.author.name} · ${new Date(this.message.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}`;
+    const by = `${this.message.author.display_name || this.message.author.name} · ${new Date(this.message.at).toLocaleString(i18n.locale, { dateStyle: 'short', timeStyle: 'short' })}`;
     const nav = this.images.length > 1
-      ? html`<button class="${LB_NAV} left-[max(12px,env(safe-area-inset-left,0px))]" data-act="prev" aria-label="Previous">${Icon.of('back')}</button><button class="${LB_NAV} right-[max(12px,env(safe-area-inset-right,0px))]" data-act="next" aria-label="Next">${Icon.of('chev')}</button>`
+      ? html`<button class="${LB_NAV} left-[max(12px,env(safe-area-inset-left,0px))]" data-act="prev" aria-label="${t('Previous')}">${Icon.of('back')}</button><button class="${LB_NAV} right-[max(12px,env(safe-area-inset-right,0px))]" data-act="next" aria-label="${t('Next')}">${Icon.of('chev')}</button>`
       : Html.empty;
-    return html`<div class="flex items-center gap-2.5 pt-[calc(10px+env(safe-area-inset-top,0px))] pr-3 pb-2.5 pl-4"><div class="min-w-0 flex-1 text-[13px]"><b class="block text-sm">${f.name}</b>${by}${this.images.length > 1 ? ` · ${this.index + 1} of ${this.images.length}` : ''}</div>
-      <a class="${look.iconBtnDark}" href="${f.url}" download="${f.name}" aria-label="Download">${Icon.of('folder')}</a>${closeButton(look.iconBtnDark)}</div>
+    return html`<div class="flex items-center gap-2.5 pt-[calc(10px+env(safe-area-inset-top,0px))] pr-3 pb-2.5 pl-4"><div class="min-w-0 flex-1 text-[13px]"><b class="block text-sm">${f.name}</b>${by}${this.images.length > 1 ? ` · ${t('{i} of {total}', { i: this.index + 1, total: this.images.length })}` : ''}</div>
+      <a class="${look.iconBtnDark}" href="${f.url}" download="${f.name}" aria-label="${t('Download')}">${Icon.of('folder')}</a>${closeButton(look.iconBtnDark)}</div>
       <div class="relative grid min-h-0 flex-1 place-items-center px-4 pb-6"><img class="max-h-full max-w-full rounded-md object-contain" src="${f.url}" alt="${f.name}">${nav}</div>`;
   }
 
@@ -218,57 +222,63 @@ export class DetailsSheet extends Component {
     super('div');
     this.actions = {
       close: () => this.app.layer.close(),
-      copy: async (t) => {
+      copy: async (el) => {
         try {
-          await navigator.clipboard.writeText(t.dataset['v'] ?? '');
-          Toaster.show('Copied.');
+          await navigator.clipboard.writeText(el.dataset['v'] ?? '');
+          Toaster.show(t('Copied.'));
         } catch {
-          Toaster.show('Select the text to copy it.');
+          Toaster.show(t('Select the text to copy it.'));
         }
       },
       add: () => this.openPicker(),
       'toggle-closed': async () => {
         const closed = !this.app.store.conversation(this.address)?.closed;
         await this.app.attempt(() => this.app.store.api.patch(`/projects/${this.address.path.replace('/', '/conversations/')}`, { closed }),
-          closed ? 'Conversation closed.' : 'Conversation reopened.');
+          closed ? t('Conversation closed.') : t('Conversation reopened.'));
         await this.app.refreshProject(this.address.project);
         this.render();
       },
-      log: (t) => {
-        const f = this.files().find((x) => x.id === Number(t.dataset['v']));
+      log: (el) => {
+        const f = this.files().find((x) => x.id === Number(el.dataset['v']));
         if (f) this.app.openLog(f);
       },
     };
   }
 
   private files(): FileInfo[] {
-    const t = this.app.store.threads.get(this.address.toString());
-    return (t?.messages ?? []).flatMap((m) => m.files ?? []).reverse();
+    const th = this.app.store.threads.get(this.address.toString());
+    return (th?.messages ?? []).flatMap((m) => m.files ?? []).reverse();
   }
 
   protected view(): Html {
     const c = this.app.store.conversation(this.address);
     const me = this.app.store.me;
-    const kindText = (m: Member) => m.kind === 'person' ? 'Person' : m.kind === 'agent' ? `Agent${m.description ? ' · ' + m.description : ''}` : `Device · sends only${m.description ? ' · ' + m.description : ''}`;
-    const members = this.members.map((m) => html`<div class="${look.mem}">${Avatar.of(m)}<div class="min-w-0 flex-1"><div class="${look.memName}">${m.display_name || m.name}${m.kind !== 'person' ? html`<span class="${ui.kind[m.kind] ?? ''}">${m.kind}</span>` : ''}</div><div class="${look.memSub}">${m.name === me?.name ? 'You' : kindText(m)}</div></div></div>`);
+    const kindText = (m: Member): string => {
+      const description = m.description ?? '';
+      if (m.kind === 'person') return t('Person');
+      if (m.kind === 'agent') return description ? t('Agent · {description}', { description }) : t('Agent');
+      return description ? t('Device · sends only · {description}', { description }) : t('Device · sends only');
+    };
+    const members = this.members.map((m) => html`<div class="${look.mem}">${Avatar.of(m)}<div class="min-w-0 flex-1"><div class="${look.memName}">${m.display_name || m.name}${m.kind !== 'person' ? html`<span class="${ui.kind[m.kind] ?? ''}">${KindName.of(m.kind)}</span>` : ''}</div><div class="${look.memSub}">${m.name === me?.name ? t('You') : kindText(m)}</div></div></div>`);
     const files = this.files().filter((f) => f.state !== 'deleted' && f.state !== 'cut').map((f) => {
-      const inner = html`<span class="grid size-10 shrink-0 place-items-center rounded-md3-s bg-surface-high">${Icon.of(f.lines_url ? 'list' : 'folder')}</span><span class="${look.fileMain}"><span class="${look.fileName}">${f.name}</span><span class="${look.fileMeta}">${Bytes.format(f.size)}${f.state === 'live' ? ' · live' : ''}</span></span>`;
+      const inner = html`<span class="grid size-10 shrink-0 place-items-center rounded-md3-s bg-surface-high">${Icon.of(f.lines_url ? 'list' : 'folder')}</span><span class="${look.fileMain}"><span class="${look.fileName}">${f.name}</span><span class="${look.fileMeta}">${Bytes.format(f.size)}${f.state === 'live' ? ` · ${t('live')}` : ''}</span></span>`;
       const row = 'flex w-full items-center gap-2.5 px-4 py-2 text-left text-inherit no-underline hover:bg-surface-container';
       // A log opens in the viewer; anything else is a download.
       return f.lines_url
         ? html`<button class="${row}" data-act="log" data-v="${String(f.id)}">${inner}</button>`
         : html`<a class="${row}" href="${f.url}" download="${f.name}">${inner}</a>`;
     });
+    const [sendBefore, sendAfter] = t('A device sends here with {command}').split('{command}');
     const send = `curl -T boot.log -H "Authorization: Bearer cfd_…" ${location.origin}/api/v1/send/${this.address}/`;
-    return html`<div class="${look.sheetHead}"><div class="min-w-0 flex-1"><h3>${c?.title ?? this.address.name}</h3><p>${this.address.project}${c?.closed ? ' · closed' : ''}</p></div>${closeButton()}</div>
+    return html`<div class="${look.sheetHead}"><div class="min-w-0 flex-1"><h3>${c?.title ?? this.address.name}</h3><p>${c?.closed ? t('{project} · closed', { project: this.address.project }) : this.address.project}</p></div>${closeButton()}</div>
       <div class="${look.sheetScroll}">
-        <div class="${look.sec}">Address for agents and scripts</div>
-        <div class="mx-4 mt-1 flex flex-col gap-1.5 rounded-xl bg-surface-container px-3 py-2.5 text-[12.5px] [&_code]:font-mono [&_code]:[overflow-wrap:anywhere]"><div class="flex items-center gap-2"><code class="min-w-0 flex-1">${this.address.toString()}</code><button class="rounded-md px-2 py-1 font-semibold text-primary" data-act="copy" data-v="${this.address.toString()}">Copy</button></div>
-          <p class="text-on-surface-variant">A device sends here with <code>${send}</code></p></div>
-        <div class="${look.sec}">Members · ${this.members.length}</div>${members}
-        ${me?.kind === 'person' ? html`<div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="add">Add or remove people and agents</button></div>` : ''}
-        <div class="${look.sec}">Files</div>${files.length ? files : html`<p class="${look.note}">No files yet.</p>`}
-        <div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="toggle-closed">${c?.closed ? 'Reopen conversation' : 'Close conversation'}</button></div>
+        <div class="${look.sec}">${t('Address for agents and scripts')}</div>
+        <div class="mx-4 mt-1 flex flex-col gap-1.5 rounded-xl bg-surface-container px-3 py-2.5 text-[12.5px] [&_code]:font-mono [&_code]:[overflow-wrap:anywhere]"><div class="flex items-center gap-2"><code class="min-w-0 flex-1">${this.address.toString()}</code><button class="rounded-md px-2 py-1 font-semibold text-primary" data-act="copy" data-v="${this.address.toString()}">${t('Copy')}</button></div>
+          <p class="text-on-surface-variant">${sendBefore}<code>${send}</code>${sendAfter}</p></div>
+        <div class="${look.sec}">${t('Members · {n}', { n: this.members.length })}</div>${members}
+        ${me?.kind === 'person' ? html`<div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="add">${t('Add or remove people and agents')}</button></div>` : ''}
+        <div class="${look.sec}">${t('Files')}</div>${files.length ? files : html`<p class="${look.note}">${t('No files yet.')}</p>`}
+        <div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="toggle-closed">${c?.closed ? t('Reopen conversation') : t('Close conversation')}</button></div>
       </div>`;
   }
 
@@ -290,7 +300,7 @@ export class DetailsSheet extends Component {
     const state = new PickerState(dir.members.map((m) => ({
       id: m.name, label: m.display_name || m.name, kind: m.kind, avatar: Avatar.of(m, 'sm'),
       text: [m.name, m.display_name, m.description].join(' ').toLowerCase(),
-      sub: m.kind === 'person' ? `@${m.name}` : m.description || 'agent',
+      sub: m.kind === 'person' ? `@${m.name}` : m.description || KindName.of(m.kind),
     })), current, current);
     this.app.layer2.open(new MembersDialog(this.app, this.address.project, state, async () => {
       this.members = await this.app.store.loadMembers(this.address.project);
@@ -310,7 +320,7 @@ class MembersDialog extends Component {
     private readonly saved: () => Promise<void>,
   ) {
     super('div');
-    this.picker = new PickerView(state, { kinds: true, inline: false, placeholder: 'Search people and agents', onChange: () => this.updateSave() });
+    this.picker = new PickerView(state, { kinds: true, inline: false, placeholder: t('Search people and agents'), onChange: () => this.updateSave() });
     this.actions = {
       close: () => this.app.layer2.close(),
       save: () => this.save(),
@@ -318,9 +328,9 @@ class MembersDialog extends Component {
   }
 
   protected view(): Html {
-    return html`<div class="${ui.dialogHead}"><div class="min-w-0 flex-1"><h2>Members of ${this.project}</h2></div>${closeButton()}</div>
+    return html`<div class="${ui.dialogHead}"><div class="min-w-0 flex-1"><h2>${t('Members of {project}', { project: this.project })}</h2></div>${closeButton()}</div>
       <div class="${ui.dialogBody}"><div class="pk-slot"></div></div>
-      <div class="${ui.dialogFoot}"><button class="${ui.btn('tonal')}" data-act="close">Cancel</button><button class="${ui.btn('filled')} save" data-act="save" disabled>Save</button></div>`;
+      <div class="${ui.dialogFoot}"><button class="${ui.btn('tonal')}" data-act="close">${t('Cancel')}</button><button class="${ui.btn('filled')} save" data-act="save" disabled>${t('Save')}</button></div>`;
   }
 
   protected override afterRender(): void {
@@ -332,8 +342,9 @@ class MembersDialog extends Component {
   private updateSave(): void {
     const btn = this.find<HTMLButtonElement>('.save');
     if (!btn) return;
+    const { add, remove } = this.state.changes();
     btn.textContent = this.state.saveLabel();
-    btn.disabled = btn.textContent === 'Save';
+    btn.disabled = !add.length && !remove.length;
   }
 
   private async save(): Promise<void> {
@@ -343,15 +354,16 @@ class MembersDialog extends Component {
     await this.app.attempt(async () => {
       for (const name of add) await this.app.store.api.post(`/projects/${p}/members`, { name });
       for (const name of remove) await this.app.store.api.delete(`/projects/${p}/members/${encodeURIComponent(name)}`);
-    }, `Saved: ${add.length} added, ${remove.length} removed.`);
+    }, t('Saved: {added} added, {removed} removed.', { added: add.length, removed: remove.length }));
     await this.saved();
   }
 }
 
 /**
  * ProfileSheet is the one place in the chat app with settings, and they are
- * the person's own: their sign-ins, signing in another phone, signing out
- * (docs/design.md, "The chat app", rule 8).
+ * the person's own: their sign-ins, signing in another phone, the language
+ * (this browser's, as i18n keeps it), signing out (docs/design.md, "The
+ * chat app", rule 8).
  */
 export class ProfileSheet extends Component {
   private signins: Signin[] | null = null;
@@ -362,32 +374,37 @@ export class ProfileSheet extends Component {
     super('div');
     this.actions = {
       close: () => this.app.layer.close(),
-      'sign-out-one': async (t) => {
-        await this.app.attempt(() => this.app.store.api.delete(`/me/signins/${t.dataset['v']}`), 'Signed out.');
+      'sign-out-one': async (el) => {
+        await this.app.attempt(() => this.app.store.api.delete(`/me/signins/${el.dataset['v']}`), t('Signed out.'));
         await this.loadSignins();
       },
       'sign-out': async () => {
         await this.app.attempt(() => this.app.store.signOut());
-        this.app.showSignIn('You are signed out.');
+        this.app.showSignIn(t('You are signed out.'));
       },
       'phone-code': () => this.showPhoneCode(),
+      lang: (el) => {
+        const lang = LANGS.find((l) => l.id === el.dataset['v']);
+        if (lang && lang.id !== i18n.lang) i18n.choose(lang.id);
+      },
     };
   }
 
   protected view(): Html {
     const me = this.app.store.me;
-    const signins = this.signins === null ? html`<p class="${look.note}">Loading…</p>`
-      : this.signins.map((s) => html`<div class="${look.mem}"><div class="min-w-0 flex-1"><div class="${look.memName}">${s.what}${s.current ? ' · this one' : ''}</div><div class="${look.memSub}">${s.surface === 'admin' ? 'admin UI' : 'chat app'} · ${s.from} · ${time.ago(s.last_used)}</div></div>${s.current ? '' : html`<button class="${ui.btn('tonal', 'sm')}" data-act="sign-out-one" data-v="${String(s.id)}">Sign out</button>`}</div>`);
+    const signins = this.signins === null ? html`<p class="${look.note}">${t('Loading…')}</p>`
+      : this.signins.map((s) => html`<div class="${look.mem}"><div class="min-w-0 flex-1"><div class="${look.memName}">${s.current ? t('{what} · this one', { what: s.what }) : s.what}</div><div class="${look.memSub}">${s.surface === 'admin' ? t('admin UI') : t('chat app')} · ${s.from} · ${time.ago(s.last_used)}</div></div>${s.current ? '' : html`<button class="${ui.btn('tonal', 'sm')}" data-act="sign-out-one" data-v="${String(s.id)}">${t('Sign out')}</button>`}</div>`);
     // The QR code stays black on white in both themes, for the camera.
     const phone = this.phone
-      ? html`<div class="flex flex-wrap items-center gap-3.5 px-4 pt-2 pb-3"><div class="w-40 max-w-full shrink-0 rounded-xl bg-white p-2">${this.phone.qr ? html`<img class="block w-full [image-rendering:pixelated]" src="${this.phone.qr}" alt="QR code that signs in a phone">` : ''}</div><p class="flex-[1_1_180px] text-[13px] text-on-surface-variant">Scan it with the phone's camera. It works once, ${time.until(this.phone.expires_at)}, and signs that phone in as you.</p></div>`
-      : html`<div class="${look.pad}"><button class="${ui.btn('filled')}" data-act="phone-code">Show a code</button>
+      ? html`<div class="flex flex-wrap items-center gap-3.5 px-4 pt-2 pb-3"><div class="w-40 max-w-full shrink-0 rounded-xl bg-white p-2">${this.phone.qr ? html`<img class="block w-full [image-rendering:pixelated]" src="${this.phone.qr}" alt="${t('QR code that signs in a phone')}">` : ''}</div><p class="flex-[1_1_180px] text-[13px] text-on-surface-variant">${t("Scan it with the phone's camera. It works once, {expires}, and signs that phone in as you.", { expires: time.until(this.phone.expires_at) })}</p></div>`
+      : html`<div class="${look.pad}"><button class="${ui.btn('filled')}" data-act="phone-code">${t('Show a code')}</button>
           ${this.error ? html`<p class="${ui.error} mt-2">${this.error}</p>` : ''}</div>`;
-    return html`<div class="${look.sheetHead}">${me ? Avatar.of(me) : ''}<div class="min-w-0 flex-1"><h3>${me?.display_name || me?.name || ''}</h3><p>@${me?.name ?? ''}${me?.admin ? ' · admin' : ''}</p></div>${closeButton()}</div>
+    return html`<div class="${look.sheetHead}">${me ? Avatar.of(me) : ''}<div class="min-w-0 flex-1"><h3>${me?.display_name || me?.name || ''}</h3><p>${me?.admin ? t('@{name} · admin', { name: me.name }) : `@${me?.name ?? ''}`}</p></div>${closeButton()}</div>
       <div class="${look.sheetScroll}">
-        <div class="${look.sec}">Sign in another phone</div>${phone}
-        <div class="${look.sec}">Signed in</div>${signins}
-        <div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="sign-out">Sign out of this browser</button></div>
+        <div class="${look.sec}">${t('Sign in another phone')}</div>${phone}
+        <div class="${look.sec}">${t('Signed in')}</div>${signins}
+        <div class="flex items-center gap-3 px-4 pt-3 pb-1"><span class="flex-1 font-semibold">${t('Language')}</span><div class="${ui.seg}" role="group" aria-label="${t('Language')}">${LANGS.map((l) => html`<button type="button" class="${ui.segBtn}" lang="${l.id}" aria-pressed="${String(l.id === i18n.lang)}" data-act="lang" data-v="${l.id}">${l.name}</button>`)}</div></div>
+        <div class="${look.pad}"><button class="${ui.btn('tonal')}" data-act="sign-out">${t('Sign out of this browser')}</button></div>
       </div>`;
   }
 
@@ -433,7 +450,7 @@ export class ProfileSheet extends Component {
       this.phone = null;
       this.signins = r.signins;
       this.render();
-      Toaster.show('The phone is signed in.');
+      Toaster.show(t('The phone is signed in.'));
     }, 2500);
   }
 }
@@ -453,10 +470,11 @@ export class SignInView extends Component {
   }
 
   protected view(): Html {
+    const [before, after] = t('Open the sign-in link an admin sent you, or scan the code from a phone that is signed in: {where}.').split('{where}');
     return html`<div class="${ui.card} w-[min(380px,100%)] gap-4 p-6">
       <div class="flex items-center gap-2 text-xl font-bold tracking-[-.01em] [&_svg]:size-[26px] [&_svg]:text-primary">${Icon.logo} cafard</div>
       ${this.message ? html`<p class="${ui.error}" role="alert">${this.message}</p>` : ''}
-      <p class="text-sm">Open the sign-in link an admin sent you, or scan the code from a phone that is signed in: <span class="text-on-surface-variant">profile, Sign in another phone</span>.</p></div>`;
+      <p class="text-sm">${before}<span class="text-on-surface-variant">${t('profile, Sign in another phone')}</span>${after}</p></div>`;
   }
 
   focus(): void {}

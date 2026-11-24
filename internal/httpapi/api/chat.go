@@ -36,7 +36,7 @@ func readJSON(r *http.Request, v any) error {
 	dec := json.NewDecoder(io.LimitReader(r.Body, 64<<10))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
-		return &access.Refusal{Code: access.BadValue, Message: "The request is not the JSON this route takes: " + err.Error()}
+		return access.Refuse(access.BadValue, "The request is not the JSON this route takes: %s", err)
 	}
 	return nil
 }
@@ -92,7 +92,7 @@ func (a *API) deleteMySignin(w http.ResponseWriter, r *http.Request, who access.
 			return
 		}
 	}
-	writeError(w, http.StatusNotFound, string(access.NotFound), "No such sign-in.")
+	writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No such sign-in."))
 }
 
 // phoneCode is "Sign in another phone": a code a phone scans to be signed
@@ -100,12 +100,12 @@ func (a *API) deleteMySignin(w http.ResponseWriter, r *http.Request, who access.
 // a person's, rather than a token; people have no password to ask again.
 func (a *API) phoneCode(w http.ResponseWriter, r *http.Request, who access.Who) {
 	if _, ok := signinFrom(r.Context()); !ok {
-		writeError(w, http.StatusForbidden, string(access.NotAllowed), "Only a person signed in to the chat app can sign in another phone.")
+		writeError(w, http.StatusForbidden, string(access.NotAllowed), say(r, "Only a person signed in to the chat app can sign in another phone."))
 		return
 	}
 	if ok, wait := a.limit.Allow("phone " + who.Name); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-		writeError(w, http.StatusTooManyRequests, "slow_down", "Too many attempts. Wait a minute.")
+		writeError(w, http.StatusTooManyRequests, "slow_down", say(r, "Too many attempts. Wait a minute."))
 		return
 	}
 	code, l, err := a.acc.IssueSigninLink(r.Context(), who)
@@ -218,7 +218,7 @@ func (a *API) directory(w http.ResponseWriter, r *http.Request, who access.Who) 
 func (a *API) deleteFile(w http.ResponseWriter, r *http.Request, who access.Who) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusNotFound, string(access.NotFound), "No such file.")
+		writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No such file."))
 		return
 	}
 	if err := a.chat.DeleteFile(r.Context(), who, id); err != nil {
@@ -250,7 +250,7 @@ const (
 func (a *API) events(w http.ResponseWriter, r *http.Request, who access.Who) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "internal", "This server cannot stream events.")
+		writeError(w, http.StatusInternalServerError, "internal", say(r, "This server cannot stream events."))
 		return
 	}
 	ctx := r.Context()

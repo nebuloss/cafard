@@ -47,14 +47,14 @@ export class AdminStore {
 
   /** Reads what every page needs, and what the tab's pages need besides. */
   async load(tab: string): Promise<void> {
-    const [m, p, n] = await Promise.all([
+    const [m, p, ns] = await Promise.all([
       this.api.get<{ members: Member[] }>('/members'),
       this.api.get<{ projects: Project[] }>('/projects'),
       this.api.get<{ notices: Notice[] }>('/notices'),
     ]);
     this.members = m.members;
     this.projects = p.projects;
-    this.notices = n.notices;
+    this.notices = ns.notices;
     if (tab === 'audit') await this.loadAudit(AuditFilter.fromSearch(location.search));
     if (tab === 'overview') this.links = (await this.api.get<{ links: Link[] }>('/links')).links;
     if (!this.config) this.config = await this.api.get<Config>('/config');
@@ -87,13 +87,13 @@ export class AdminStore {
 
   /** The notices not marked read: what the bell counts. */
   unread(): Notice[] {
-    return this.notices.filter((n) => !n.read);
+    return this.notices.filter((x) => !x.read);
   }
 
   async markRead(ids: string[]): Promise<void> {
     await this.api.post('/notices/read', { ids });
     const now = new Date().toISOString();
-    for (const n of this.notices) if (ids.includes(n.id)) n.read = now;
+    for (const x of this.notices) if (ids.includes(x.id)) x.read = now;
   }
 
   member(name: string): Member | undefined {

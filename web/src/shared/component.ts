@@ -38,10 +38,10 @@ export abstract class Component {
     if (className) this.root.className = className;
     this.root.addEventListener('click', (e) => this.dispatch(e));
     this.root.addEventListener('keydown', (e) => {
-      const t = e.target as HTMLElement;
-      if ((e.key === 'Enter' || e.key === ' ') && t.matches('[role="button"][data-act]:not(button)')) {
+      const el = e.target as HTMLElement;
+      if ((e.key === 'Enter' || e.key === ' ') && el.matches('[role="button"][data-act]:not(button)')) {
         e.preventDefault();
-        t.click();
+        el.click();
       }
     });
   }

@@ -1,5 +1,6 @@
 import { ApiClient, Refused } from '@shared/api';
 import { html } from '@shared/html';
+import { t } from '@shared/i18n';
 import { Layer } from '@shared/overlay';
 import { Toaster } from '@shared/toast';
 import { ConversationView } from './conversation';
@@ -32,7 +33,7 @@ export class ChatApp {
   private staleTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly root: HTMLElement) {
-    this.api = new ApiClient('/api/v1', () => this.showSignIn('You were signed out. Sign in again.'));
+    this.api = new ApiClient('/api/v1', () => this.showSignIn(t('This sign-in has ended. Sign in again.')));
     this.store = new ChatStore(this.api);
     this.layer = new Layer(document.getElementById('overlay') as HTMLElement);
     this.layer2 = new Layer(document.getElementById('overlay2') as HTMLElement);
@@ -54,7 +55,7 @@ export class ChatApp {
       if (await this.store.whoAmI()) await this.showApp();
       else this.showSignIn();
     } catch {
-      this.root.innerHTML = html`<p class="${look.loading}">cafard does not answer. Is it running?</p>`.value;
+      this.root.innerHTML = html`<p class="${look.loading}">${t('cafard does not answer. Is it running?')}</p>`.value;
     }
   }
 
@@ -107,7 +108,7 @@ export class ChatApp {
     } else {
       const empty = document.createElement('main');
       empty.className = look.pane;
-      empty.innerHTML = html`<div class="${look.empty}"><h2>Pick a conversation</h2></div>`.value;
+      empty.innerHTML = html`<div class="${look.empty}"><h2>${t('Pick a conversation')}</h2></div>`.value;
       this.frame.append(empty);
     }
     this.list.drawRows();
@@ -134,13 +135,13 @@ export class ChatApp {
     }
     this.markStale(project.name);
     if (c.topic === 'conversation' && c.conversation) {
-      const t = this.store.threadById(project.id, c.conversation);
-      if (t && this.view?.address?.toString() === t.address.toString()) {
+      const th = this.store.threadById(project.id, c.conversation);
+      if (th && this.view?.address?.toString() === th.address.toString()) {
         await this.view.refresh();
         if (this.log) await this.log.update(this.view.fileNow(this.log.fileId));
-      } else if (t) {
+      } else if (th) {
         // Open before but not on screen: read again when it is next shown.
-        this.store.threads.delete(t.address.toString());
+        this.store.threads.delete(th.address.toString());
       }
     }
   }
@@ -152,7 +153,7 @@ export class ChatApp {
     this.staleTimer = setTimeout(() => {
       const names = [...this.staleProjects];
       this.staleProjects.clear();
-      void Promise.all(names.map((n) => this.attempt(() => this.store.loadConversations(n)))).then(() => this.list.drawRows());
+      void Promise.all(names.map((name) => this.attempt(() => this.store.loadConversations(name)))).then(() => this.list.drawRows());
     }, 300);
   }
 

@@ -7,7 +7,6 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"strings"
 
 	"cafard/internal/store"
@@ -103,8 +102,11 @@ func (s *Service) Authenticate(ctx context.Context, token, from string) (store.I
 // used: the agent may have been paused or removed since.
 func (s *Service) Active(ctx context.Context, id int64) (store.Identity, error) {
 	i, err := s.st.Identity(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return i, refuse(NotFound, "Member %d does not exist, or has been removed.", id)
+	}
 	if err != nil {
-		return i, notFound(err, fmt.Sprintf("Member %d", id))
+		return i, err
 	}
 	return i, active(i)
 }

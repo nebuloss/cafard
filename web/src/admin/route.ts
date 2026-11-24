@@ -1,4 +1,5 @@
 import type { IconName } from '@shared/icons';
+import { t } from '@shared/i18n';
 
 /**
  * The admin UI's page tree, and reading a location against it, as
@@ -23,19 +24,34 @@ import type { IconName } from '@shared/icons';
 
 export interface Section {
   id: string;
-  label: string;
   icon?: IconName;
 }
 
-/** The top-level screens, in the order the rail lists them. */
+/** The top-level screens, in the order the rail lists them; tabLabel names them. */
 export const TABS = [
-  { id: 'overview', label: 'Overview', icon: 'home' },
-  { id: 'members', label: 'Members', icon: 'people' },
-  { id: 'projects', label: 'Projects', icon: 'folder' },
-  { id: 'audit', label: 'Audit log', icon: 'list' },
-  { id: 'settings', label: 'Settings', icon: 'gear' },
+  { id: 'overview', icon: 'home' },
+  { id: 'members', icon: 'people' },
+  { id: 'projects', icon: 'folder' },
+  { id: 'audit', icon: 'list' },
+  { id: 'settings', icon: 'gear' },
 ] as const satisfies readonly Section[];
 export type Tab = (typeof TABS)[number]['id'];
+
+/** What the rail and the trail call a screen, in the page's language. */
+export function tabLabel(id: Tab): string {
+  switch (id) {
+    case 'overview':
+      return t('Overview');
+    case 'members':
+      return t('Members');
+    case 'projects':
+      return t('Projects');
+    case 'audit':
+      return t('Audit log');
+    case 'settings':
+      return t('Settings');
+  }
+}
 
 export type ItemKind = 'members' | 'projects';
 
@@ -88,7 +104,7 @@ export interface Place {
 
 export function placeOf(pathname: string): Place {
   const [top, name] = segments(canonical(pathname));
-  const tab = (TABS.some((t) => t.id === top) ? top : 'overview') as Tab;
+  const tab = (TABS.some((x) => x.id === top) ? top : 'overview') as Tab;
   return { tab, name };
 }
 
@@ -116,7 +132,7 @@ export function navLevel(pathname: string): NavLevel {
     // The overview is the root itself, reached by the trail's home step and
     // the name in the top bar, so it is not one of the rail's entries (as in
     // claudication); on it, no entry is marked.
-    items: TABS.filter((t) => t.id !== 'overview').map((t) => ({ href: pathOf(t.id), label: t.label, icon: t.icon })),
+    items: TABS.filter((x) => x.id !== 'overview').map((x) => ({ href: pathOf(x.id), label: tabLabel(x.id), icon: x.icon })),
     current: p.tab === 'overview' ? '/' : pathOf(p.tab),
   };
 }
@@ -127,10 +143,10 @@ export type Namer = (kind: ItemKind, name: string) => string;
 /** Every level from the root down to this page, the last one being it. */
 export function trailOf(pathname: string, name: Namer): NavLink[] {
   const p = placeOf(pathname);
-  const out: NavLink[] = [{ href: '/', label: 'Overview', icon: 'home' }];
+  const out: NavLink[] = [{ href: '/', label: tabLabel('overview'), icon: 'home' }];
   if (p.tab === 'overview') return out;
-  const tab = TABS.find((t) => t.id === p.tab)!;
-  out.push({ href: pathOf(p.tab), label: tab.label, icon: tab.icon });
+  const tab = TABS.find((x) => x.id === p.tab)!;
+  out.push({ href: pathOf(p.tab), label: tabLabel(p.tab), icon: tab.icon });
   if ((p.tab === 'members' || p.tab === 'projects') && p.name !== undefined) {
     out.push({ href: pathOf(p.tab, p.name), label: name(p.tab, p.name) });
   }
@@ -143,5 +159,5 @@ export function fromHash(hash: string): string | null {
   if (h === '') return null;
   if (h === 'storage') return '/';
   if (h === 'config') return '/settings';
-  return TABS.some((t) => t.id === h) ? canonical('/' + h) : null;
+  return TABS.some((x) => x.id === h) ? canonical('/' + h) : null;
 }

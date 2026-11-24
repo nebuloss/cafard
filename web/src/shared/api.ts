@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 /** A refusal from cafard: a code to act on and a sentence to show. */
 export class Refused extends Error {
   constructor(
@@ -38,7 +40,7 @@ export class ApiClient {
     }
     if (!resp.ok) {
       if (resp.status === 401) this.onSignedOut();
-      throw new Refused(resp.status, String(data['error'] ?? 'error'), String(data['message'] ?? 'cafard could not do that.'));
+      throw new Refused(resp.status, String(data['error'] ?? 'error'), String(data['message'] ?? t('cafard could not do that.')));
     }
     return data as T;
   }
@@ -58,7 +60,7 @@ export class ApiClient {
     }
     if (!resp.ok) {
       if (resp.status === 401) this.onSignedOut();
-      throw new Refused(resp.status, String(data['error'] ?? 'error'), String(data['message'] ?? 'cafard could not do that.'));
+      throw new Refused(resp.status, String(data['error'] ?? 'error'), String(data['message'] ?? t('cafard could not do that.')));
     }
     return data as T;
   }

@@ -164,6 +164,16 @@ a live server is a script under `scripts/`, run by hand, and says so.
 - No explanatory text on screen: a page has no title paragraph (the trail
   names it), a field no help line unless it prevents a mistake. Say it in a
   tooltip if it must be said.
+- **Every text a person reads is translated** (English and French). In the
+  web UIs, write it in English inside `t('…')` (or `n(count, 'one', 'other')`)
+  from `@shared/i18n`, with `{placeholders}` and never concatenated
+  sentences, and add the French to `web/src/shared/locales/fr/`. On the
+  server, a refusal is `access.Refuse(code, format, args…)` and other text a
+  browser reads goes through `say(r, …)`/`i18n.T`, with the French in
+  `internal/i18n/fr.go`. Tests on both sides fail on a missing or unused
+  entry. The language is the `cafard_lang` cookie, else Accept-Language.
+  What models and terminals read (MCP tools, install scripts, CLI, logs, the
+  audit log's stored text) stays English.
 - The UI's words are the ones in the design doc's glossary: person, agent,
   device, member, session, project, conversation, message, file. Not channel,
   server, workspace or topic.

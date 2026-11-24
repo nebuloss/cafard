@@ -5,7 +5,7 @@
 // Lowest first:
 //
 //	0  leaves         version logging testenv arch config blobs ratelimit webui live
-//	                  mcp imagefit uploads install
+//	                  mcp imagefit uploads install i18n
 //	1  records        store
 //	2  rules          service/access
 //	3  services       service/chat service/attention
@@ -25,6 +25,10 @@
 // uses; /api/v1 (httpapi/api) passes a request to service/chat, which asks
 // service/access whether the caller may, then reads and writes through the
 // store and the blob store.
+//
+// What people are shown is said in their language at the surface that
+// answers them (i18n); a refusal carries its English format and arguments
+// up to there. The MCP server, the scripts and the log stay English.
 //
 // The MCP server (httpapi/agent) is a surface like /api/v1: its tools call
 // service/chat, and service/attention decides what an agent is offered.

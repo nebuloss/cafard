@@ -38,6 +38,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"cafard/internal/i18n"
 	"cafard/internal/store"
 )
 
@@ -62,15 +63,36 @@ const (
 
 // Refusal is why something was not allowed.
 type Refusal struct {
-	Code    Code
+	Code Code
+	// Message is the English sentence: what the MCP server, the log and a
+	// shell are given.
 	Message string
+	// Format and Args are Message before it was filled in, so that a surface
+	// answering a person can say it in their language (In). A refusal made
+	// without them is said in English everywhere.
+	Format string
+	Args   []any
 }
 
 func (r *Refusal) Error() string { return r.Message }
 
-func refuse(code Code, format string, args ...any) error {
-	return &Refusal{Code: code, Message: fmt.Sprintf(format, args...)}
+// In is the refusal in l.
+func (r *Refusal) In(l i18n.Lang) string {
+	if r.Format == "" {
+		return r.Message
+	}
+	return i18n.T(l, r.Format, r.Args...)
 }
+
+// Refuse is a refusal with code, its sentence an English format that the
+// i18n catalog says in French as well. Names, paths and errors from Go are
+// fine as arguments; a word cafard chooses, like a kind, is not: it would
+// stay English in the French sentence, so give each case its own format.
+func Refuse(code Code, format string, args ...any) *Refusal {
+	return &Refusal{Code: code, Message: fmt.Sprintf(format, args...), Format: format, Args: args}
+}
+
+func refuse(code Code, format string, args ...any) error { return Refuse(code, format, args...) }
 
 // Is reports whether err is a refusal with that code.
 func Is(err error, code Code) bool {
@@ -153,20 +175,17 @@ func requireAdmin(who Who) error {
 	if err := active(who.Identity); err != nil {
 		return err
 	}
-	if who.Kind != store.Person {
-		return refuse(NotAllowed, "%s is %s %s: only people manage access.", who.Name, article(who.Kind), who.Kind)
+	switch who.Kind {
+	case store.Person:
+	case store.Agent:
+		return refuse(NotAllowed, "%s is an agent: only people manage access.", who.Name)
+	default:
+		return refuse(NotAllowed, "%s is a device: only people manage access.", who.Name)
 	}
 	if !who.Admin {
 		return refuse(NotAdmin, "%s is not an admin.", who.Name)
 	}
 	return nil
-}
-
-func article(k store.Kind) string {
-	if k == store.Agent {
-		return "an"
-	}
-	return "a"
 }
 
 func (who Who) audit(action, target string) store.AuditEntry {
@@ -257,8 +276,12 @@ func (s *Service) canChangeMembers(ctx context.Context, who Who, p store.Project
 	if err := active(who.Identity); err != nil {
 		return err
 	}
-	if who.Kind != store.Person {
-		return refuse(NotAllowed, "%s is %s %s: only people add or remove members.", who.Name, article(who.Kind), who.Kind)
+	switch who.Kind {
+	case store.Person:
+	case store.Agent:
+		return refuse(NotAllowed, "%s is an agent: only people add or remove members.", who.Name)
+	default:
+		return refuse(NotAllowed, "%s is a device: only people add or remove members.", who.Name)
 	}
 	if p.Archived() {
 		return refuse(Archived, "%s is archived: its members cannot change until it is unarchived.", p.Name)

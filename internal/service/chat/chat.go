@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -69,7 +68,7 @@ func (s *Service) Start(ctx context.Context) (cut int64, err error) {
 func (s *Service) project(ctx context.Context, name string) (store.Project, error) {
 	p, err := s.st.ProjectByName(ctx, name)
 	if errors.Is(err, store.ErrNotFound) {
-		return store.Project{}, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No project %q.", name)}
+		return store.Project{}, access.Refuse(access.NotFound, "No project %q.", name)
 	}
 	return p, err
 }
@@ -93,8 +92,8 @@ func (s *Service) conversationFor(ctx context.Context, who access.Who, project, 
 		return p, store.Conversation{}, false, err
 	}
 	if !convName.MatchString(conversation) {
-		return p, store.Conversation{}, false, &access.Refusal{Code: access.BadName, Message: fmt.Sprintf(
-			"%q is not a conversation name cafard accepts: use lowercase letters, digits and hyphens, like wifi-drops.", conversation)}
+		return p, store.Conversation{}, false, access.Refuse(access.BadName,
+			"%q is not a conversation name cafard accepts: use lowercase letters, digits and hyphens, like wifi-drops.", conversation)
 	}
 	c, created, err := s.st.EnsureConversation(ctx, p.ID, conversation, titleFrom(conversation), who.ID)
 	return p, c, created, err
@@ -112,12 +111,12 @@ func (s *Service) SendText(ctx context.Context, who access.Who, project, convers
 	text = strings.TrimSpace(text)
 	switch {
 	case text == "":
-		return Sent{}, &access.Refusal{Code: access.BadValue, Message: "The message is empty."}
+		return Sent{}, access.Refuse(access.BadValue, "The message is empty.")
 	case len(text) > MaxText:
-		return Sent{}, &access.Refusal{Code: access.BadValue, Message: fmt.Sprintf(
-			"The message is %d bytes; the most is %d. Send long text as a file, where it can be read by page.", len(text), MaxText)}
+		return Sent{}, access.Refuse(access.BadValue,
+			"The message is %d bytes; the most is %d. Send long text as a file, where it can be read by page.", len(text), MaxText)
 	case !utf8.ValidString(text):
-		return Sent{}, &access.Refusal{Code: access.BadValue, Message: "The message is not UTF-8 text. Send it as a file."}
+		return Sent{}, access.Refuse(access.BadValue, "The message is not UTF-8 text. Send it as a file.")
 	}
 	p, c, created, err := s.conversationFor(ctx, who, project, conversation)
 	if err != nil {
@@ -142,7 +141,7 @@ func (s *Service) SendFile(ctx context.Context, who access.Who, project, convers
 		return Sent{}, err
 	}
 	if len(text) > MaxText {
-		return Sent{}, &access.Refusal{Code: access.BadValue, Message: "The caption is too long."}
+		return Sent{}, access.Refuse(access.BadValue, "The caption is too long.")
 	}
 	p, c, created, err := s.conversationFor(ctx, who, project, conversation)
 	if err != nil {
@@ -348,7 +347,7 @@ func (s *Service) MessagesPage(ctx context.Context, who access.Who, project, con
 	}
 	c, err := s.st.ConversationByName(ctx, p.ID, conversation)
 	if errors.Is(err, store.ErrNotFound) {
-		return c, nil, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No conversation %q in %s.", conversation, p.Name)}
+		return c, nil, access.Refuse(access.NotFound, "No conversation %q in %s.", conversation, p.Name)
 	}
 	if err != nil {
 		return c, nil, err
@@ -384,7 +383,7 @@ func (s *Service) MessagesPage(ctx context.Context, who access.Who, project, con
 func (s *Service) File(ctx context.Context, who access.Who, id int64) (store.FileWhere, io.ReadSeekCloser, error) {
 	fw, err := s.st.File(ctx, id)
 	if errors.Is(err, store.ErrNotFound) {
-		return fw, nil, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No file %d.", id)}
+		return fw, nil, access.Refuse(access.NotFound, "No file %d.", id)
 	}
 	if err != nil {
 		return fw, nil, err
@@ -397,7 +396,7 @@ func (s *Service) File(ctx context.Context, who access.Who, id int64) (store.Fil
 	// project the reader is not in.
 	if err := s.acc.CanRead(ctx, who, p); err != nil {
 		if access.Is(err, access.NotMember) {
-			return fw, nil, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No file %d.", id)}
+			return fw, nil, access.Refuse(access.NotFound, "No file %d.", id)
 		}
 		return fw, nil, err
 	}
@@ -417,9 +416,9 @@ func (s *Service) File(ctx context.Context, who access.Who, id int64) (store.Fil
 		}
 		return fw, r, err
 	case store.Cut:
-		return fw, nil, &access.Refusal{Code: Gone, Message: fmt.Sprintf("%s was cut off: the server stopped while it was arriving.", fw.Name)}
+		return fw, nil, access.Refuse(Gone, "%s was cut off: the server stopped while it was arriving.", fw.Name)
 	default:
-		return fw, nil, &access.Refusal{Code: Gone, Message: fmt.Sprintf("%s was deleted.", fw.Name)}
+		return fw, nil, access.Refuse(Gone, "%s was deleted.", fw.Name)
 	}
 }
 

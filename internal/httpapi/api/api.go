@@ -48,6 +48,7 @@ import (
 	"time"
 
 	"cafard/internal/httpapi/httpx"
+	"cafard/internal/i18n"
 	"cafard/internal/live"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
@@ -103,7 +104,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/files/{id}", a.auth(a.deleteFile))
 	mux.HandleFunc("GET /api/v1/files/{id}/lines", a.auth(a.lines))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusNotFound, "not_found", fmt.Sprintf("No route %s %s. The routes are listed in `go doc cafard/internal/httpapi/api`.", r.Method, r.URL.Path))
+		writeError(w, http.StatusNotFound, "not_found", say(r, "No route %s %s. The routes are listed in `go doc cafard/internal/httpapi/api`.", r.Method, r.URL.Path))
 	})
 }
 
@@ -128,11 +129,11 @@ func (a *API) auth(next handler) http.HandlerFunc {
 		if cookie == "" {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="cafard"`)
 			writeError(w, http.StatusUnauthorized, string(access.Unauthorized),
-				`Sign in, or send a token: -H "Authorization: Bearer cfd_…". An admin makes one with cafard admin create agent or device.`)
+				say(r, `Sign in, or send a token: -H "Authorization: Bearer cfd_…". An admin makes one with cafard admin create agent or device.`))
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && !httpx.SameOrigin(r) {
-			writeError(w, http.StatusForbidden, "cross_site", "Writes from another site are refused.")
+			writeError(w, http.StatusForbidden, "cross_site", say(r, "Writes from another site are refused."))
 			return
 		}
 		id, si, err := a.acc.Session(r.Context(), access.ChatSurface, cookie, from)
@@ -179,11 +180,17 @@ func (a *API) fail(w http.ResponseWriter, r *http.Request, err error) {
 		if !ok {
 			status = http.StatusBadRequest
 		}
-		writeError(w, status, string(ref.Code), ref.Message)
+		writeError(w, status, string(ref.Code), ref.In(i18n.FromRequest(r)))
 		return
 	}
 	a.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
-	writeError(w, http.StatusInternalServerError, "internal", "cafard could not do that; the error is in its log.")
+	writeError(w, http.StatusInternalServerError, "internal", say(r, "cafard could not do that; the error is in its log."))
+}
+
+// say is format in the language of the person asking (internal/i18n):
+// curl sends no Accept-Language, and is answered in English.
+func say(r *http.Request, format string, args ...any) string {
+	return i18n.T(i18n.FromRequest(r), format, args...)
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
@@ -308,11 +315,11 @@ func (a *API) sendFile(w http.ResponseWriter, r *http.Request, who access.Who) {
 	switch {
 	case errors.As(err, &tooBig):
 		status = http.StatusRequestEntityTooLarge
-		resp["stopped"] = fmt.Sprintf("The upload reached the %d MB a request may send; what arrived before that is stored.", MaxUpload>>20)
+		resp["stopped"] = say(r, "The upload reached the %d MB a request may send; what arrived before that is stored.", MaxUpload>>20)
 	case err != nil:
 		// The sender went away mid-upload; what arrived is kept.
 		a.log.Info("upload ended early", "file", sent.Message.Files[0].ID, "err", err)
-		resp["stopped"] = "The upload ended early; what arrived is stored."
+		resp["stopped"] = say(r, "The upload ended early; what arrived is stored.")
 	}
 	writeJSON(w, status, resp)
 }
@@ -443,7 +450,7 @@ var safeImages = map[string]bool{
 func (a *API) file(w http.ResponseWriter, r *http.Request, who access.Who) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusNotFound, string(access.NotFound), "No such file.")
+		writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No such file."))
 		return
 	}
 	f, rd, err := a.chat.File(r.Context(), who, id)
@@ -491,7 +498,7 @@ func sanitizeFilename(name string) string {
 func (a *API) lines(w http.ResponseWriter, r *http.Request, who access.Who) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusNotFound, string(access.NotFound), "No such file.")
+		writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No such file."))
 		return
 	}
 	q := r.URL.Query()

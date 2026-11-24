@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"cafard/internal/httpapi/httpx"
+	"cafard/internal/i18n"
 	"cafard/internal/install"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
@@ -68,7 +69,7 @@ func (j *Join) limited(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if ok, wait := j.limit.Allow(clientIP(r)); !ok {
 			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-			http.Error(w, "Too many attempts from this address. Wait a minute.", http.StatusTooManyRequests)
+			http.Error(w, say(r, "Too many attempts from this address. Wait a minute."), http.StatusTooManyRequests)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
@@ -115,12 +116,13 @@ func (j *Join) open(w http.ResponseWriter, r *http.Request) {
 				c = Clients[0]
 			}
 			link := j.publicURL.String() + "/join/" + code
-			d := pageData{Title: "Set up " + id.Name, Name: id.Name, Expires: l.ExpiresAt, Agent: true,
+			title := say(r, "Set up %s", id.Name)
+			d := pageData{Title: title, Heading: title, Expires: l.ExpiresAt, Agent: true,
 				Sh: install.Command(link, false, c.ID), PS1: install.Command(link, true, c.ID)}
 			for _, o := range Clients {
 				d.Clients = append(d.Clients, pageClient{Name: o.Name, Href: "?client=" + o.ID, On: o == c})
 			}
-			page(w, http.StatusOK, d)
+			page(w, r, http.StatusOK, d)
 			return
 		}
 		j.script(w, r, code, shell)
@@ -134,7 +136,8 @@ func (j *Join) open(w http.ResponseWriter, r *http.Request) {
 		j.signIn(w, r, code)
 		return
 	}
-	page(w, http.StatusOK, pageData{Title: "Sign in", Name: displayName(id), Username: id.Name, Expires: l.ExpiresAt})
+	page(w, r, http.StatusOK, pageData{Title: say(r, "Sign in"), Heading: say(r, "Sign in as %s", displayName(id)),
+		Username: id.Name, Expires: l.ExpiresAt})
 }
 
 // signIn is a phone that scanned the code shown by "Sign in another phone":
@@ -151,6 +154,13 @@ func (j *Join) signIn(w http.ResponseWriter, r *http.Request, code string) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+// say is format in the language of the browser asking (internal/i18n). The
+// scripts and the errors served to a shell are not said with it: a terminal
+// is answered in English.
+func say(r *http.Request, format string, args ...any) string {
+	return i18n.T(i18n.FromRequest(r), format, args...)
+}
+
 func displayName(id store.Identity) string {
 	if id.DisplayName != "" {
 		return id.DisplayName
@@ -164,7 +174,7 @@ func (j *Join) signInPerson(w http.ResponseWriter, r *http.Request) {
 	// the code, which is the secret; refusing cross-site posts as well costs
 	// nothing.
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
-		http.Error(w, "Cross-site requests are refused.", http.StatusForbidden)
+		http.Error(w, say(r, "Cross-site requests are refused."), http.StatusForbidden)
 		return
 	}
 	_, cookie, err := j.acc.SignInWithLink(r.Context(), r.PathValue("code"), clientIP(r), r.UserAgent())
@@ -238,13 +248,15 @@ func (j *Join) refused(w http.ResponseWriter, r *http.Request, err error) {
 	ref, ok := err.(*access.Refusal)
 	if !ok {
 		j.log.Error("join link", "err", err)
-		ref = &access.Refusal{Message: "cafard could not do that; the error is in its log."}
+		ref = access.Refuse("", "cafard could not do that; the error is in its log.")
 	}
+	// A shell is answered in English, as a terminal is everywhere else.
 	if shell := shellOf(r); shell != "" {
 		shellError(w, shell, ref.Message)
 		return
 	}
-	page(w, http.StatusGone, pageData{Title: "This link no longer works", Error: ref.Message, Spent: true})
+	title := say(r, "This link no longer works")
+	page(w, r, http.StatusGone, pageData{Title: title, Heading: title, Error: ref.In(i18n.FromRequest(r)), Spent: true})
 }
 
 // shellError is a script that says why and fails, so `curl … | sh` and

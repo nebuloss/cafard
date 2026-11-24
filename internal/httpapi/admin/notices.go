@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"cafard/internal/i18n"
 	"cafard/internal/service/access"
 )
 
@@ -14,7 +15,8 @@ import (
 // a sentence and a link to where it is dealt with. Worked out from the state
 // on every read; nothing is stored but which ones the admin marked read, and
 // a mark is forgotten once its notice is gone, so a problem that comes back
-// is news again.
+// is news again. Being worked out on every read, they are written in the
+// language of the read.
 //
 //	GET  /admin/api/notices        {notices: [...]}, the worst first
 //	POST /admin/api/notices/read   {ids, read?}: mark read, or unread
@@ -54,6 +56,7 @@ var severityRank = map[string]int{noticeError: 0, noticeWarn: 1, noticeInfo: 2}
 
 func (a *Admin) notices(r *http.Request, now time.Time) ([]notice, error) {
 	out := []notice{}
+	l := i18n.FromRequest(r)
 	members, err := a.memberList(r)
 	if err != nil {
 		return nil, err
@@ -64,23 +67,23 @@ func (a *Admin) notices(r *http.Request, now time.Time) ([]notice, error) {
 		}
 		link := "/members/" + m.Name
 		if m.Link != nil && !m.Joined && m.Link.State == "expired" {
-			what := "join"
+			title := i18n.T(l, "The join link for %s expired unused", m.Name)
 			if m.Kind == "agent" {
-				what = "install"
+				title = i18n.T(l, "The install link for %s expired unused", m.Name)
 			}
 			t := m.Link.ExpiresAt
 			out = append(out, notice{ID: fmt.Sprintf("link-expired:%d", m.Link.ID), Severity: noticeWarn, Kind: "member",
-				Title: fmt.Sprintf("The %s link for %s expired unused", what, m.Name), Detail: "Make a new one from its page.", Link: link, Since: &t})
+				Title: title, Detail: i18n.T(l, "Make a new one from its page."), Link: link, Since: &t})
 		}
 		if m.Kind != "person" && m.Enabled && m.LastUsed != nil && now.Sub(*m.LastUsed) > unusedAfter {
 			days := int(now.Sub(*m.LastUsed).Hours() / 24)
 			out = append(out, notice{ID: "unused:" + m.Name, Severity: noticeWarn, Kind: "member",
-				Title:  fmt.Sprintf("%s has not connected for %d days", m.Name, days),
-				Detail: "Its token still works. Pause it if the machine is gone.", Link: link, Since: m.LastUsed})
+				Title:  i18n.T(l, "%s has not connected for %d days", m.Name, days),
+				Detail: i18n.T(l, "Its token still works. Pause it if the machine is gone."), Link: link, Since: m.LastUsed})
 		}
 		if m.Enabled && len(m.Projects) == 0 {
 			out = append(out, notice{ID: "no-project:" + m.Name, Severity: noticeInfo, Kind: "member",
-				Title: fmt.Sprintf("%s is in no project", m.Name), Detail: "It can reach nothing until it is put in one.", Link: link})
+				Title: i18n.T(l, "%s is in no project", m.Name), Detail: i18n.T(l, "It can reach nothing until it is put in one."), Link: link})
 		}
 	}
 	projects, err := a.projectList(r)
@@ -97,15 +100,15 @@ func (a *Admin) notices(r *http.Request, now time.Time) ([]notice, error) {
 			switch {
 			case share >= 1:
 				out = append(out, notice{ID: "quota-full:" + p.Name, Severity: noticeError, Kind: "project",
-					Title: p.Name + " is at its quota: uploads are refused", Detail: "Raise the quota, or shorten the retention.", Link: link})
+					Title: i18n.T(l, "%s is at its quota: uploads are refused", p.Name), Detail: i18n.T(l, "Raise the quota, or shorten the retention."), Link: link})
 			case share >= nearlyFull:
 				out = append(out, notice{ID: "quota-near:" + p.Name, Severity: noticeWarn, Kind: "project",
-					Title: fmt.Sprintf("%s is at %.0f%% of its quota", p.Name, 100*share), Detail: "Uploads stop at 100%.", Link: link})
+					Title: i18n.T(l, "%s is at %.0f%% of its quota", p.Name, 100*share), Detail: i18n.T(l, "Uploads stop at 100%%."), Link: link})
 			}
 		}
 		if len(p.Members) == 0 {
 			out = append(out, notice{ID: "empty:" + p.Name, Severity: noticeInfo, Kind: "project",
-				Title: p.Name + " has no members", Link: link})
+				Title: i18n.T(l, "%s has no members", p.Name), Link: link})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return severityRank[out[i].Severity] < severityRank[out[j].Severity] })
@@ -149,7 +152,7 @@ func (a *Admin) noticesRead(w http.ResponseWriter, r *http.Request, _ access.Who
 		return
 	}
 	if len(in.IDs) == 0 || len(in.IDs) > 500 {
-		writeError(w, http.StatusBadRequest, string(access.BadValue), "Name between 1 and 500 notices.")
+		writeError(w, http.StatusBadRequest, string(access.BadValue), say(r, "Name between 1 and 500 notices."))
 		return
 	}
 	if err := a.st.MarkNotices(r.Context(), in.IDs, in.Read == nil || *in.Read); err != nil {

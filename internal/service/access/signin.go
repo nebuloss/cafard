@@ -119,7 +119,11 @@ func (s *Service) SignOut(ctx context.Context, who Who, si store.Signin) error {
 			return err
 		}
 	}
-	return notFound(s.st.DeleteSignin(ctx, si.ID, who.audit("signed out", "a sign-in")), "the sign-in")
+	err := s.st.DeleteSignin(ctx, si.ID, who.audit("signed out", "a sign-in"))
+	if errors.Is(err, store.ErrNotFound) {
+		return refuse(NotFound, "That sign-in has already ended.")
+	}
+	return err
 }
 
 func randomToken() (string, error) {

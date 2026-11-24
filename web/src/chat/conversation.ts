@@ -1,10 +1,11 @@
 import { Component } from '@shared/component';
 import { Bytes } from '@shared/format';
 import { Html, html } from '@shared/html';
+import { i18n, n, t } from '@shared/i18n';
 import { Icon } from '@shared/icons';
 import { Toaster } from '@shared/toast';
 import { ui } from '@shared/ui';
-import { Avatar } from '@shared/widgets';
+import { Avatar, KindName } from '@shared/widgets';
 import type { ChatApp } from './app';
 import { pathOf } from './route';
 import { Composer } from './composer';
@@ -15,16 +16,16 @@ import { MessageText } from './text';
 import type { FileInfo, Member, Message, Project } from './types';
 
 const SAFE_IMAGES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif']);
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString(i18n.locale, { hour: '2-digit', minute: '2-digit' });
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
-  if (d.toDateString() === now.toDateString()) return 'Today';
+  if (d.toDateString() === now.toDateString()) return t('Today');
   const y = new Date(now);
   y.setDate(now.getDate() - 1);
-  if (d.toDateString() === y.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  if (d.toDateString() === y.toDateString()) return t('Yesterday');
+  return d.toLocaleDateString(i18n.locale, { day: 'numeric', month: 'short' });
 }
 
 // A message's text: what text.ts makes of it carries no class but
@@ -65,7 +66,7 @@ export class ConversationView extends Component {
     this.composer = new Composer({
       send: (text, files) => this.send(text, files),
       members: () => this.members.filter((m) => m.name !== this.app.store.me?.name),
-      placeholder: address ? 'Message, or drop a file' : 'Write the first message, or drop a file',
+      placeholder: address ? t('Message, or drop a file') : t('Write the first message, or drop a file'),
     });
     this.actions = {
       back: () => this.app.go('#'),
@@ -80,17 +81,17 @@ export class ConversationView extends Component {
         await this.app.attempt(() => this.thread?.earlier() ?? Promise.resolve());
         this.drawTimeline(false);
       },
-      img: (t) => this.openImage(Number(t.dataset['v']), Number(t.dataset['m'])),
-      log: (t) => this.openLog(Number(t.dataset['v'])),
-      target: (t) => {
-        this.project = t.dataset['v'] ?? this.project;
+      img: (el) => this.openImage(Number(el.dataset['v']), Number(el.dataset['m'])),
+      log: (el) => this.openLog(Number(el.dataset['v'])),
+      target: (el) => {
+        this.project = el.dataset['v'] ?? this.project;
         this.render();
       },
     };
     this.root.addEventListener('keydown', (e) => {
-      const t = e.target as HTMLInputElement;
-      if (t.classList.contains('head-title-input')) {
-        if (e.key === 'Enter') void this.saveTitle(t.value);
+      const el = e.target as HTMLInputElement;
+      if (el.classList.contains('head-title-input')) {
+        if (e.key === 'Enter') void this.saveTitle(el.value);
         if (e.key === 'Escape') {
           this.renaming = false;
           this.drawHead();
@@ -98,8 +99,8 @@ export class ConversationView extends Component {
       }
     });
     this.root.addEventListener('focusout', (e) => {
-      const t = e.target as HTMLInputElement;
-      if (t.classList.contains('head-title-input') && this.renaming) void this.saveTitle(t.value);
+      const el = e.target as HTMLInputElement;
+      if (el.classList.contains('head-title-input') && this.renaming) void this.saveTitle(el.value);
     });
     // Drop a file anywhere on the conversation.
     this.root.addEventListener('dragenter', (e) => {
@@ -163,7 +164,7 @@ export class ConversationView extends Component {
     return html`<header class="chat-head flex min-h-[60px] shrink-0 items-center gap-2.5 border-b border-outline-variant bg-surface py-2 pr-3 pl-2 min-[840px]:pl-5"></header>
       <div class="timeline flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-4 pt-4 pb-2 min-[840px]:px-6" aria-live="polite"></div>
       <div class="composer-slot"></div>
-      <div class="drop pointer-events-none absolute inset-2 z-[6] grid place-items-center rounded-2xl border-2 border-dashed border-primary bg-primary-container/85 text-base font-bold text-on-primary-container" hidden>Drop to attach</div>`;
+      <div class="drop pointer-events-none absolute inset-2 z-[6] grid place-items-center rounded-2xl border-2 border-dashed border-primary bg-primary-container/85 text-base font-bold text-on-primary-container" hidden>${t('Drop to attach')}</div>`;
   }
 
   protected override afterRender(): void {
@@ -176,22 +177,27 @@ export class ConversationView extends Component {
   private drawHead(): void {
     const head = this.find('.chat-head');
     if (!head) return;
-    const back = html`<button class="${ui.iconBtn} min-[840px]:hidden" data-act="back" aria-label="Back to conversations">${Icon.of('back')}</button>`;
+    const back = html`<button class="${ui.iconBtn} min-[840px]:hidden" data-act="back" aria-label="${t('Back to conversations')}">${Icon.of('back')}</button>`;
     const titleClass = 'block max-w-full truncate rounded-md text-left text-base font-bold';
     const subClass = 'truncate text-[12.5px] text-on-surface-variant';
     if (!this.address) {
-      head.innerHTML = html`${back}<div class="min-w-0 flex-1"><span class="${titleClass}">New conversation</span></div>`.value;
+      head.innerHTML = html`${back}<div class="min-w-0 flex-1"><span class="${titleClass}">${t('New conversation')}</span></div>`.value;
       return;
     }
     const c = this.thread?.conversation ?? this.app.store.conversation(this.address);
     const title = c?.title ?? this.address.name;
     const agents = this.members.filter((m) => m.kind === 'agent').length;
-    const sub = `${this.address.project} · ${this.members.length} members${agents ? ` · ${agents} agent${agents > 1 ? 's' : ''}` : ''}${c?.closed ? ' · closed' : ''}`;
+    const sub = [
+      this.address.project,
+      n(this.members.length, '{n} member', '{n} members'),
+      agents ? n(agents, '{n} agent', '{n} agents') : '',
+      c?.closed ? t('closed') : '',
+    ].filter(Boolean).join(' · ');
     const stack = this.members.filter((m) => m.name !== this.app.store.me?.name).slice(0, 4).map((m) => Avatar.of(m, 'sm'));
     const titleEl = this.renaming
-      ? html`<input class="head-title-input w-full rounded-md border border-primary bg-surface-lowest px-1.5 py-0.5 text-base font-bold outline-none" value="${title}" aria-label="Conversation title" maxlength="120">`
-      : html`<button class="${titleClass} hover:bg-surface-container" data-act="rename" title="Rename">${title}</button>`;
-    head.innerHTML = html`${back}<div class="min-w-0 flex-1">${titleEl}<div class="${subClass}">${sub}</div></div><button class="flex items-center gap-1.5 rounded-full py-1 pr-2 pl-3.5 hover:bg-surface-container" data-act="details" aria-label="Members and files"><span class="flex *:-ml-2 *:border-2 *:border-surface">${stack}</span></button>`.value;
+      ? html`<input class="head-title-input w-full rounded-md border border-primary bg-surface-lowest px-1.5 py-0.5 text-base font-bold outline-none" value="${title}" aria-label="${t('Conversation title')}" maxlength="120">`
+      : html`<button class="${titleClass} hover:bg-surface-container" data-act="rename" title="${t('Rename')}">${title}</button>`;
+    head.innerHTML = html`${back}<div class="min-w-0 flex-1">${titleEl}<div class="${subClass}">${sub}</div></div><button class="flex items-center gap-1.5 rounded-full py-1 pr-2 pl-3.5 hover:bg-surface-container" data-act="details" aria-label="${t('Members and files')}"><span class="flex *:-ml-2 *:border-2 *:border-surface">${stack}</span></button>`.value;
     if (this.renaming) {
       const input = head.querySelector<HTMLInputElement>('input');
       input?.focus();
@@ -204,7 +210,7 @@ export class ConversationView extends Component {
     this.renaming = false;
     const title = value.trim();
     if (title && title !== this.thread?.conversation?.title) {
-      await this.app.attempt(() => this.app.store.api.patch(`/projects/${this.address?.path.replace('/', '/conversations/')}`, { title }), 'Renamed.');
+      await this.app.attempt(() => this.app.store.api.patch(`/projects/${this.address?.path.replace('/', '/conversations/')}`, { title }), t('Renamed.'));
       await this.refresh();
     } else {
       this.drawHead();
@@ -216,11 +222,11 @@ export class ConversationView extends Component {
     if (!tl) return;
     if (!this.address) {
       const chips = this.openProjects().map((p) => html`<button class="inline-flex h-8 items-center gap-1.5 rounded-md3-s border border-outline-variant px-3 text-[13px] font-semibold aria-pressed:border-transparent aria-pressed:bg-secondary-container aria-pressed:text-on-secondary-container" data-act="target" data-v="${p.name}" aria-pressed="${String(p.name === this.project)}">${p.name}</button>`);
-      tl.innerHTML = html`<div class="${look.empty}"><h2>Start with a message or a file</h2><p>Pick the project it goes to.</p><div class="mt-1 flex flex-wrap gap-1.5">${chips.length ? chips : html`<span>You are in no project you can post to.</span>`}</div></div>`.value;
+      tl.innerHTML = html`<div class="${look.empty}"><h2>${t('Start with a message or a file')}</h2><p>${t('Pick the project it goes to.')}</p><div class="mt-1 flex flex-wrap gap-1.5">${chips.length ? chips : html`<span>${t('You are in no project you can post to.')}</span>`}</div></div>`.value;
       return;
     }
     if (!this.thread) {
-      tl.innerHTML = html`<p class="${look.loading}">Loading…</p>`.value;
+      tl.innerHTML = html`<p class="${look.loading}">${t('Loading…')}</p>`.value;
       return;
     }
     const keepFrom = tl.scrollHeight - tl.scrollTop;
@@ -231,22 +237,22 @@ export class ConversationView extends Component {
     void this.loadTails();
   }
 
-  private timeline(t: Thread): Html {
+  private timeline(th: Thread): Html {
     const me = this.app.store.me?.name;
     const text = new MessageText(new Set(this.members.map((m) => m.name)));
     const parts: Html[] = [];
-    if (t.hasEarlier) parts.push(html`<button class="${ui.btn('tonal')} mt-1 mb-3 self-center" data-act="earlier">Earlier messages</button>`);
-    if (!t.messages.length) parts.push(html`<div class="${look.empty}"><h2>Nothing here yet</h2></div>`);
-    const myLast = [...t.messages].reverse().find((m) => m.author.name === me);
+    if (th.hasEarlier) parts.push(html`<button class="${ui.btn('tonal')} mt-1 mb-3 self-center" data-act="earlier">${t('Earlier messages')}</button>`);
+    if (!th.messages.length) parts.push(html`<div class="${look.empty}"><h2>${t('Nothing here yet')}</h2></div>`);
+    const myLast = [...th.messages].reverse().find((m) => m.author.name === me);
     let prev: Message | undefined;
-    for (const m of t.messages) {
+    for (const m of th.messages) {
       const newDay = !prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString();
       if (newDay) parts.push(html`<div class="my-2.5 self-center rounded-full bg-surface-container px-3 py-[3px] text-xs text-on-surface-variant">${dayLabel(m.at)}</div>`);
       const first = !prev || prev.author.name !== m.author.name || new Date(m.at).getTime() - new Date(prev.at).getTime() > 5 * 60000 || newDay;
       // A new author is set apart from the message above, unless a day
       // divider already is.
       parts.push(this.message(m, m.author.name === me, first, first && !newDay, text));
-      if (myLast && m.id === myLast.id) parts.push(this.receipt(t, myLast));
+      if (myLast && m.id === myLast.id) parts.push(this.receipt(th, myLast));
       prev = m;
     }
     return Html.join(parts);
@@ -254,12 +260,12 @@ export class ConversationView extends Component {
 
   private message(m: Message, mine: boolean, first: boolean, spaced: boolean, text: MessageText): Html {
     const a = m.author;
-    const name = `${a.display_name || a.name}${a.removed ? ' (removed)' : ''}`;
-    const meta = first && !mine ? html`<div class="flex items-center gap-1.5 text-xs"><span class="font-bold">${name}</span>${a.kind !== 'person' ? html`<span class="${ui.kind[a.kind] ?? ''}">${a.kind}</span>` : ''}<time class="text-on-surface-variant tabular-nums">${hhmm(m.at)}</time></div>` : Html.empty;
+    const name = a.removed ? t('{name} (removed)', { name: a.display_name || a.name }) : a.display_name || a.name;
+    const meta = first && !mine ? html`<div class="flex items-center gap-1.5 text-xs"><span class="font-bold">${name}</span>${a.kind !== 'person' ? html`<span class="${ui.kind[a.kind] ?? ''}">${KindName.of(a.kind)}</span>` : ''}<time class="text-on-surface-variant tabular-nums">${hhmm(m.at)}</time></div>` : Html.empty;
     const files = m.files ?? [];
     const images = files.filter((f) => f.state === 'stored' && SAFE_IMAGES.has(f.type));
     const imgs = images.length
-      ? html`<div class="grid w-[min(320px,100%)] gap-1 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}">${images.map((f) => html`<button class="block aspect-[4/3] overflow-hidden rounded-[10px] bg-surface-high" data-act="img" data-v="${String(f.id)}" data-m="${String(m.id)}" aria-label="Open ${f.name}"><img class="block size-full object-cover" src="${f.url}" alt="${f.name}" loading="lazy"></button>`)}</div>`
+      ? html`<div class="grid w-[min(320px,100%)] gap-1 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}">${images.map((f) => html`<button class="block aspect-[4/3] overflow-hidden rounded-[10px] bg-surface-high" data-act="img" data-v="${String(f.id)}" data-m="${String(m.id)}" aria-label="${t('Open {name}', { name: f.name })}"><img class="block size-full object-cover" src="${f.url}" alt="${f.name}" loading="lazy"></button>`)}</div>`
       : Html.empty;
     const others = files.filter((f) => !images.includes(f)).map((f) => this.file(f));
     const avatar = !mine ? (first ? html`<span class="mb-0.5 flex">${Avatar.of(a, 'sm')}</span>` : html`<span class="w-7 shrink-0"></span>`) : Html.empty;
@@ -274,23 +280,23 @@ export class ConversationView extends Component {
 
   private file(f: FileInfo): Html {
     const gone = (why: string) => html`<div class="${look.fileCard} opacity-60"><span class="${look.fileMain}"><span class="${look.fileName}">${f.name}</span><span class="${look.fileMeta}">${why}</span></span></div>`;
-    if (f.state === 'deleted') return gone('File deleted');
-    if (f.state === 'cut') return gone('Cut off: the server stopped while it arrived');
+    if (f.state === 'deleted') return gone(t('File deleted'));
+    if (f.state === 'cut') return gone(t('Cut off: the server stopped while it arrived'));
     if (isLog(f)) {
-      const state = f.state === 'live' ? html`<span class="${look.live}">live</span>` : Html.empty;
+      const state = f.state === 'live' ? html`<span class="${look.live}">${t('live')}</span>` : Html.empty;
       const tail = this.tails.get(f.id)?.lines ?? [];
-      return html`<button class="block w-[min(420px,100%)] overflow-hidden rounded-xl border border-outline-variant bg-surface-low text-left text-on-surface hover:border-outline" data-act="log" data-v="${String(f.id)}"><div class="flex min-w-0 items-center gap-2 px-2.5 pt-2 pb-0.5 font-semibold">${Icon.of('list')}<span class="min-w-0 flex-1 truncate">${f.name}</span>${state}</div><div class="pr-2.5 pb-2 pl-[38px] text-xs text-on-surface-variant tabular-nums">${Bytes.format(f.size)}${f.state === 'live' ? ' so far' : ''}</div><pre class="m-0 overflow-hidden bg-(--log-bg) px-2.5 py-2 font-mono text-[11.5px]/[1.5] whitespace-pre text-(--log-fg) [&>span]:block [&>span]:truncate" data-tail="${String(f.id)}">${tail.map((l) => html`<span>${l || ' '}</span>`)}</pre></button>`;
+      return html`<button class="block w-[min(420px,100%)] overflow-hidden rounded-xl border border-outline-variant bg-surface-low text-left text-on-surface hover:border-outline" data-act="log" data-v="${String(f.id)}"><div class="flex min-w-0 items-center gap-2 px-2.5 pt-2 pb-0.5 font-semibold">${Icon.of('list')}<span class="min-w-0 flex-1 truncate">${f.name}</span>${state}</div><div class="pr-2.5 pb-2 pl-[38px] text-xs text-on-surface-variant tabular-nums">${f.state === 'live' ? t('{size} so far', { size: Bytes.format(f.size) }) : Bytes.format(f.size)}</div><pre class="m-0 overflow-hidden bg-(--log-bg) px-2.5 py-2 font-mono text-[11.5px]/[1.5] whitespace-pre text-(--log-fg) [&>span]:block [&>span]:truncate" data-tail="${String(f.id)}">${tail.map((l) => html`<span>${l || ' '}</span>`)}</pre></button>`;
     }
-    return html`<a class="${look.fileCard}" href="${f.url}" download="${f.name}"><span class="flex shrink-0">${Icon.of('folder')}</span><span class="${look.fileMain}"><span class="${look.fileName}">${f.name}</span><span class="${look.fileMeta}">${Bytes.format(f.size)}${f.state === 'live' ? ' so far, still arriving' : ''}</span></span></a>`;
+    return html`<a class="${look.fileCard}" href="${f.url}" download="${f.name}"><span class="flex shrink-0">${Icon.of('folder')}</span><span class="${look.fileMain}"><span class="${look.fileName}">${f.name}</span><span class="${look.fileMeta}">${f.state === 'live' ? t('{size} so far, still arriving', { size: Bytes.format(f.size) }) : Bytes.format(f.size)}</span></span></a>`;
   }
 
   /** "Read by dev-code · 14:03" under the last message of mine each reader has reached. */
-  private receipt(t: Thread, mine: Message): Html {
+  private receipt(th: Thread, mine: Message): Html {
     const me = this.app.store.me?.name;
-    const readers = t.readBy.filter((r) => r.name !== me && r.up_to >= mine.id);
+    const readers = th.readBy.filter((r) => r.name !== me && r.up_to >= mine.id);
     if (!readers.length) return Html.empty;
     const latest = readers.reduce((a, b) => (a.at > b.at ? a : b));
-    return html`<div class="mx-1 mt-0.5 flex items-center gap-1 self-end text-xs text-on-surface-variant [&_.ic]:size-[15px] [&_.ic]:text-success">${Icon.of('check')}Read by ${readers.map((r) => r.display_name || r.name).join(', ')} · ${hhmm(latest.at)}</div>`;
+    return html`<div class="mx-1 mt-0.5 flex items-center gap-1 self-end text-xs text-on-surface-variant [&_.ic]:size-[15px] [&_.ic]:text-success">${Icon.of('check')}${t('Read by {names} · {time}', { names: readers.map((r) => r.display_name || r.name).join(', '), time: hhmm(latest.at) })}</div>`;
   }
 
   /** Fetches the last lines of each log card whose size changed since. */
@@ -328,7 +334,7 @@ export class ConversationView extends Component {
 
   private async send(text: string, files: File[]): Promise<void> {
     if (!this.project) {
-      Toaster.show('Pick a project first.');
+      Toaster.show(t('Pick a project first.'));
       throw new Error('no project');
     }
     try {

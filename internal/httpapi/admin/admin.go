@@ -43,7 +43,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -57,6 +56,7 @@ import (
 
 	"cafard/internal/config"
 	"cafard/internal/httpapi/httpx"
+	"cafard/internal/i18n"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
@@ -118,7 +118,7 @@ func (a *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/config", a.auth(a.config))
 	mux.HandleFunc("PUT /admin/api/settings/public-url", a.auth(a.setPublicURL))
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusNotFound, "not_found", "No route "+r.Method+" "+r.URL.Path+".")
+		writeError(w, http.StatusNotFound, "not_found", say(r, "No route %s %s.", r.Method, r.URL.Path))
 	})
 	// "/" and not "GET /": a pattern with a method and a shorter path
 	// conflicts with "/admin/api/" in ServeMux, which panics. static answers
@@ -136,7 +136,7 @@ type handler func(w http.ResponseWriter, r *http.Request, who access.Who)
 func (a *Admin) auth(next handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && !sameOrigin(r) {
-			writeError(w, http.StatusForbidden, "cross_site", "Writes from another site are refused.")
+			writeError(w, http.StatusForbidden, "cross_site", say(r, "Writes from another site are refused."))
 			return
 		}
 		c, _ := r.Cookie(cookieName)
@@ -146,7 +146,7 @@ func (a *Admin) auth(next handler) http.HandlerFunc {
 		}
 		from := clientIP(r)
 		if !a.sessions.valid(value) {
-			writeError(w, http.StatusUnauthorized, string(access.Unauthorized), "You are signed out. Sign in again.")
+			writeError(w, http.StatusUnauthorized, string(access.Unauthorized), say(r, "You are signed out. Sign in again."))
 			return
 		}
 		next(w, r, access.Admin("admin · "+from))
@@ -171,11 +171,16 @@ func (a *Admin) fail(w http.ResponseWriter, r *http.Request, err error) {
 		if !ok {
 			status = http.StatusBadRequest
 		}
-		writeError(w, status, string(ref.Code), ref.Message)
+		writeError(w, status, string(ref.Code), ref.In(i18n.FromRequest(r)))
 		return
 	}
 	a.log.Error("admin request failed", "method", r.Method, "path", r.URL.Path, "err", err)
-	writeError(w, http.StatusInternalServerError, "internal", "cafard could not do that; the error is in its log.")
+	writeError(w, http.StatusInternalServerError, "internal", say(r, "cafard could not do that; the error is in its log."))
+}
+
+// say is format in the language of the person asking (internal/i18n).
+func say(r *http.Request, format string, args ...any) string {
+	return i18n.T(i18n.FromRequest(r), format, args...)
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
@@ -193,7 +198,7 @@ func readJSON(r *http.Request, v any) error {
 	dec := json.NewDecoder(io.LimitReader(r.Body, 64<<10))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
-		return &access.Refusal{Code: access.BadValue, Message: "The request is not the JSON this route takes: " + err.Error()}
+		return access.Refuse(access.BadValue, "The request is not the JSON this route takes: %s", err)
 	}
 	return nil
 }
@@ -202,7 +207,7 @@ func readJSON(r *http.Request, v any) error {
 
 func (a *Admin) signin(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
-		writeError(w, http.StatusForbidden, "cross_site", "Writes from another site are refused.")
+		writeError(w, http.StatusForbidden, "cross_site", say(r, "Writes from another site are refused."))
 		return
 	}
 	var in struct{ Password string }
@@ -216,17 +221,17 @@ func (a *Admin) signin(w http.ResponseWriter, r *http.Request) {
 	for _, key := range []string{"ip " + from, "admin"} {
 		if ok, wait := a.limit.Allow(key); !ok {
 			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-			writeError(w, http.StatusTooManyRequests, "slow_down", fmt.Sprintf("Too many attempts. Try again in %d seconds.", int(wait.Seconds())+1))
+			writeError(w, http.StatusTooManyRequests, "slow_down", say(r, "Too many attempts. Try again in %d seconds.", int(wait.Seconds())+1))
 			return
 		}
 	}
 	if a.cfg.PasswordHash == "" {
 		access.CheckAdminPassword("", in.Password)
-		writeError(w, http.StatusForbidden, string(access.NotAdmin), "No admin password is set. Set one on the box with cafard passwd, then restart cafard.")
+		writeError(w, http.StatusForbidden, string(access.NotAdmin), say(r, "No admin password is set. Set one on the box with cafard passwd, then restart cafard."))
 		return
 	}
 	if !access.CheckAdminPassword(a.cfg.PasswordHash, in.Password) {
-		writeError(w, http.StatusForbidden, string(access.Wrong), "That is not the admin password.")
+		writeError(w, http.StatusForbidden, string(access.Wrong), say(r, "That is not the admin password."))
 		return
 	}
 	cookie := a.sessions.start()
@@ -386,7 +391,7 @@ func (a *Admin) identity(r *http.Request) (store.Identity, error) {
 	name := r.PathValue("name")
 	i, err := a.st.IdentityByName(r.Context(), name)
 	if errors.Is(err, store.ErrNotFound) {
-		return i, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No member %q.", name)}
+		return i, access.Refuse(access.NotFound, "No member %q.", name)
 	}
 	return i, err
 }
@@ -394,7 +399,7 @@ func (a *Admin) identity(r *http.Request) (store.Identity, error) {
 func (a *Admin) project(r *http.Request, name string) (store.Project, error) {
 	p, err := a.st.ProjectByName(r.Context(), name)
 	if errors.Is(err, store.ErrNotFound) {
-		return p, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No project %q.", name)}
+		return p, access.Refuse(access.NotFound, "No project %q.", name)
 	}
 	return p, err
 }
@@ -582,7 +587,7 @@ func (a *Admin) memberToken(w http.ResponseWriter, r *http.Request, who access.W
 	}
 	if i.Kind == store.Agent {
 		writeError(w, http.StatusBadRequest, string(access.NotAllowed),
-			"An agent's token is never shown: make a new install link, and run it on the agent's machine.")
+			say(r, "An agent's token is never shown: make a new install link, and run it on the agent's machine."))
 		return
 	}
 	tok, err := a.acc.IssueToken(r.Context(), who, i)
@@ -642,7 +647,7 @@ func (a *Admin) deleteSignin(w http.ResponseWriter, r *http.Request, who access.
 			return
 		}
 	}
-	writeError(w, http.StatusNotFound, string(access.NotFound), "No such sign-in.")
+	writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No such sign-in."))
 }
 
 type projectJSON struct {
@@ -716,7 +721,7 @@ func (a *Admin) createProject(w http.ResponseWriter, r *http.Request, who access
 	for _, n := range in.Members {
 		i, err := a.st.IdentityByName(r.Context(), n)
 		if err != nil {
-			writeError(w, http.StatusNotFound, string(access.NotFound), fmt.Sprintf("No member %q.", n))
+			writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No member %q.", n))
 			return
 		}
 		ids = append(ids, i)
@@ -796,7 +801,7 @@ func (a *Admin) setMembers(r *http.Request, who access.Who, p store.Project, nam
 	for _, n := range sortedKeys(want) {
 		i, err := a.st.IdentityByName(r.Context(), n)
 		if err != nil {
-			return &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No member %q.", n)}
+			return access.Refuse(access.NotFound, "No member %q.", n)
 		}
 		if err := a.acc.AddMember(r.Context(), who, p, i); err != nil {
 			return err
@@ -821,7 +826,7 @@ func (a *Admin) deleteProject(w http.ResponseWriter, r *http.Request, who access
 	// The name typed again, on the server as well as in the page: a delete
 	// cannot be undone, and a script calling this by mistake should fail.
 	if in.Confirm != p.Name {
-		writeError(w, http.StatusBadRequest, string(access.BadValue), "Type the project's name to confirm: deleting it cannot be undone.")
+		writeError(w, http.StatusBadRequest, string(access.BadValue), say(r, "Type the project's name to confirm: deleting it cannot be undone."))
 		return
 	}
 	if err := a.acc.DeleteProject(r.Context(), who, p); err != nil {
@@ -848,7 +853,7 @@ func (a *Admin) cancelLink(w http.ResponseWriter, r *http.Request, who access.Wh
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := a.st.Link(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, string(access.NotFound), "No such link.")
+		writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No such link."))
 		return
 	}
 	if err == nil {
@@ -940,7 +945,7 @@ func (a *Admin) setPublicURL(w http.ResponseWriter, r *http.Request, who access.
 	if u != "" {
 		var err error
 		if u, err = config.CheckPublicURL(u); err != nil {
-			a.fail(w, r, &access.Refusal{Code: access.BadValue, Message: "The public URL " + err.Error() + "."})
+			a.fail(w, r, access.Refuse(access.BadValue, "The public URL %s.", err))
 			return
 		}
 	}

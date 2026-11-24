@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 
@@ -63,8 +62,8 @@ func (s *Service) Lines(ctx context.Context, who access.Who, fileID int64, q Lin
 	}
 	defer r.Close()
 	if !isText(fw.ContentType) {
-		return LinesPage{}, &access.Refusal{Code: access.BadValue, Message: fmt.Sprintf(
-			"%s is %s, not text: read it whole, or open it as an image.", fw.Name, fw.ContentType)}
+		return LinesPage{}, access.Refuse(access.BadValue,
+			"%s is %s, not text: read it whole, or open it as an image.", fw.Name, fw.ContentType)
 	}
 	return ReadLines(r, q)
 }

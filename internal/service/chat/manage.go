@@ -25,10 +25,10 @@ func (s *Service) StartConversation(ctx context.Context, who access.Who, project
 		title = TitleFrom(text)
 	}
 	if title == "" {
-		return Sent{}, &access.Refusal{Code: access.BadValue, Message: "Write a first message, or give the conversation a title."}
+		return Sent{}, access.Refuse(access.BadValue, "Write a first message, or give the conversation a title.")
 	}
 	if len(text) > MaxText {
-		return Sent{}, &access.Refusal{Code: access.BadValue, Message: "The message is too long. Send long text as a file."}
+		return Sent{}, access.Refuse(access.BadValue, "The message is too long. Send long text as a file.")
 	}
 	p, err := s.project(ctx, project)
 	if err != nil {
@@ -139,11 +139,11 @@ func (s *Service) AttachFile(ctx context.Context, who access.Who, project, conve
 	}
 	c, err := s.st.ConversationByName(ctx, p.ID, conversation)
 	if err != nil {
-		return Sent{}, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No conversation %q in %s.", conversation, p.Name)}
+		return Sent{}, access.Refuse(access.NotFound, "No conversation %q in %s.", conversation, p.Name)
 	}
 	m, err := s.st.MessageInfo(ctx, messageID)
 	if err != nil || m.ConversationID != c.ID || m.AuthorID != who.ID || time.Since(m.CreatedAt) > attachWindow {
-		return Sent{}, &access.Refusal{Code: access.NotAllowed, Message: "A file is added only to your own message, sent in the last few minutes, in this conversation. Send it on its own instead."}
+		return Sent{}, access.Refuse(access.NotAllowed, "A file is added only to your own message, sent in the last few minutes, in this conversation. Send it on its own instead.")
 	}
 	head, rest := firstChunk(body)
 	f, err := s.st.AddFile(ctx, m.ID, store.NewFile{Name: name, ContentType: detectType(name, contentType, head)})
@@ -173,12 +173,12 @@ func (s *Service) UpdateConversation(ctx context.Context, who access.Who, projec
 	}
 	c, err := s.st.ConversationByName(ctx, p.ID, conversation)
 	if err != nil {
-		return store.Conversation{}, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No conversation %q in %s.", conversation, p.Name)}
+		return store.Conversation{}, access.Refuse(access.NotFound, "No conversation %q in %s.", conversation, p.Name)
 	}
 	if title != nil {
 		t := strings.TrimSpace(*title)
 		if t == "" || len(t) > 120 || !utf8.ValidString(t) {
-			return c, &access.Refusal{Code: access.BadValue, Message: "A title is 1 to 120 characters."}
+			return c, access.Refuse(access.BadValue, "A title is 1 to 120 characters.")
 		}
 		if err := s.st.SetConversationTitle(ctx, c.ID, t); err != nil {
 			return c, err
@@ -210,7 +210,7 @@ func (s *Service) AddMember(ctx context.Context, who access.Who, project, name s
 	}
 	target, err := s.st.IdentityByName(ctx, name)
 	if err != nil {
-		return &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No member %q.", name)}
+		return access.Refuse(access.NotFound, "No member %q.", name)
 	}
 	return s.acc.AddMember(ctx, who, p, target)
 }
@@ -223,7 +223,7 @@ func (s *Service) RemoveMember(ctx context.Context, who access.Who, project, nam
 	}
 	target, err := s.st.IdentityByName(ctx, name)
 	if err != nil {
-		return &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No member %q.", name)}
+		return access.Refuse(access.NotFound, "No member %q.", name)
 	}
 	return s.acc.RemoveMember(ctx, who, p, target)
 }
@@ -233,7 +233,7 @@ func (s *Service) RemoveMember(ctx context.Context, who access.Who, project, nam
 // admin UI, with their token.
 func (s *Service) Directory(ctx context.Context, who access.Who) ([]store.Identity, error) {
 	if who.Kind != store.Person {
-		return nil, &access.Refusal{Code: access.NotAllowed, Message: "Only people add members."}
+		return nil, access.Refuse(access.NotAllowed, "Only people add members.")
 	}
 	ids, err := s.st.Identities(ctx)
 	if err != nil {
@@ -266,7 +266,7 @@ func (s *Service) Reads(ctx context.Context, who access.Who, project, conversati
 	}
 	c, err := s.st.ConversationByName(ctx, p.ID, conversation)
 	if err != nil {
-		return nil, &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No conversation %q in %s.", conversation, p.Name)}
+		return nil, access.Refuse(access.NotFound, "No conversation %q in %s.", conversation, p.Name)
 	}
 	return s.st.Reads(ctx, c.ID)
 }
@@ -286,11 +286,11 @@ func (s *Service) DeleteFile(ctx context.Context, who access.Who, id int64) erro
 		// A device cannot read, but may delete what it sent: find the file
 		// without the read check, and let CanDeleteFile decide.
 		if fw, err = s.st.File(ctx, id); err != nil {
-			return &access.Refusal{Code: access.NotFound, Message: fmt.Sprintf("No file %d.", id)}
+			return access.Refuse(access.NotFound, "No file %d.", id)
 		}
 	}
 	if fw.State == store.Live {
-		return &access.Refusal{Code: access.BadValue, Message: fmt.Sprintf("%s is still arriving. Delete it once the upload ends.", fw.Name)}
+		return access.Refuse(access.BadValue, "%s is still arriving. Delete it once the upload ends.", fw.Name)
 	}
 	author, err := s.st.FileAuthor(ctx, id)
 	if err != nil {
@@ -310,7 +310,7 @@ func (s *Service) DeleteFile(ctx context.Context, who access.Who, id int64) erro
 	sum, stillUsed, err := s.st.DeleteFile(ctx, id, store.AuditEntry{Actor: who.Name, Action: "deleted the file " + fw.Name + " in",
 		Target: p.Name + "/" + c.Name, Origin: who.Origin})
 	if errors.Is(err, store.ErrNotFound) {
-		return &access.Refusal{Code: Gone, Message: fmt.Sprintf("%s is already gone.", fw.Name)}
+		return access.Refuse(Gone, "%s is already gone.", fw.Name)
 	}
 	if err != nil {
 		return err
@@ -328,7 +328,7 @@ func fileName(name string) (string, error) {
 		name = name[i+1:]
 	}
 	if name == "" || name == "." || name == ".." || name == "-" || len(name) > 255 || !utf8.ValidString(name) {
-		return "", &access.Refusal{Code: access.BadName, Message: "Name the file at the end of the address: …/send/<project>/<conversation>/boot.log."}
+		return "", access.Refuse(access.BadName, "Name the file at the end of the address: …/send/<project>/<conversation>/boot.log.")
 	}
 	return name, nil
 }

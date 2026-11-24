@@ -1,6 +1,7 @@
 import { ApiClient, Refused } from '@shared/api';
 import { Component } from '@shared/component';
 import { Html, html } from '@shared/html';
+import { t } from '@shared/i18n';
 import { Icon } from '@shared/icons';
 import { Layer } from '@shared/overlay';
 import { Toaster } from '@shared/toast';
@@ -8,7 +9,7 @@ import { ui } from '@shared/ui';
 import { AdminStore } from './store';
 import { NoticeCenter, bell } from './notices';
 import { MemberPage, ProjectPage } from './pages';
-import { canonical, fromHash, navLevel, placeOf, trailOf, type Place } from './route';
+import { canonical, fromHash, navLevel, placeOf, tabLabel, trailOf, type Place } from './route';
 import type { View } from './view';
 import { AuditView } from './audit';
 import { MembersView, OverviewView, ProjectsView, SettingsView, SignInView } from './views';
@@ -31,7 +32,7 @@ export class AdminApp {
   private shell: Shell | null = null;
 
   constructor(private readonly root: HTMLElement) {
-    this.api = new ApiClient('/admin/api', () => this.showSignIn('You were signed out. Sign in again.'));
+    this.api = new ApiClient('/admin/api', () => this.showSignIn(t('You were signed out. Sign in again.')));
     this.store = new AdminStore(this.api);
     this.layer = new Layer(document.getElementById('overlay') as HTMLElement);
     this.layer2 = new Layer(document.getElementById('overlay2') as HTMLElement);
@@ -66,7 +67,7 @@ export class AdminApp {
       if (await this.store.whoAmI()) await this.showShell();
       else this.showSignIn();
     } catch {
-      this.root.innerHTML = html`<p class="loading">cafard does not answer. Is it running?</p>`.value;
+      this.root.innerHTML = html`<p class="loading">${t('cafard does not answer. Is it running?')}</p>`.value;
     }
   }
 
@@ -182,7 +183,7 @@ class Shell extends Component {
     this.actions = {
       signout: async () => {
         await this.app.attempt(() => this.app.store.signOut());
-        this.app.showSignIn('You are signed out.');
+        this.app.showSignIn(t('You are signed out.'));
       },
       notices: () => this.app.openNotices(),
     };
@@ -211,18 +212,18 @@ class Shell extends Component {
     const current = (href: string) => Html.raw(href === level.current ? 'aria-current="page"' : '');
     const rail = html`${level.back ? html`<a class="${RAIL_ITEM} mb-1.5 bg-surface-lowest font-medium text-on-surface-variant max-md:mr-1 max-md:mb-0" href="${level.back.href}">${Icon.of('back')}${level.back.label}</a>` : ''}
       ${level.items.map((l) => html`<a class="${RAIL_ITEM}" href="${l.href}" ${current(l.href)}>${l.icon ? Icon.of(l.icon) : ''}<span class="min-w-0 truncate">${l.label}</span>${!level.back && counts[l.href] ? html`<span class="ml-auto text-xs font-bold text-on-surface-variant max-md:ml-1">${counts[l.href]}</span>` : ''}</a>`)}`;
-    const trail = trailOf(path, (k, n) => this.app.nameOf(k, n));
+    const trail = trailOf(path, (k, name) => this.app.nameOf(k, name));
     const crumbs = trail.map((c, i) => {
       const last = i === trail.length - 1;
-      return html`${i > 0 ? html`<span class="flex opacity-40 [&_.ic]:size-3.5">${Icon.of('chev')}</span>` : ''}<a class="state-layer flex items-center gap-1.5 rounded-md3-full py-1.5 text-[13.5px] font-semibold whitespace-nowrap text-inherit no-underline aria-[current=page]:bg-surface-lowest aria-[current=page]:text-on-surface [&_.ic]:size-[17px] ${i === 0 ? 'px-2' : 'px-3'}" href="${c.href}" ${Html.raw(last ? 'aria-current="page"' : '')} ${Html.raw(i === 0 ? 'aria-label="Overview"' : '')}>${i === 0 ? Icon.of('home') : html`${c.icon ? Icon.of(c.icon) : ''}<span>${c.label}</span>`}</a>`;
+      return html`${i > 0 ? html`<span class="flex opacity-40 [&_.ic]:size-3.5">${Icon.of('chev')}</span>` : ''}<a class="state-layer flex items-center gap-1.5 rounded-md3-full py-1.5 text-[13.5px] font-semibold whitespace-nowrap text-inherit no-underline aria-[current=page]:bg-surface-lowest aria-[current=page]:text-on-surface [&_.ic]:size-[17px] ${i === 0 ? 'px-2' : 'px-3'}" href="${c.href}" ${Html.raw(last ? 'aria-current="page"' : '')} ${i === 0 ? html`aria-label="${c.label}"` : ''}>${i === 0 ? Icon.of('home') : html`${c.icon ? Icon.of(c.icon) : ''}<span>${c.label}</span>`}</a>`;
     });
     // Two rows, as claudication's header: the name and the controls, then
     // the trail across the whole width.
     return html`<header class="shrink-0 px-3 pt-2 pb-3 md:px-4"><div class="flex min-h-10 items-center gap-3"><a class="mr-auto flex shrink-0 items-center gap-2 text-[17px] font-bold text-inherit no-underline [&_svg]:size-[26px] [&_svg]:text-primary" href="/" title="cafard admin">${Icon.logo}<span>cafard</span><small class="text-[13px] font-semibold text-on-surface-variant">admin</small></a>
       <span class="bell-slot contents">${bell(this.app.store.unread())}</span>
-      <button class="${ui.btn('text', 'sm')}" data-act="signout">Sign out</button></div>
-      <nav class="trail mt-2 flex w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-md3-full bg-primary-container p-1 text-on-primary-container [scrollbar-width:none]" aria-label="Breadcrumb">${crumbs}</nav></header>
-      <div class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-3 md:grid-cols-[13.5rem_minmax(0,1fr)] md:grid-rows-1 md:gap-4 md:px-4"><nav class="rail flex gap-0.5 self-start overflow-auto rounded-md3-full bg-surface-container p-1 [scrollbar-width:none] md:max-h-full md:flex-col md:rounded-md3-xl md:p-2" aria-label="${level.back ? 'Pages' : 'Sections'}">${rail}</nav>
+      <button class="${ui.btn('text', 'sm')}" data-act="signout">${t('Sign out')}</button></div>
+      <nav class="trail mt-2 flex w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-md3-full bg-primary-container p-1 text-on-primary-container [scrollbar-width:none]" aria-label="${t('Breadcrumb')}">${crumbs}</nav></header>
+      <div class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-3 md:grid-cols-[13.5rem_minmax(0,1fr)] md:grid-rows-1 md:gap-4 md:px-4"><nav class="rail flex gap-0.5 self-start overflow-auto rounded-md3-full bg-surface-container p-1 [scrollbar-width:none] md:max-h-full md:flex-col md:rounded-md3-xl md:p-2" aria-label="${level.back ? t('Pages') : t('Sections')}">${rail}</nav>
       <main class="min-h-0 min-w-0 overflow-y-auto"><div class="page"></div></main></div>`;
   }
 
@@ -235,6 +236,6 @@ class Shell extends Component {
     this.find('.rail [aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     const trail = this.find('.trail');
     if (trail) trail.scrollLeft = trail.scrollWidth;
-    document.title = `${trailOf(canonical(location.pathname), (k, n) => this.app.nameOf(k, n)).slice(1).map((c) => c.label).reverse().join(' · ') || 'Overview'} · cafard admin`;
+    document.title = `${trailOf(canonical(location.pathname), (k, name) => this.app.nameOf(k, name)).slice(1).map((c) => c.label).reverse().join(' · ') || tabLabel('overview')} · cafard admin`;
   }
 }

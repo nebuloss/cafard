@@ -1,14 +1,18 @@
 package join
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"time"
+
+	"cafard/internal/i18n"
 )
 
 type pageData struct {
+	// Title and Heading are said in the request's language by the caller.
 	Title    string
-	Name     string
+	Heading  string
 	Username string
 	Expires  time.Time
 	Error    string
@@ -18,6 +22,17 @@ type pageData struct {
 	Agent   bool
 	Sh, PS1 string
 	Clients []pageClient
+
+	// Filled in by page, in the request's language.
+	Lang i18n.Lang
+	Text pageText
+}
+
+// pageText is what the template says, in the page's language. The template
+// holds no sentence of its own, so that the i18n catalog's test sees them
+// all.
+type pageText struct {
+	RunOn, OnDevice, SignIn, Until string
 }
 
 // pageClient is a client the page can show the commands for: a link to the
@@ -27,9 +42,18 @@ type pageClient struct {
 	On         bool
 }
 
-func page(w http.ResponseWriter, status int, d pageData) {
+func page(w http.ResponseWriter, r *http.Request, status int, d pageData) {
+	d.Lang = i18n.FromRequest(r)
+	d.Text = pageText{
+		RunOn:    say(r, "Run on its machine, as the user its agents run as."),
+		OnDevice: say(r, "On this device, as"),
+		SignIn:   say(r, "Sign in"),
+		Until:    say(r, "Works once, until %s.", until(d.Lang, d.Expires)),
+	}
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Language", string(d.Lang))
+	h.Set("Vary", "Accept-Language, Cookie")
 	// The page needs nothing from anywhere: its style is inline and it has
 	// no script.
 	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
@@ -37,11 +61,23 @@ func page(w http.ResponseWriter, status int, d pageData) {
 	pageTmpl.Execute(w, d)
 }
 
+// frMonths are the months as a French date abbreviates them.
+var frMonths = [12]string{"janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."}
+
+// until is when a link stops working, in l: "2 Jan 15:04", "2 janv. à
+// 15:04".
+func until(l i18n.Lang, t time.Time) string {
+	if l == i18n.FR {
+		return fmt.Sprintf("%d %s à %s", t.Day(), frMonths[t.Month()-1], t.Format("15:04"))
+	}
+	return t.Format("2 Jan 15:04")
+}
+
 // The page uses claudication's MD3 tokens, as the admin UI and the chat app
 // do, so a person meets the same look on their phone before they have
 // signed in.
 var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
-<html lang="en">
+<html lang="{{.Lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -79,20 +115,20 @@ pre { margin:0; padding:10px 12px; border-radius:12px; border:1px solid var(--ou
 <main>
   <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="16" cy="19" rx="7" ry="9.5" fill="currentColor" fill-opacity=".18"/><path d="M16 10v18"/><path d="M13 9.5C11 6 8 4 5 4M19 9.5C21 6 24 4 27 4"/><path d="M9.5 16 5 14M9.5 21 4.5 22M22.5 16 27 14M22.5 21l5 1"/></svg>cafard</div>
 {{- if .Spent}}
-  <h1>{{.Title}}</h1>
+  <h1>{{.Heading}}</h1>
   <div class="err">{{.Error}}</div>
 {{- else if .Agent}}
-  <h1>Set up {{.Name}}</h1>
+  <h1>{{.Heading}}</h1>
   <nav class="clients">{{range .Clients}}<a href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}</nav>
-  <p>Run on its machine, as the user its agents run as.</p>
+  <p>{{.Text.RunOn}}</p>
   <div class="cmd"><span>Linux / macOS</span><pre>{{.Sh}}</pre></div>
   <div class="cmd"><span>Windows (PowerShell)</span><pre>{{.PS1}}</pre></div>
-  <small>Works once, until {{.Expires.Format "2 Jan 15:04"}}.</small>
+  <small>{{.Text.Until}}</small>
 {{- else}}
-  <h1>Sign in as {{.Name}}</h1>
-  <p>On this device, as <span class="user">{{.Username}}</span>.</p>
-  <form method="post"><button type="submit" autofocus>Sign in</button></form>
-  <small>Works once, until {{.Expires.Format "2 Jan 15:04"}}.</small>
+  <h1>{{.Heading}}</h1>
+  <p>{{.Text.OnDevice}} <span class="user">{{.Username}}</span>.</p>
+  <form method="post"><button type="submit" autofocus>{{.Text.SignIn}}</button></form>
+  <small>{{.Text.Until}}</small>
 {{- end}}
 </main>
 </body>

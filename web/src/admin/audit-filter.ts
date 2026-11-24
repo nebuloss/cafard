@@ -7,21 +7,44 @@
  * Pure, and tested under node.
  */
 
+import { t } from '@shared/i18n';
+
 export const AUDIT_FIELDS = ['actor', 'kind', 'target', 'source'] as const;
 export type AuditField = (typeof AUDIT_FIELDS)[number];
 
 /** What a column is called where someone reads it. */
-export const FIELD_LABEL: Record<AuditField, string> = { actor: 'Who', kind: 'Kind', target: 'Target', source: 'From' };
+export function fieldLabel(field: AuditField): string {
+  switch (field) {
+    case 'actor':
+      return t('Who');
+    case 'kind':
+      return t('Kind');
+    case 'target':
+      return t('Target');
+    case 'source':
+      return t('From');
+  }
+}
 
-/** How a kind or a source reads; any other value reads as itself. */
-export const VALUE_LABEL: Partial<Record<AuditField, Record<string, string>>> = {
-  kind: { members: 'Members', projects: 'Projects', links: 'Links & tokens', 'sign-ins': 'Sign-ins', settings: 'Settings' },
-  source: { admin: 'Admin UI', chat: 'Chat', cli: 'Box (cli)', join: 'Join link', mcp: 'MCP', api: 'API', 'upload link': 'Upload link' },
-};
+/**
+ * How a kind or a source reads; any other value reads as itself. The keys
+ * are the values the server stores, and stay English; only what is shown
+ * for them is translated.
+ */
+function valueLabels(field: AuditField): Record<string, string> | undefined {
+  switch (field) {
+    case 'kind':
+      return { members: t('Members'), projects: t('Projects'), links: t('Links & tokens'), 'sign-ins': t('Sign-ins'), settings: t('Settings') };
+    case 'source':
+      return { admin: t('Admin UI'), chat: t('Chat'), cli: t('Box (cli)'), join: t('Join link'), mcp: 'MCP', api: 'API', 'upload link': t('Upload link') };
+    default:
+      return undefined;
+  }
+}
 
 export function valueLabel(field: AuditField, value: string): string {
-  if (value === '') return 'none';
-  return VALUE_LABEL[field]?.[value] ?? value;
+  if (value === '') return t('none');
+  return valueLabels(field)?.[value] ?? value;
 }
 
 export class AuditFilter {

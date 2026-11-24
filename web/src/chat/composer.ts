@@ -1,9 +1,10 @@
 import { Component, mayAutofocus } from '@shared/component';
 import { Bytes } from '@shared/format';
 import { Html, html } from '@shared/html';
+import { t } from '@shared/i18n';
 import { Icon } from '@shared/icons';
 import { ui } from '@shared/ui';
-import { Avatar } from '@shared/widgets';
+import { Avatar, KindName } from '@shared/widgets';
 import { MessageText } from './text';
 import type { Member } from './types';
 
@@ -50,13 +51,13 @@ export class Composer extends Component {
     // busy, while a message is sent, dims the text.
     super('div', 'relative shrink-0 border-t border-outline-variant bg-surface px-3 pt-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] min-[840px]:px-5 [&.busy_textarea]:opacity-60');
     this.actions = {
-      unstage: (t) => {
-        const i = Number(t.dataset['i']);
+      unstage: (el) => {
+        const i = Number(el.dataset['i']);
         this.staged[i]?.drop();
         this.staged.splice(i, 1);
         this.drawStaged();
       },
-      mention: (t) => this.insertMention(t.dataset['v'] ?? ''),
+      mention: (el) => this.insertMention(el.dataset['v'] ?? ''),
       send: () => this.submit(),
       // The attach button asks what is attached, so the browser is told: a
       // phone given a file input that takes anything offers the camera and
@@ -69,14 +70,14 @@ export class Composer extends Component {
     // browser does not always turn into a click.
     document.addEventListener('pointerdown', (e) => {
       if (!this.root.isConnected) return;
-      const t = e.target as Element | null;
-      if (!t?.closest('.attach-menu, [data-act="attach-menu"]')) this.toggleAttach(false);
+      const el = e.target as Element | null;
+      if (!el?.closest('.attach-menu, [data-act="attach-menu"]')) this.toggleAttach(false);
     });
     this.root.addEventListener('change', (e) => {
-      const t = e.target as HTMLInputElement;
-      if (t.type === 'file' && t.files) {
-        this.stage([...t.files]);
-        t.value = '';
+      const el = e.target as HTMLInputElement;
+      if (el.type === 'file' && el.files) {
+        this.stage([...el.files]);
+        el.value = '';
       }
     });
     this.root.addEventListener('input', (e) => {
@@ -98,15 +99,15 @@ export class Composer extends Component {
 
   protected view(): Html {
     return html`<div class="attach-menu absolute bottom-[calc(100%-4px)] left-2 z-[5] min-w-52 rounded-xl border border-outline-variant bg-surface-lowest p-1 shadow-[0_8px_24px_rgba(0,0,0,.18)] min-[840px]:left-4" role="menu" hidden>
-        <button type="button" class="state-layer flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm" role="menuitem" data-act="attach-media"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>Photo or video</button>
-        <button type="button" class="state-layer flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm" role="menuitem" data-act="attach-file"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>File or log</button></div>
+        <button type="button" class="state-layer flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm" role="menuitem" data-act="attach-media"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>${t('Photo or video')}</button>
+        <button type="button" class="state-layer flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm" role="menuitem" data-act="attach-file"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>${t('File or log')}</button></div>
       <div class="mentions absolute bottom-[calc(100%-4px)] left-[60px] z-[5] max-w-[calc(100%-80px)] min-w-60 rounded-xl border border-outline-variant bg-surface-lowest p-1 shadow-[0_8px_24px_rgba(0,0,0,.18)]" hidden></div><div class="staged flex gap-2 overflow-x-auto pb-2 empty:hidden"></div>
       <form class="flex items-end gap-1.5" novalidate>
-        <button type="button" class="${ui.iconBtn}" data-act="attach-menu" title="Attach" aria-label="Attach" aria-haspopup="menu" aria-expanded="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9"/></svg></button>
+        <button type="button" class="${ui.iconBtn}" data-act="attach-menu" title="${t('Attach')}" aria-label="${t('Attach')}" aria-haspopup="menu" aria-expanded="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9"/></svg></button>
         <input class="pick-media" type="file" multiple accept="image/*,video/*" hidden>
         <input class="pick-file" type="file" multiple accept="${FILE_TYPES}" hidden>
-        <textarea class="max-h-[140px] min-h-[42px] min-w-0 flex-1 resize-none rounded-[21px] border border-outline-variant bg-surface-lowest px-3.5 py-2.5 leading-[1.4] outline-none focus:border-primary" rows="1" placeholder="${this.opts.placeholder}" aria-label="Message"></textarea>
-        <button class="send grid size-[42px] shrink-0 place-items-center rounded-full bg-primary text-on-primary disabled:cursor-default disabled:opacity-40" type="button" data-act="send" aria-label="Send" disabled><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/></svg></button>
+        <textarea class="max-h-[140px] min-h-[42px] min-w-0 flex-1 resize-none rounded-[21px] border border-outline-variant bg-surface-lowest px-3.5 py-2.5 leading-[1.4] outline-none focus:border-primary" rows="1" placeholder="${this.opts.placeholder}" aria-label="${t('Message')}"></textarea>
+        <button class="send grid size-[42px] shrink-0 place-items-center rounded-full bg-primary text-on-primary disabled:cursor-default disabled:opacity-40" type="button" data-act="send" aria-label="${t('Send')}" disabled><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/></svg></button>
       </form>`;
   }
 
@@ -149,7 +150,7 @@ export class Composer extends Component {
     const box = this.find('.staged');
     if (!box) return;
     box.innerHTML = Html.join(this.staged.map((s, i) => {
-      const x = html`<button type="button" class="absolute top-[3px] right-[3px] grid size-[22px] place-items-center rounded-full bg-black/45 text-white [&_.ic]:size-3.5" data-act="unstage" data-i="${String(i)}" aria-label="Remove ${s.file.name}">${Icon.of('close')}</button>`;
+      const x = html`<button type="button" class="absolute top-[3px] right-[3px] grid size-[22px] place-items-center rounded-full bg-black/45 text-white [&_.ic]:size-3.5" data-act="unstage" data-i="${String(i)}" aria-label="${t('Remove {name}', { name: s.file.name })}">${Icon.of('close')}</button>`;
       const st = 'relative flex h-16 shrink-0 items-center overflow-hidden rounded-[10px] bg-surface-high';
       return s.preview
         ? html`<div class="${st}"><img class="block size-16 object-cover" src="${s.preview}" alt="">${x}</div>`
@@ -164,9 +165,9 @@ export class Composer extends Component {
   }
 
   private autosize(): void {
-    const t = this.textarea;
-    t.style.height = 'auto';
-    t.style.height = `${Math.min(t.scrollHeight + 2, 160)}px`;
+    const ta = this.textarea;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight + 2, 160)}px`;
   }
 
   private onKey(e: KeyboardEvent): void {
@@ -200,8 +201,8 @@ export class Composer extends Component {
   }
 
   private checkMention(): void {
-    const t = this.textarea;
-    const typed = MessageText.mentionAt(t.value.slice(0, t.selectionStart));
+    const ta = this.textarea;
+    const typed = MessageText.mentionAt(ta.value.slice(0, ta.selectionStart));
     if (typed === null) return this.hideMentions();
     this.mentions = this.opts.members().filter((m) => m.name.startsWith(typed) || (m.display_name ?? '').toLowerCase().startsWith(typed)).slice(0, 8);
     if (!this.mentions.length) return this.hideMentions();
@@ -213,7 +214,7 @@ export class Composer extends Component {
     const box = this.$('.mentions');
     box.hidden = false;
     box.innerHTML = Html.join(this.mentions.map((m, i) =>
-      html`<button type="button" class="flex w-full items-center gap-2.5 rounded-md3-s px-2 py-1.5 text-left hover:bg-surface-container ${i === this.selected ? 'bg-surface-container' : ''}" data-act="mention" data-v="${m.name}">${Avatar.of(m, 'sm')}<span><b>${m.display_name || m.name}</b><small class="block text-xs text-on-surface-variant">@${m.name}${m.kind !== 'person' ? ` · ${m.kind}` : ''}</small></span></button>`)).value;
+      html`<button type="button" class="flex w-full items-center gap-2.5 rounded-md3-s px-2 py-1.5 text-left hover:bg-surface-container ${i === this.selected ? 'bg-surface-container' : ''}" data-act="mention" data-v="${m.name}">${Avatar.of(m, 'sm')}<span><b>${m.display_name || m.name}</b><small class="block text-xs text-on-surface-variant">@${m.name}${m.kind !== 'person' ? ` · ${KindName.of(m.kind)}` : ''}</small></span></button>`)).value;
   }
 
   private hideMentions(): void {
@@ -224,14 +225,14 @@ export class Composer extends Component {
   }
 
   private insertMention(name: string): void {
-    const t = this.textarea;
-    const pos = t.selectionStart;
-    const before = t.value.slice(0, pos).replace(/@([a-z0-9._-]*)$/i, `@${name} `);
-    t.value = before + t.value.slice(pos);
-    t.selectionStart = t.selectionEnd = before.length;
+    const ta = this.textarea;
+    const pos = ta.selectionStart;
+    const before = ta.value.slice(0, pos).replace(/@([a-z0-9._-]*)$/i, `@${name} `);
+    ta.value = before + ta.value.slice(pos);
+    ta.selectionStart = ta.selectionEnd = before.length;
     this.hideMentions();
     this.updateSend();
-    t.focus();
+    ta.focus();
   }
 
   private async submit(): Promise<void> {

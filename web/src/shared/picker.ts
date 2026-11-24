@@ -1,7 +1,9 @@
 import { Component, mayAutofocus } from './component';
 import { Html, html } from './html';
+import { t } from './i18n';
 import { Icon } from './icons';
 import { ui } from './ui';
+import { KindName } from './widgets';
 
 /** Something the picker can tick: a member or a project. */
 export interface PickItem {
@@ -86,9 +88,9 @@ export class PickerState {
   /** The label of the save button: "Save · +2 −1", or "Save" with no change. */
   saveLabel(): string {
     const { add, remove } = this.changes();
-    if (!add.length && !remove.length) return 'Save';
+    if (!add.length && !remove.length) return t('Save');
     const parts = [add.length ? `+${add.length}` : '', remove.length ? `−${remove.length}` : ''].filter(Boolean);
-    return `Save · ${parts.join(' ')}`;
+    return t('Save · {changes}', { changes: parts.join(' ') });
   }
 }
 
@@ -104,25 +106,25 @@ export class PickerView extends Component {
   ) {
     super('div', 'flex min-w-0 flex-col gap-2.5');
     this.actions = {
-      'pk-toggle': (t) => {
-        this.state.toggle(t.dataset['v'] ?? '');
+      'pk-toggle': (el) => {
+        this.state.toggle(el.dataset['v'] ?? '');
         this.drawList();
       },
-      'pk-kind': (t) => {
-        this.state.kind = (t.dataset['v'] ?? 'all') as KindFilter;
+      'pk-kind': (el) => {
+        this.state.kind = (el.dataset['v'] ?? 'all') as KindFilter;
         this.render();
       },
     };
     this.root.addEventListener('input', (e) => {
-      const t = e.target as HTMLInputElement;
-      if (t.classList.contains('pk-q')) {
-        this.state.query = t.value;
+      const el = e.target as HTMLInputElement;
+      if (el.classList.contains('pk-q')) {
+        this.state.query = el.value;
         this.drawList();
       }
     });
     this.root.addEventListener('keydown', (e) => {
-      const t = e.target as HTMLElement;
-      if (t.classList.contains('pk-q') && e.key === 'Enter') {
+      const el = e.target as HTMLElement;
+      if (el.classList.contains('pk-q') && e.key === 'Enter') {
         e.preventDefault();
         const first = this.state.first();
         if (first) {
@@ -134,9 +136,9 @@ export class PickerView extends Component {
   }
 
   protected view(): Html {
-    const kinds: [KindFilter, string][] = [['all', 'All'], ['person', 'People'], ['agent', 'Agents'], ['device', 'Devices']];
+    const kinds: [KindFilter, string][] = [['all', t('All')], ['person', t('People')], ['agent', t('Agents')], ['device', t('Devices')]];
     const seg = this.opts.kinds
-      ? html`<div class="${ui.seg}" role="group" aria-label="Show">${kinds.map(
+      ? html`<div class="${ui.seg}" role="group" aria-label="${t('Show')}">${kinds.map(
           ([k, l]) => html`<button type="button" class="${ui.segBtn}" aria-pressed="${String(this.state.kind === k)}" data-act="pk-kind" data-v="${k}">${l}</button>`,
         )}</div>`
       : Html.empty;
@@ -162,20 +164,20 @@ export class PickerView extends Component {
         const on = s.selected.has(it.id);
         const tag = this.opts.inline ? null : s.tag(it.id);
         const pill =
-          tag === 'add' ? html`<span class="${ui.pill.ok}">will be added</span>`
-          : tag === 'remove' ? html`<span class="${ui.pill.err}">will be removed</span>`
-          : tag === 'member' ? html`<span class="${ui.pill.muted}">member</span>`
+          tag === 'add' ? html`<span class="${ui.pill.ok}">${t('will be added')}</span>`
+          : tag === 'remove' ? html`<span class="${ui.pill.err}">${t('will be removed')}</span>`
+          : tag === 'member' ? html`<span class="${ui.pill.muted}">${t('member')}</span>`
           : Html.empty;
-        return html`<button type="button" class="group flex w-full items-center gap-2.5 border-b border-outline-variant px-3 py-2 text-left last:border-0 hover:bg-surface-low disabled:cursor-default disabled:opacity-50" role="option" aria-selected="${String(on)}" data-act="pk-toggle" data-v="${it.id}" ${Html.raw(it.disabled ? 'disabled' : '')}><span class="grid size-5 shrink-0 place-items-center rounded-[5px] border-2 border-outline group-aria-selected:border-primary group-aria-selected:bg-primary group-aria-selected:text-on-primary [&_.ic]:size-3.5 [&_.ic]:stroke-[2.8]">${on ? Icon.of('check') : ''}</span>${it.avatar}<span class="min-w-0 flex-1"><b class="mr-1.5 font-semibold">${it.label}</b>${it.kind && it.kind !== 'person' ? html`<span class="${ui.kind[it.kind] ?? ''}">${it.kind}</span>` : ''}<span class="block truncate text-[12.5px] text-on-surface-variant">${it.sub}</span></span>${pill}</button>`;
+        return html`<button type="button" class="group flex w-full items-center gap-2.5 border-b border-outline-variant px-3 py-2 text-left last:border-0 hover:bg-surface-low disabled:cursor-default disabled:opacity-50" role="option" aria-selected="${String(on)}" data-act="pk-toggle" data-v="${it.id}" ${Html.raw(it.disabled ? 'disabled' : '')}><span class="grid size-5 shrink-0 place-items-center rounded-[5px] border-2 border-outline group-aria-selected:border-primary group-aria-selected:bg-primary group-aria-selected:text-on-primary [&_.ic]:size-3.5 [&_.ic]:stroke-[2.8]">${on ? Icon.of('check') : ''}</span>${it.avatar}<span class="min-w-0 flex-1"><b class="mr-1.5 font-semibold">${it.label}</b>${it.kind && it.kind !== 'person' ? html`<span class="${ui.kind[it.kind] ?? ''}">${KindName.of(it.kind)}</span>` : ''}<span class="block truncate text-[12.5px] text-on-surface-variant">${it.sub}</span></span>${pill}</button>`;
       }),
-    ).value || html`<div class="${ui.empty}">Nothing matches “${s.query}”.</div>`.value;
+    ).value || html`<div class="${ui.empty}">${t('Nothing matches “{query}”.', { query: s.query })}</div>`.value;
     const { add, remove } = s.changes();
-    const shown = rows.length < s.items.length ? `Showing ${rows.length} of ${s.items.length}. ` : '';
+    const shown = rows.length < s.items.length ? `${t('Showing {shown} of {total}.', { shown: rows.length, total: s.items.length })} ` : '';
     const summary = this.opts.inline
-      ? html`<b>${s.selected.size} selected.</b>`
+      ? html`<b>${t('{n} selected.', { n: s.selected.size })}</b>`
       : add.length || remove.length
-        ? html`<b>${add.length} to add, ${remove.length} to remove.</b>`
-        : html`No change yet. Tick to add, untick to remove.`;
+        ? html`<b>${t('{add} to add, {remove} to remove.', { add: add.length, remove: remove.length })}</b>`
+        : html`${t('No change yet. Tick to add, untick to remove.')}`;
     this.$('.pk-sum').innerHTML = html`${shown}${summary}`.value;
     this.opts.onChange?.();
   }
