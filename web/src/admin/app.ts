@@ -230,7 +230,7 @@ export class AdminApp {
 
 /** A rail entry: a pill, filled when it is the page. */
 const RAIL_ITEM =
-  'state-layer flex min-h-9 shrink-0 items-center gap-3 rounded-md3-full px-3 font-semibold text-on-surface no-underline md:min-h-10 aria-[current=page]:bg-secondary-container aria-[current=page]:text-on-secondary-container';
+  'state-layer flex h-10 shrink-0 items-center gap-3 rounded-md3-full px-4 text-sm font-medium whitespace-nowrap text-on-surface-variant no-underline hover:text-on-surface aria-[current=page]:bg-primary-container aria-[current=page]:text-on-primary-container';
 
 /**
  * Shell is the frame: the top bar, the rail of the current level down the
@@ -282,13 +282,13 @@ class Shell extends Component {
     });
     // Two rows, as claudication's header: the name and the controls, then
     // the trail across the whole width.
-    return html`<header class="shrink-0 px-3 pt-2 pb-3 md:px-4"><div class="flex min-h-10 items-center gap-3"><a class="mr-auto flex shrink-0 items-center gap-2 text-[17px] font-bold text-inherit no-underline [&_svg]:size-[26px] [&_svg]:text-primary" href="/" title="cafard admin">${Icon.logo}<span>cafard</span><small class="text-[13px] font-semibold text-on-surface-variant">admin</small></a>
+    return html`<header class="shrink-0 px-4 pt-4 pb-3 sm:px-6"><div class="flex min-h-10 flex-wrap items-center justify-end gap-2"><a class="mr-auto flex shrink-0 items-center gap-2 text-[17px] font-bold text-inherit no-underline [&_svg]:size-[26px] [&_svg]:text-primary" href="/" title="cafard admin">${Icon.logo}<span>cafard</span><small class="text-[13px] font-semibold text-on-surface-variant">admin</small></a>
       <span class="live-slot contents"></span>${SourceLink.view()}${LangMenu.view()}${ThemeSwitch.view()}
       <span class="bell-slot contents">${bell(this.app.store.unread())}</span>
       <button class="${ui.btn('text', 'sm')}" data-act="signout">${t('Sign out')}</button></div>
-      <nav class="trail mt-2 flex w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-md3-full bg-primary-container p-1 text-on-primary-container [scrollbar-width:none]" aria-label="${t('Breadcrumb')}">${crumbs}</nav></header>
-      <div class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-3 md:grid-cols-[13.5rem_minmax(0,1fr)] md:grid-rows-1 md:gap-4 md:px-4"><nav class="rail flex gap-0.5 self-start overflow-auto rounded-md3-full bg-surface-container p-1 [scrollbar-width:none] md:max-h-full md:flex-col md:rounded-md3-xl md:p-2" aria-label="${level.back ? t('Pages') : t('Sections')}">${rail}</nav>
-      <main class="min-h-0 min-w-0 overflow-y-auto"><div class="page"></div></main></div>`;
+      <nav class="trail mt-3 flex w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-md3-full bg-primary-container p-1 text-on-primary-container [scrollbar-width:none]" aria-label="${t('Breadcrumb')}">${crumbs}</nav></header>
+      <div class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 px-4 pt-1 sm:px-6 md:grid-cols-[13rem_minmax(0,1fr)] md:grid-rows-1 md:gap-8 md:pt-3"><nav class="rail flex gap-1 self-start overflow-auto rounded-md3-full bg-surface-container p-1 [scrollbar-width:none] md:max-h-full md:flex-col md:rounded-md3-xl md:p-2" aria-label="${level.back ? t('Pages') : t('Sections')}">${rail}</nav>
+      <main class="min-h-0 min-w-0 overflow-y-auto pb-16"><div class="page"></div></main></div>`;
   }
 
   protected override afterRender(): void {
