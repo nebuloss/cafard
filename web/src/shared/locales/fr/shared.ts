@@ -43,6 +43,7 @@ export const shared: Record<string, string> = {
   'Colour theme': 'Thème',
   Offline: 'Hors ligne',
   'Changes show within half a minute until the connection is back.': "Les changements s'affichent en une demi-minute jusqu'au retour de la connexion.",
+  'Source on GitHub': 'Code source sur GitHub',
   // toast.ts
   'A new version of cafard is ready.': 'Une nouvelle version de cafard est prête.',
   Reload: 'Recharger',

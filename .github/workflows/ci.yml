@@ -1,0 +1,74 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Nothing here writes anything back.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: fmt, vet, tidy, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # go.mod is the single source of the version; the Makefile pins
+          # GOTOOLCHAIN to it as well.
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # What dev-build runs before a push: gofmt, vet, go mod tidy -diff, tsc,
+      # the web tests, and the Go tests with the race detector (cgo).
+      - run: make check
+
+  build:
+    name: cross-compile, reproducibly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Unshallow, or `git describe` has no tag to describe against and
+          # every binary calls itself by its commit alone.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Two builds apart must be the same bytes, or the checksums a release
+      # publishes cannot be checked by building it again.
+      - run: make repro
+
+      # Every release platform, so a broken target shows here rather than
+      # when a tag is pushed.
+      - run: make dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cafard-${{ github.sha }}
+          path: dist/release/
+          retention-days: 14

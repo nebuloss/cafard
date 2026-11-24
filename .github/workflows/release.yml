@@ -1,0 +1,69 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build a release from'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  binaries:
+    name: binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          # `git describe` stamps the version into the binary, and a shallow
+          # clone has no tags to describe against.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: make dist
+
+      # As claudication's release: plain binaries and SHA256SUMS, titled with
+      # the version, the annotated tag's message as the notes (nothing here
+      # goes through pull requests, so generated notes would be a bare
+      # compare link). Re-runnable: dispatched against a tag that already has
+      # a release, it updates it.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -eu
+          # Only an annotated tag has a message of its own; on a lightweight
+          # one %(contents) falls through to the commit's message.
+          if [ "$(git cat-file -t "$TAG")" = tag ]; then
+            git tag -l --format='%(contents)' "$TAG" > notes.md
+          else
+            : > notes.md
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            if [ -s notes.md ]; then
+              gh release edit "$TAG" --title "$TAG" --notes-file notes.md
+            else
+              gh release edit "$TAG" --title "$TAG"
+            fi
+            gh release upload "$TAG" dist/release/* --clobber
+          elif [ -s notes.md ]; then
+            gh release create "$TAG" --title "$TAG" --notes-file notes.md --verify-tag dist/release/*
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag dist/release/*
+          fi
