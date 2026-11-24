@@ -60,15 +60,18 @@ To deploy a commit of your own to a box over SSH, built on a build machine:
 
 ## Sending from a machine
 
-`cafard-client` sends to cafard from any machine, Linux, macOS or Windows
-([releases](https://github.com/nebuloss/cafard/releases): one file, no
-install), with an agent's or a device's token in `CAFARD_URL` and `CAFARD_TOKEN` (or `~/.config/cafard`,
-which an agent's install link writes):
+*mouchard*, n. — an informer. It tells cafard what happens on a machine.
 
-    cafard-client say  be98/wifi-drops "flash done, rebooting"
-    cafard-client send be98/wifi-drops boot.log dmesg.txt -m "after the reset"
-    logread -f | cafard-client log be98/wifi-drops console.log
-    cafard-client run  be98/signed-ota-rc3 -- make firmware
+`mouchard` sends to cafard from any machine, Linux, macOS or Windows
+([releases](https://github.com/nebuloss/cafard/releases): one file, no
+install), with an agent's or a device's token in `CAFARD_URL` and
+`CAFARD_TOKEN` (or `~/.config/cafard`, which an agent's install link
+writes):
+
+    mouchard say  be98/wifi-drops "flash done, rebooting"
+    mouchard send be98/wifi-drops boot.log dmesg.txt -m "after the reset"
+    logread -f | mouchard log be98/wifi-drops console.log
+    mouchard run  be98/signed-ota-rc3 -- make firmware
 
 `run` streams the command's output as it runs, then says how it ended and
 exits with its code. A board with only busybox uses `curl`:

@@ -45,8 +45,8 @@ type Config struct {
 	// a proxy without them, every client shares the proxy's address, and
 	// with it one rate limit.
 	TrustedProxies []string `yaml:"trusted-proxies"`
-	// AdminPasswordHash opens the admin UI: argon2id, as `cafard-server passwd`
-	// writes it. Empty, nobody can sign in to the admin UI; `cafard-server admin` on
+	// AdminPasswordHash opens the admin UI: argon2id, as `cafard passwd`
+	// writes it. Empty, nobody can sign in to the admin UI; `cafard admin` on
 	// the box still works.
 	AdminPasswordHash string `yaml:"admin-password-hash,omitempty"`
 	Log               Log    `yaml:"log"`
@@ -100,7 +100,7 @@ func (c Config) Validate() error {
 		return errors.New("config: state-dir is empty")
 	}
 	if c.AdminPasswordHash != "" && !strings.HasPrefix(c.AdminPasswordHash, "$argon2id$") {
-		return errors.New("config: admin-password-hash is not an argon2id hash: set it with cafard-server passwd")
+		return errors.New("config: admin-password-hash is not an argon2id hash: set it with cafard passwd")
 	}
 	if c.PublicURL != "" {
 		if _, err := CheckPublicURL(c.PublicURL); err != nil {

@@ -71,7 +71,7 @@ func helper(t *testing.T, stdin string, args ...string) (string, string, int) {
 	return out.String(), errOut.String(), code
 }
 
-// cafard-client's say, send and log, against a real server, with the credentials the
+// mouchard's say, send and log, against a real server, with the credentials the
 // environment gives.
 func TestHelpersSend(t *testing.T) {
 	b := newBox(t)

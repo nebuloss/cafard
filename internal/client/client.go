@@ -1,4 +1,4 @@
-// Package client is cafard-client: say, send, log and run (cli.go), on a
+// Package client is mouchard: say, send, log and run (cli.go), on a
 // machine that holds an agent's or a device's token, over /api/v1. It adds no ability of its own (CLAUDE.md, rule 6): each
 // call is one of the curl lines docs/design.md shows, made robust, with an
 // ending a script can act on.
@@ -176,7 +176,7 @@ func (c *Client) do(ctx context.Context, method, u, ctype string, body io.Reader
 	}
 	agent := c.Agent
 	if agent == "" {
-		agent = "cafard-client"
+		agent = "mouchard"
 	}
 	req.Header.Set("User-Agent", agent)
 	hc := c.HTTP

@@ -231,7 +231,7 @@ func (a *Admin) signin(w http.ResponseWriter, r *http.Request) {
 	}
 	if a.cfg.PasswordHash == "" {
 		access.CheckAdminPassword("", in.Password)
-		writeError(w, http.StatusForbidden, string(access.NotAdmin), say(r, "No admin password is set. Set one on the box with cafard-server passwd, then restart cafard."))
+		writeError(w, http.StatusForbidden, string(access.NotAdmin), say(r, "No admin password is set. Set one on the box with cafard passwd, then restart cafard."))
 		return
 	}
 	if !access.CheckAdminPassword(a.cfg.PasswordHash, in.Password) {

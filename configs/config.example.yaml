@@ -13,7 +13,7 @@ listen: "0.0.0.0:8330"
 admin-listen: "127.0.0.1:8331"
 
 # The database and the files people and agents send. Back it up with
-# `cafard-server backup`; it is as sensitive as everything sent to cafard.
+# `cafard backup`; it is as sensitive as everything sent to cafard.
 state-dir: "/var/lib/cafard"
 
 # The address people and agents reach `listen` at, as it appears in join
@@ -30,7 +30,7 @@ trusted-proxies:
   - "10.0.10.1"    # the one serving the admin UI on the internal network
 
 # The hash of the admin password, which opens the admin UI. Written by
-# `cafard-server passwd`, which asks for the password; restart cafard after.
+# `cafard passwd`, which asks for the password; restart cafard after.
 # admin-password-hash: "$argon2id$v=19$m=19456,t=2,p=1$…"
 
 log:

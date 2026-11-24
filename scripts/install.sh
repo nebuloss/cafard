@@ -83,7 +83,7 @@ STATE_DIR="${STATE_DIR:-/var/lib/cafard}"
 
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-30}"    # seconds to wait for the first response
 # Seconds to wait for the old process to let go of its listeners. Longer than
-# the 10 s it gives its servers to shut down (cmd/cafard-server runServer), or the
+# the 10 s it gives its servers to shut down (cmd/cafard runServer), or the
 # wait is pointless.
 STOP_TIMEOUT="${STOP_TIMEOUT:-30}"
 SET_PASSWORD="${SET_PASSWORD:-1}"     # 0 to leave the admin UI without a password
@@ -97,11 +97,12 @@ BINARY_SHA256="${BINARY_SHA256:-}"
 BACKUPS_KEPT="${BACKUPS_KEPT:-5}"
 QUIET="${QUIET:-0}"                   # 1 to drop the progress dots
 
-BINARY="$BIN_DIR/cafard-server"
-# The name the server had before it was split from the client (v0.2.1 and
-# earlier): an update moves it to BINARY, so its version, its rollback copy
-# and the service all go on under the new name.
-OLD_BINARY="$BIN_DIR/cafard"
+BINARY="$BIN_DIR/cafard"
+# The name the server had for a day, between the split from the client and
+# the client's own name (mouchard): a box deployed then has it, and an update
+# moves it back to BINARY, so its version, its rollback copy and the service
+# all go on under cafard.
+OLD_BINARY="$BIN_DIR/cafard-server"
 LOG_FILE="/var/log/${SERVICE_NAME}.log"
 # What store.Open names it, and the two files SQLite keeps beside it in WAL
 # mode. files/ is not copied: it is large and append-only, and a rollback
@@ -158,8 +159,8 @@ detect_platform() {
 # kernel says "Exec format error", which says nothing about why.
 detect_arch() {
   case "$(uname -m)" in
-    x86_64|amd64)  ASSET=cafard-server-linux-amd64 ;;
-    aarch64|arm64) ASSET=cafard-server-linux-arm64 ;;
+    x86_64|amd64)  ASSET=cafard-linux-amd64 ;;
+    aarch64|arm64) ASSET=cafard-linux-arm64 ;;
     *) die "no release for $(uname -m): cafard is released for amd64 and arm64 only (build one and install it with BINARY_FILE=…)" ;;
   esac
 }
@@ -356,7 +357,7 @@ depend() {
 start_pre() {
     checkpath --file --owner $SERVICE_USER:$SERVICE_USER --mode 0640 "\$output_log"
 
-    # Refuse to start rather than start wrong: \`cafard-server config\` fails on an
+    # Refuse to start rather than start wrong: \`cafard config\` fails on an
     # unknown key or on listeners that overlap, and says which. Under
     # supervise-daemon a refusal here is one clear line in the log, where a
     # binary that exits at once would be respawned into the same error.
@@ -441,7 +442,7 @@ EOF
 # install, commented like configs/config.example.yaml; after that it is the
 # operator's, with their comments in it, and an update changes only the lines
 # for the settings this run names. Every version of it is checked by the new
-# binary's `cafard-server config` before it replaces the file, so a typo in LISTEN
+# binary's `cafard config` before it replaces the file, so a typo in LISTEN
 # fails here, with nothing touched, rather than at the start that follows.
 
 # The first global IPv4 of this machine, or empty: what a person on the same
@@ -543,7 +544,7 @@ EOF
   cat <<EOF
 
 # The hash of the admin password, which opens the admin UI. Written by
-# \`cafard-server passwd -config $CONFIG_FILE\`; restart cafard after.
+# \`cafard passwd -config $CONFIG_FILE\`; restart cafard after.
 # admin-password-hash: "\$argon2id\$v=19\$m=19456,t=2,p=1\$…"
 
 log:
@@ -759,15 +760,15 @@ verify_download() {
 
 # The version a binary reports, or empty. Also the pre-flight check: a binary
 # that cannot print its version will not serve either — wrong architecture, a
-# truncated copy, a file that is not cafard at all. `cafard-server version`
-# prints "cafard-server v0.3.0 (commit …, built …)"; before the split it was
-# "cafard v0.2.1 …", which an update still has to read.
+# truncated copy, a file that is not cafard at all. `cafard version` prints
+# "cafard v0.3.0 (commit …, built …)"; a build from the day it was named
+# cafard says that instead, and an update still has to read it.
 binary_version() {
   [ -x "$1" ] || return 0
-  "$1" version 2>/dev/null | awk '$1 == "cafard-server" || $1 == "cafard" {print $2; exit}'
+  "$1" version 2>/dev/null | awk '$1 == "cafard" || $1 == "cafard-server" {print $2; exit}'
 }
 
-# The server installed under its old name is taken as the installed one: moved
+# The server installed under that name is taken as the installed one: moved
 # to BINARY (a running process keeps its open file, so this touches nothing
 # that is serving), its rollback copy with it. The service is rewritten to
 # the new name before the restart, as on every update.
@@ -785,7 +786,7 @@ installed_version() { binary_version "$BINARY"; }
 fetch_binary() {
   BEFORE="$(installed_version)"
   NEW_DIR="$(mktemp -d)"
-  NEW_BIN="$NEW_DIR/cafard-server"
+  NEW_BIN="$NEW_DIR/cafard"
 
   if [ -n "$BINARY_FILE" ]; then
     [ -f "$BINARY_FILE" ] || die "BINARY_FILE=$BINARY_FILE does not exist"
@@ -967,7 +968,7 @@ stop_and_start() {
 }
 
 # A fresh install's admin UI has no password, so nobody can open it until
-# someone runs `cafard-server passwd` on the box. Set one here and hand it back once,
+# someone runs `cafard passwd` on the box. Set one here and hand it back once,
 # so the box is usable from the summary below. Only on a first install with
 # no hash in the config: an update never touches the password, which is the
 # operator's from the day it was printed.
@@ -983,7 +984,7 @@ set_admin_password() {
     ADMIN_PASSWORD="$pw"
     info "Admin password set"
   else
-    warn "could not set the admin password: run 'cafard-server passwd -config $CONFIG_FILE', then restart"
+    warn "could not set the admin password: run 'cafard passwd -config $CONFIG_FILE', then restart"
   fi
 }
 
@@ -1095,12 +1096,12 @@ print_summary() {
   if [ -n "${ADMIN_PASSWORD:-}" ]; then
     printf '\n'
     printf "  ${BOLD}admin password: %s${NC}\n" "$ADMIN_PASSWORD"
-    step "shown once — nothing can recover it, but 'cafard-server passwd' sets a new one"
+    step "shown once — nothing can recover it, but 'cafard passwd' sets a new one"
   fi
 
   if [ "${CONFIG_WRITTEN:-0}" = 1 ]; then
     printf '\n'
-    step "next: open the admin UI, or 'cafard-server admin create person NAME' for a join link"
+    step "next: open the admin UI, or 'cafard admin create person NAME' for a join link"
     warn "the admin listener ($adm) must not be published: keep port ${adm##*:} on the internal network, publish only ${pub##*:}"
     case "$url" in
       http://*) warn "served over plain HTTP: put a TLS proxy in front of ${pub##*:}, then set PUBLIC_URL and TRUSTED_PROXIES" ;;

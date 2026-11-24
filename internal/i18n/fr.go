@@ -91,8 +91,8 @@ var fr = map[string]string{
 	"Name the file at the end of the address: …/send/<project>/<conversation>/boot.log.":                                        "Nommez le fichier à la fin de l'adresse\u00a0: …/send/<project>/<conversation>/boot.log.",
 
 	// httpapi/api/api.go and chat.go
-	"No route %s %s. The routes are listed in `go doc cafard/internal/httpapi/api`.":                                                  "Aucune route %s %s. Les routes sont listées dans `go doc cafard/internal/httpapi/api`.",
-	`Sign in, or send a token: -H "Authorization: Bearer cfd_…". An admin makes one with cafard-server admin create agent or device.`: "Connectez-vous, ou envoyez un jeton\u00a0: -H \"Authorization: Bearer cfd_…\". Un admin en crée un avec cafard-server admin create agent ou device.",
+	"No route %s %s. The routes are listed in `go doc cafard/internal/httpapi/api`.":                                           "Aucune route %s %s. Les routes sont listées dans `go doc cafard/internal/httpapi/api`.",
+	`Sign in, or send a token: -H "Authorization: Bearer cfd_…". An admin makes one with cafard admin create agent or device.`: "Connectez-vous, ou envoyez un jeton\u00a0: -H \"Authorization: Bearer cfd_…\". Un admin en crée un avec cafard admin create agent ou device.",
 	"Writes from another site are refused.":                                                "Les écritures venant d'un autre site sont refusées.",
 	"cafard could not do that; the error is in its log.":                                   "cafard n'a pas pu le faire\u00a0; l'erreur est dans son journal.",
 	"The request is not the JSON this route takes: %s":                                     "La requête n'est pas le JSON qu'attend cette route\u00a0: %s",
@@ -107,7 +107,7 @@ var fr = map[string]string{
 	// httpapi/admin/admin.go
 	"No route %s %s.": "Aucune route %s %s.",
 	"Too many attempts. Try again in %d seconds.":                                                  "Trop de tentatives. Réessayez dans %d secondes.",
-	"No admin password is set. Set one on the box with cafard-server passwd, then restart cafard.": "Aucun mot de passe admin n'est défini. Définissez-en un sur la machine avec cafard-server passwd, puis redémarrez cafard.",
+	"No admin password is set. Set one on the box with cafard passwd, then restart cafard.":        "Aucun mot de passe admin n'est défini. Définissez-en un sur la machine avec cafard passwd, puis redémarrez cafard.",
 	"That is not the admin password.":                                                              "Ce n'est pas le mot de passe admin.",
 	"An agent's token is never shown: make a new install link, and run it on the agent's machine.": "Le jeton d'un agent n'est jamais affiché\u00a0: créez un nouveau lien d'installation, et exécutez-le sur la machine de l'agent.",
 	"Type the project's name to confirm: deleting it cannot be undone.":                            "Saisissez le nom du projet pour confirmer\u00a0: sa suppression est définitive.",

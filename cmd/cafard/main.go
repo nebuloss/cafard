@@ -1,10 +1,10 @@
-// Command cafard-server is the server, and the commands that look after it
-// on its box. Sending from other machines is cafard-client's.
+// Command cafard is the server, and the commands that look after it
+// on its box. Sending from other machines is mouchard's.
 //
-//	cafard-server serve [-config FILE]    run both listeners
-//	cafard-server config [-config FILE]   check the configuration, print it in full
-//	cafard-server admin COMMAND           people, agents, devices and projects
-//	cafard-server version                 print the build
+//	cafard serve [-config FILE]    run both listeners
+//	cafard config [-config FILE]   check the configuration, print it in full
+//	cafard admin COMMAND           people, agents, devices and projects
+//	cafard version                 print the build
 package main
 
 import (
@@ -43,17 +43,17 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const usage = `cafard-server: a message hub for people and agents on different machines.
+const usage = `cafard: a message hub for people and agents on different machines.
 
 Usage:
-  cafard-server serve [-config FILE]    run the public and the admin listener
-  cafard-server config [-config FILE]   check the configuration, print it in full
-  cafard-server admin  COMMAND          people, agents, devices and projects (cafard-server admin -h)
-  cafard-server passwd [-config FILE]   set the admin password, which opens the admin UI
-  cafard-server version                 print the build
+  cafard serve [-config FILE]    run the public and the admin listener
+  cafard config [-config FILE]   check the configuration, print it in full
+  cafard admin  COMMAND          people, agents, devices and projects (cafard admin -h)
+  cafard passwd [-config FILE]   set the admin password, which opens the admin UI
+  cafard version                 print the build
 
 The configuration is described in configs/config.example.yaml.
-To send to cafard from another machine, use cafard-client.
+To send to cafard from another machine, use mouchard.
 `
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -71,7 +71,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "passwd":
 		return passwdCommand(args[1:], os.Stdin, stdout, stderr)
 	case "version", "-version", "--version":
-		fmt.Fprintln(stdout, "cafard-server", version.String())
+		fmt.Fprintln(stdout, "cafard", version.String())
 		return 0
 	case "help", "-h", "-help", "--help":
 		fmt.Fprint(stdout, usage)

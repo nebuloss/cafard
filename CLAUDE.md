@@ -11,11 +11,11 @@ claudication's way of working (`~/misc/claudication`); when in doubt about a
 convention, do what claudication does.
 
 **Status: steps 1 to 5 of the build order are in** — the store, the files,
-the access rules, `cafard-server serve` with both listeners, `/api/v1` behind agent
+the access rules, `cafard serve` with both listeners, `/api/v1` behind agent
 and device tokens and people's chat sign-in (send with `curl`, live logs
 included; read by page; conversations started from their first message;
 members, reads, file deletion, the profile), live notices through
-`internal/live` and `/api/v1/events`, `cafard-server admin` on the box, the admin
+`internal/live` and `/api/v1/events`, `cafard admin` on the box, the admin
 UI, the chat app at the public listener's root, and the MCP server at `/mcp`
 (`internal/httpapi/agent`: sessions, `select_project`, `inbox`,
 `read_conversation`, `read_file`, `post`, `upload_link`, `members`) with
@@ -96,7 +96,7 @@ topic, and a tab's one event stream tells its panels to read again. MCP's
 ## Commands
 
     make check        # fmt-check, vet, tidy-check, typecheck, test-web, test with -race: what CI runs
-    make build        # dist/cafard-server (web UIs embedded) and dist/cafard-client (runs make web)
+    make build        # dist/cafard (web UIs embedded) and dist/mouchard (runs make web)
     make web          # build the web UIs into internal/webui/dist, where go:embed takes them
     make typecheck    # tsc over web/: Vite strips types without checking them
     make test-web     # the web UIs' unit tests (vitest, under node)
@@ -105,7 +105,7 @@ topic, and a tab's one event stream tells its panels to read again. MCP's
 
 Git holds `internal/webui/dist` empty; a bare `go build` serves the APIs and
 says the UI is missing. For UI work, `cd web && npm run dev:admin` (or
-`dev:chat`) runs Vite proxying the API to a local `cafard-server serve`. Neither
+`dev:chat`) runs Vite proxying the API to a local `cafard serve`. Neither
 UI has a page test runner; a change to one is checked in a browser against
 a deployed box (headless Chromium on dev-build works).
 
@@ -115,10 +115,10 @@ The Makefile pins `GOTOOLCHAIN` to the `go` directive in `go.mod` (1.26.0),
 so a plain `go` command may resolve a different compiler than `make` does;
 `web/package-lock.json` pins the web compilers the same way.
 
-Two binaries. `cafard-server` (`cmd/cafard-server`, Linux): `serve`,
+Two binaries. `cafard` (`cmd/cafard`, Linux): `serve`,
 `config` (check and print the configuration), `admin` (people, agents,
-devices, projects, tokens; `cafard-server admin -h`), `passwd`, `version`.
-`cafard-client` (`cmd/cafard-client`, Linux, macOS and Windows), which sends
+devices, projects, tokens; `cafard admin -h`), `passwd`, `version`.
+`mouchard` (`cmd/mouchard`, Linux, macOS and Windows), which sends
 to a cafard from any machine with an agent's or device's token: `say`,
 `send`, `log`, `run`, all in `internal/client` (docs/design.md, "Helpers");
 it imports none of the server.
@@ -128,12 +128,12 @@ it imports none of the server.
 `./internal/httpapi/join` list the routes. To try a deployed box:
 `scripts/deploy.sh [ref]` builds a pushed commit on dev-build and installs it
 through `scripts/install.sh` (dmz-cafard, CT 409, by default);
-`cafard-server passwd` inside it writes the admin password's hash into
+`cafard passwd` inside it writes the admin password's hash into
 `/etc/cafard/config.yaml` (restart to apply), and the admin UI is then at the
 admin listener's address, opened with that password alone, as claudication's
-is. The admin is the box's operator, not a person: `cafard-server admin create
+is. The admin is the box's operator, not a person: `cafard admin create
 person NAME` makes a member and prints their join link with a QR code, and
-`cafard-server admin link NAME` makes a new one.
+`cafard admin link NAME` makes a new one.
 
 The tests need no credentials and no network. A package whose tests build an
 HTTP client calls `testenv.Offline` from its `TestMain`. Anything that talks to
@@ -191,6 +191,6 @@ Like claudication: `scripts/install.sh` installs or updates a systemd or
 OpenRC service and writes `/etc/cafard/config.yaml` on first run. `listen` is
 published in the DMZ; `admin-listen` stays on the internal network. An update
 is a handover, not a stop. State (the database, the blobs, the sealing key)
-lives in the state directory and never in config. `cafard-server backup FILE` takes a
+lives in the state directory and never in config. `cafard backup FILE` takes a
 consistent snapshot without stopping the service, and is as sensitive as the
 state directory.

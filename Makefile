@@ -1,7 +1,7 @@
 # Two binaries: the server, with the web UIs inside, and the client, which
-# carries none of it (cmd/cafard-client imports internal/client alone).
-SERVER := cafard-server
-CLIENT := cafard-client
+# carries none of it (cmd/mouchard imports internal/client alone).
+SERVER := cafard
+CLIENT := mouchard
 DIST   := dist
 PKG    := cafard/internal/version
 

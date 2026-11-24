@@ -43,7 +43,7 @@ type Store struct {
 	db  *sql.DB
 	now func() time.Time
 	// hub is told what each write changed, so open pages and waiting agents
-	// read it again. Nil until Announce: cafard-server admin, run beside the server,
+	// read it again. Nil until Announce: cafard admin, run beside the server,
 	// writes without one.
 	hub *live.Hub
 }

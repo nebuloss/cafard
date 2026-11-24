@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 
-// Where each UI's API answers during `npm run dev:<mode>`, with `cafard-server serve`
+// Where each UI's API answers during `npm run dev:<mode>`, with `cafard serve`
 // running on the default loopback ports.
 const devAPI: Record<string, Record<string, string>> = {
   admin: { '/admin/api': 'http://127.0.0.1:8331' },

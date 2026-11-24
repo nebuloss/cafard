@@ -113,7 +113,7 @@ func (a *Agent) auth(next http.Handler) http.Handler {
 		if !ok || strings.TrimSpace(token) == "" {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="cafard"`)
 			mcp.WriteError(w, http.StatusUnauthorized,
-				`cafard's MCP server needs an agent's token: --header "Authorization: Bearer cfd_ag_…". An admin makes one with cafard-server admin create agent.`)
+				`cafard's MCP server needs an agent's token: --header "Authorization: Bearer cfd_ag_…". An admin makes one with cafard admin create agent.`)
 			return
 		}
 		from := httpx.ClientIP(r)

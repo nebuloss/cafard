@@ -15,25 +15,25 @@ import (
 	"time"
 )
 
-// The commands of cafard-client: say, send, log and run, for a machine that
+// The commands of mouchard: say, send, log and run, for a machine that
 // holds an agent's or a device's token. Each is a curl line of
 // docs/design.md, made robust and given an ending a script can act on. They
 // print in English, as command lines do here, and work the same on Linux,
-// macOS and Windows. cmd/cafard-client only calls Command.
+// macOS and Windows. cmd/mouchard only calls Command.
 
-// Usage is cafard-client's help.
-const Usage = `cafard-client: send to cafard from this machine, with its agent's or
+// Usage is mouchard's help.
+const Usage = `mouchard: send to cafard from this machine, with its agent's or
 device's token (CAFARD_URL and CAFARD_TOKEN, or ~/.config/cafard):
 
-  cafard-client say  PROJECT/CONVERSATION TEXT...     a message (TEXT, or stdin)
-  cafard-client send PROJECT/CONVERSATION FILE... [-m TEXT]
+  mouchard say  PROJECT/CONVERSATION TEXT...     a message (TEXT, or stdin)
+  mouchard send PROJECT/CONVERSATION FILE... [-m TEXT]
                                                       files, in one message
-  cafard-client log  PROJECT/CONVERSATION NAME [-tee] stdin as a live file:
-                                                      tail -f x | cafard-client log …
-  cafard-client run  PROJECT/CONVERSATION [-name F] -- COMMAND [ARGS...]
+  mouchard log  PROJECT/CONVERSATION NAME [-tee] stdin as a live file:
+                                                      tail -f x | mouchard log …
+  mouchard run  PROJECT/CONVERSATION [-name F] -- COMMAND [ARGS...]
                                                       run COMMAND, its output as a live
                                                       file, then how it ended; exits as it did
-  cafard-client version                               print the build
+  mouchard version                               print the build
 
 The conversation is created by the first thing sent to it.
 `
@@ -56,7 +56,7 @@ func Command(name string, args []string, stdin io.Reader, stdout, stderr io.Writ
 		fmt.Fprintln(stderr, "cafard:", err)
 		return 1
 	}
-	c.Agent = "cafard-client/" + name
+	c.Agent = "mouchard/" + name
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	switch name {
@@ -72,7 +72,7 @@ func Command(name string, args []string, stdin io.Reader, stdout, stderr io.Writ
 }
 
 // flags parses a helper's flags wherever they are among its arguments, so
-// `cafard-client send be98/x a.log -m "boot"` works as well as the flag first.
+// `mouchard send be98/x a.log -m "boot"` works as well as the flag first.
 // Everything after "--" is left alone.
 //
 // The arguments are split at "--" before parsing: the flag package swallows

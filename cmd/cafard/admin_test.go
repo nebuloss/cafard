@@ -34,7 +34,7 @@ func newBox(t *testing.T) *box {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "config.yaml")
-	// The file is what `cafard-server admin` reads; the ports in it are never bound.
+	// The file is what `cafard admin` reads; the ports in it are never bound.
 	// The server in serve() runs from cfg, on ports the kernel picks.
 	os.WriteFile(path, []byte("listen: 127.0.0.1:18330\nadmin-listen: 127.0.0.1:18331\nstate-dir: "+state+"\npublic-url: https://cafard.example\n"), 0o600)
 	cfg := config.Default()
@@ -42,7 +42,7 @@ func newBox(t *testing.T) *box {
 	return &box{t: t, cfg: cfg, path: path}
 }
 
-// admin runs `cafard-server admin -config … args…` and returns what it printed.
+// admin runs `cafard admin -config … args…` and returns what it printed.
 func (b *box) admin(args ...string) (string, int) {
 	b.t.Helper()
 	var out, errOut bytes.Buffer
@@ -54,7 +54,7 @@ func (b *box) must(args ...string) string {
 	b.t.Helper()
 	out, code := b.admin(args...)
 	if code != 0 {
-		b.t.Fatalf("cafard-server admin %s: %d\n%s", strings.Join(args, " "), code, out)
+		b.t.Fatalf("cafard admin %s: %d\n%s", strings.Join(args, " "), code, out)
 	}
 	return out
 }
@@ -165,7 +165,7 @@ func TestAdminNeedsTheStateDirectory(t *testing.T) {
 		t.Errorf("no state directory: %d %s", code, out)
 	}
 	if _, err := os.Stat(b.cfg.StateDir); err == nil {
-		t.Error("cafard-server admin created the state directory")
+		t.Error("cafard admin created the state directory")
 	}
 }
 

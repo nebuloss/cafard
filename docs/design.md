@@ -48,7 +48,7 @@ here.
 - **State lives in the state directory**, never in config: the database, the
   files, the sealing key.
 - **An update is a handover**, not a stop (`internal/handover`).
-  `cafard-server backup FILE` takes a consistent snapshot without stopping.
+  `cafard backup FILE` takes a consistent snapshot without stopping.
 - **Every write marks a topic** (`internal/live`); a tab opens one event
   stream and reads again when a topic it shows changes. MCP's `wait` and
   `ask` sit on the same topics.
@@ -163,7 +163,7 @@ a permission rule that would otherwise fail silently.
 
 **The admin is the box's operator, not a person**, as in claudication: one
 password opens the admin UI, its argon2id hash in the configuration file
-(`admin-password-hash`, written by `cafard-server passwd`), and `cafard-server admin` on the
+(`admin-password-hash`, written by `cafard passwd`), and `cafard admin` on the
 box acts as the same admin. No person is an admin, so a person's stolen
 password reaches the chat and never the place where identities are made.
 
@@ -232,7 +232,7 @@ one-time link, never by something typed. There is no email either: a DMZ
 host has no business sending mail, and nothing in cafard needs an address.
 
 - **A sign-in link** is made by the admin, from the person's page or with
-  `cafard-server admin link NAME`, and works once, 24 hours by default. The first
+  `cafard admin link NAME`, and works once, 24 hours by default. The first
   one is the person's join link; another is made whenever they need a way
   in on a new device. Opening it shows *Sign in as Camille*; the button
   signs that browser in and opens the chat. Opening alone spends nothing,
@@ -314,7 +314,7 @@ phone in the DMZ.
   'speedtest'";
 - the confirm screen says what will be lost — "42 conversations, 318 files,
   1.2 GB" — offers to take a backup first (written to the state directory's
-  `backups/`, as `cafard-server backup` would), and asks for the project's name to be
+  `backups/`, as `cafard backup` would), and asks for the project's name to be
   typed.
 
 Both go in the audit log, with who did it and what the project held.
@@ -597,15 +597,15 @@ it.
 
 The curl lines above, made one short command each, for a machine next to the
 work: a build host, a lab bench beside a board's serial console, a laptop.
-They are `cafard-client`, a binary of its own beside `cafard-server`, which
+They are `mouchard`, a binary of its own beside `cafard`, which
 carries none of the server: released for Linux, macOS and Windows on amd64
 and arm64, it calls `/api/v1` like any client, adding no ability of its own.
 
 ```sh
-cafard-client say  be98/wifi-drops "flash done, rebooting"
-cafard-client send be98/wifi-drops boot.log dmesg.txt -m "after the reset"
-logread -f | cafard-client log be98/wifi-drops console.log
-cafard-client run  be98/signed-ota-rc3 -name build.log -- make firmware
+mouchard say  be98/wifi-drops "flash done, rebooting"
+mouchard send be98/wifi-drops boot.log dmesg.txt -m "after the reset"
+logread -f | mouchard log be98/wifi-drops console.log
+mouchard run  be98/signed-ota-rc3 -name build.log -- make firmware
 ```
 
 - **say** posts its arguments, or stdin, as a message.
@@ -675,7 +675,7 @@ that the following do not:
 
 - **the disk**: volume encryption on the host (LUKS), and the state
   directory `0700`, owned by the service user;
-- **backups**: `cafard-server backup --passphrase` encrypts the snapshot, because
+- **backups**: `cafard backup --passphrase` encrypts the snapshot, because
   the backup file is what gets copied around;
 - **retention** and **Delete file**: a secret that is gone cannot leak.
 
@@ -789,7 +789,7 @@ uses it too, limited to people and agents that already exist.
 
 ## First version, in order
 
-1. Store, files, `service/access` with its rule tests; `cafard-server serve` with
+1. Store, files, `service/access` with its rule tests; `cafard serve` with
    both listeners.
 2. `/api/v1/send` and the read routes behind device and agent tokens: `curl`
    works end to end, live logs included.
