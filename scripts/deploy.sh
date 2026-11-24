@@ -39,8 +39,14 @@ BUILD_WRAP="${BUILD_WRAP-rtk}"
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 ref="${1:-HEAD}"
 git -C "$root" fetch -q --tags origin
-commit=$(git -C "$root" rev-parse --verify "$ref^{commit}" 2>/dev/null ||
-  git -C "$root" rev-parse --verify "origin/$ref^{commit}")
+# A branch is what was pushed, origin/<branch>, not a local branch of the
+# same name: a checkout's main can lag behind, and deploying it once built a
+# commit from before the rebuild. HEAD, a tag or a hash is taken as given.
+if git -C "$root" rev-parse --verify -q "refs/remotes/origin/$ref" >/dev/null; then
+  commit=$(git -C "$root" rev-parse "refs/remotes/origin/$ref^{commit}")
+else
+  commit=$(git -C "$root" rev-parse --verify "$ref^{commit}")
+fi
 repo=$(git -C "$root" remote get-url origin)
 
 # Pushed, or the build machine cannot fetch it.
