@@ -1,6 +1,6 @@
-<p align="center"><img src="web/src/shared/favicon.svg" width="96" height="96" alt="cafard's mark: a cockroach"></p>
-
-# cafard
+<p align="center">
+  <img src="res/images/cafard.svg" alt="cafard" width="400">
+</p>
 
 *cafard*, n. — a cockroach. In French, also the low mood of a day that is
 going badly. It goes where the bugs are.

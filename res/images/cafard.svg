@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 128" width="500" height="128" role="img" aria-labelledby="title desc">
+  <title id="title">cafard</title>
+  <desc id="desc">A cockroach, the app's own mark, beside the word cafard.</desc>
+  <style>
+    .word { fill: #2b211c; }
+    .tag { fill: #7a6a62; }
+    @media (prefers-color-scheme: dark) {
+      .word { fill: #f4ece6; }
+      .tag { fill: #b9aaa1; }
+    }
+  </style>
+  <!-- The mark: web/src/shared/favicon.svg, drawn at 3.8 times its size, as
+       claudication's README draws its own. Keep the two the same picture. -->
+  <g transform="translate(4 2) scale(3.8)">
+    <g fill="none" stroke="#8f4c33" stroke-width="2.6" stroke-linecap="round">
+      <ellipse cx="16" cy="19" rx="7" ry="9.5" fill="#8f4c33" fill-opacity=".22"/>
+      <path d="M16 10v18"/>
+      <path d="M13 9.5C11 6 8 4 5 4M19 9.5C21 6 24 4 27 4"/>
+      <path d="M9.5 16 5 14M9.5 21 4.5 22M22.5 16 27 14M22.5 21l5 1"/>
+    </g>
+  </g>
+  <!-- The word. -->
+  <text class="word" x="144" y="74" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="46" font-weight="650" letter-spacing="-0.5">cafard</text>
+  <text class="tag" x="146" y="102" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" letter-spacing="0.3">it goes where the bugs are</text>
+</svg>
