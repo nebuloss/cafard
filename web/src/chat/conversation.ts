@@ -11,7 +11,7 @@ import { Albums, type Item } from './album';
 import { pathOf } from './route';
 import { Composer } from './composer';
 import { look } from './look';
-import { DetailsSheet, ImageViewer } from './sheets';
+import { DetailsSheet, ImageViewer, MessageSheet } from './sheets';
 import { Address, type Thread } from './store';
 import { MessageText } from './text';
 import type { FileInfo, Member, Message, Project } from './types';
@@ -55,14 +55,6 @@ export class ConversationView extends Component {
   /** The last three lines of each log card, by file id, with the size they were read at. */
   private readonly tails = new Map<number, { size: number; lines: string[] }>();
   private dragDepth = 0;
-  /**
-   * Messages picked by a long press, for the bar that replaces the header:
-   * copy, edit, delete. Empty is the ordinary view.
-   */
-  private readonly selected = new Set<number>();
-  private confirmDelete = false;
-  /** The message being edited in place, if any. */
-  private editing: number | null = null;
   /** Each bubble's photos, by its first message's id, for the viewer. */
   private readonly photoSets = new Map<number, ReturnType<typeof Albums.photos>>();
   private press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
@@ -95,26 +87,7 @@ export class ConversationView extends Component {
         this.drawTimeline(false);
       },
       img: (el) => this.openImage(Number(el.dataset['g']), Number(el.dataset['v'])),
-      'sel-cancel': () => this.clearSelection(),
-      'sel-copy': () => void this.copySelected(),
-      'sel-edit': () => {
-        this.editing = [...this.selected][0] ?? null;
-        this.clearSelection();
-      },
-      'sel-delete': () => {
-        this.confirmDelete = true;
-        this.drawHead();
-      },
-      'sel-delete-no': () => {
-        this.confirmDelete = false;
-        this.drawHead();
-      },
-      'sel-delete-yes': () => void this.deleteSelected(),
-      'edit-save': () => void this.saveEdit(),
-      'edit-cancel': () => {
-        this.editing = null;
-        this.drawTimeline(false);
-      },
+
       log: (el) => this.openLog(Number(el.dataset['v'])),
       target: (el) => {
         this.project = el.dataset['v'] ?? this.project;
@@ -131,22 +104,21 @@ export class ConversationView extends Component {
         }
       }
     });
-    // A long press on a message picks it, as on a phone's messages app; a
-    // right click does on a desktop. While some are picked, a tap picks or
-    // unpicks, and opens nothing.
+    // A long press on a message opens what can be done with it (MessageSheet),
+    // as on a phone's messages app; a right click does on a desktop.
     this.root.addEventListener('pointerdown', (e) => {
       // A long press redraws the bubble under the finger, so the browser
       // sends no click to end it: the flag that swallows that click ends
       // with the next touch instead, or it would swallow that one.
       this.pressed = false;
       const el = (e.target as Element).closest<HTMLElement>('[data-ids]');
-      if (!el || !e.isPrimary || this.editing !== null) return;
+      if (!el || !e.isPrimary) return;
       this.cancelPress();
       this.press = { x: e.clientX, y: e.clientY, timer: setTimeout(() => {
         this.press = null;
         this.pressed = true;
         navigator.vibrate?.(15);
-        this.toggle(el);
+        this.openSheet(el);
       }, 450) };
     });
     this.root.addEventListener('pointermove', (e) => {
@@ -155,38 +127,17 @@ export class ConversationView extends Component {
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave'] as const) this.root.addEventListener(ev, () => this.cancelPress());
     this.root.addEventListener('contextmenu', (e) => {
       const el = (e.target as Element).closest<HTMLElement>('[data-ids]');
-      if (!el || this.editing !== null) return;
+      if (!el) return;
       e.preventDefault();
-      this.toggle(el);
+      this.openSheet(el);
     });
+    // The click that ends a long press opens nothing under the finger.
     this.root.addEventListener('click', (e) => {
-      const el = (e.target as Element).closest<HTMLElement>('[data-ids]');
-      if (this.pressed) {
-        this.pressed = false;
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      if (el && this.selected.size) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.toggle(el);
-      }
+      if (!this.pressed) return;
+      this.pressed = false;
+      e.preventDefault();
+      e.stopPropagation();
     }, true);
-    this.root.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.selected.size) this.clearSelection();
-      const el = e.target as HTMLElement;
-      if (el.classList.contains('edit-text')) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          void this.saveEdit();
-        }
-        if (e.key === 'Escape') {
-          this.editing = null;
-          this.drawTimeline(false);
-        }
-      }
-    });
     this.root.addEventListener('focusout', (e) => {
       const el = e.target as HTMLInputElement;
       if (el.classList.contains('head-title-input') && this.renaming) void this.saveTitle(el.value);
@@ -266,10 +217,6 @@ export class ConversationView extends Component {
   private drawHead(): void {
     const head = this.find('.chat-head');
     if (!head) return;
-    if (this.selected.size) {
-      head.innerHTML = this.selectionBar().value;
-      return;
-    }
     const back = html`<button class="${ui.iconBtn} min-[840px]:hidden" data-act="back" aria-label="${t('Back to conversations')}">${Icon.of('back')}</button>`;
     const titleClass = 'block max-w-full truncate rounded-md text-left text-base font-bold';
     const subClass = 'truncate text-[12.5px] text-on-surface-variant';
@@ -327,11 +274,6 @@ export class ConversationView extends Component {
     Component.sizeBars(tl);
     if (toEnd) tl.scrollTop = tl.scrollHeight;
     else tl.scrollTop = tl.scrollHeight - keepFrom;
-    if (this.editing !== null) {
-      const box = this.find<HTMLTextAreaElement>('.edit-text');
-      box?.focus();
-      box?.setSelectionRange(box.value.length, box.value.length);
-    }
     void this.loadTails();
   }
 
@@ -370,7 +312,6 @@ export class ConversationView extends Component {
     const imgs = photos.length ? this.grid(m.id, photos) : Html.empty;
     const others = item.messages.flatMap((x) => (x.deleted ? [] : (x.files ?? []).filter((f) => !photos.some((p) => p.file.id === f.id)))).map((f) => this.file(f));
     const avatar = !mine ? (first ? html`<span class="mb-0.5 flex">${Avatar.of(a, 'sm')}</span>` : html`<span class="w-7 shrink-0"></span>`) : Html.empty;
-    const picked = item.messages.every((x) => this.selected.has(x.id));
     // The first bubble of a run points at its author: a sharper corner on
     // the author's side.
     const bubble = mine
@@ -381,15 +322,12 @@ export class ConversationView extends Component {
     let body: Html;
     if (m.deleted) {
       body = html`<div class="text-[14px] italic opacity-70">${t('Message deleted')}</div>`;
-    } else if (this.editing === m.id) {
-      body = html`<textarea class="edit-text min-h-16 w-[min(480px,70vw)] resize-y rounded-lg border border-outline bg-surface-lowest px-2.5 py-2 text-[14.5px] text-on-surface outline-none focus:border-primary" aria-label="${t('Edit message')}">${m.text ?? ''}</textarea>
-        <div class="flex justify-end gap-2"><button class="${ui.btn('text', 'sm')}" data-act="edit-cancel">${t('Cancel')}</button><button class="${ui.btn('filled', 'sm')}" data-act="edit-save">${t('Save')}</button></div>`;
     } else {
       body = html`${m.text ? html`<div class="${TEXT} ${mine ? TEXT_MINE : TEXT_THEIRS}">${text.render(m.text)}</div>` : ''}${imgs}${others}`;
     }
-    // Picked by a long press: the whole bubble says so. On a touch screen
-    // the press is the bubble's, not the browser's text selection.
-    return html`<div class="flex max-w-full items-end gap-2 ${mine ? 'justify-end' : ''} ${spaced ? 'mt-2.5' : ''}" data-ids="${item.messages.map((x) => x.id).join(',')}" data-mine="${String(mine)}">${avatar}<div class="relative flex max-w-[min(560px,84%)] min-w-0 flex-col gap-1.5 rounded-2xl border px-3 py-2 pointer-coarse:select-none [-webkit-touch-callout:none] ${bubble} ${picked ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface' : ''}">${meta}${body}${!first || mine ? timeOnly : ''}</div></div>`;
+    // On a touch screen a press is the bubble's, not the browser's text
+    // selection: copying is in MessageSheet.
+    return html`<div class="flex max-w-full items-end gap-2 ${mine ? 'justify-end' : ''} ${spaced ? 'mt-2.5' : ''}" data-ids="${item.messages.map((x) => x.id).join(',')}" data-mine="${String(mine)}">${avatar}<div class="relative flex max-w-[min(560px,84%)] min-w-0 flex-col gap-1.5 rounded-2xl border px-3 py-2 pointer-coarse:select-none [-webkit-touch-callout:none] ${bubble}">${meta}${body}${!first || mine ? timeOnly : ''}</div></div>`;
   }
 
   /**
@@ -409,97 +347,16 @@ export class ConversationView extends Component {
     })}</div>`;
   }
 
-  /** The bar that replaces the header while messages are picked. */
-  private selectionBar(): Html {
-    const picked = this.pickedMessages();
-    const me = this.app.store.me?.name;
-    const allMine = picked.length > 0 && picked.every((m) => m.author.name === me && !m.deleted);
-    const one = picked.length === 1 ? picked[0] : undefined;
-    const close = html`<button class="${ui.iconBtn}" data-act="sel-cancel" aria-label="${t('Cancel')}">${Icon.of('close')}</button>`;
-    if (this.confirmDelete) {
-      return html`${close}<div class="min-w-0 flex-1 truncate font-semibold">${n(picked.length, 'Delete {n} message?', 'Delete {n} messages?')}</div>
-        <button class="${ui.btn('text', 'sm')}" data-act="sel-delete-no">${t('Cancel')}</button><button class="${ui.btn('danger', 'sm')}" data-act="sel-delete-yes">${t('Delete')}</button>`;
-    }
-    const copy = one?.text ? html`<button class="${ui.btn('text', 'sm')}" data-act="sel-copy">${t('Copy')}</button>` : '';
-    const editBtn = one && allMine && one.text !== undefined && one.author.name === me ? html`<button class="${ui.btn('text', 'sm')}" data-act="sel-edit">${t('Edit')}</button>` : '';
-    const del = allMine
-      ? html`<button class="${ui.btn('danger-text', 'sm')}" data-act="sel-delete">${t('Delete')}</button>`
-      : html`<span class="text-xs text-on-surface-variant" title="${t('Only your own messages can be changed or deleted')}">${t('Not yours')}</span>`;
-    return html`${close}<div class="min-w-0 flex-1 truncate font-semibold">${n(picked.length, '{n} selected', '{n} selected')}</div>${copy}${editBtn}${del}`;
-  }
-
-  private pickedMessages(): Message[] {
-    return (this.thread?.messages ?? []).filter((m) => this.selected.has(m.id));
-  }
-
-  private toggle(el: HTMLElement): void {
-    const ids = (el.dataset['ids'] ?? '').split(',').map(Number).filter(Boolean);
-    const on = ids.every((id) => this.selected.has(id));
-    for (const id of ids) {
-      if (on) this.selected.delete(id);
-      else this.selected.add(id);
-    }
-    this.confirmDelete = false;
-    this.drawHead();
-    this.drawTimeline(false);
-  }
-
-  private clearSelection(): void {
-    this.selected.clear();
-    this.confirmDelete = false;
-    this.drawHead();
-    this.drawTimeline(false);
+  /** Opens what can be done with a bubble's messages. */
+  private openSheet(el: HTMLElement): void {
+    const ids = new Set((el.dataset['ids'] ?? '').split(',').map(Number));
+    const messages = (this.thread?.messages ?? []).filter((m) => ids.has(m.id));
+    if (messages.length) MessageSheet.open(this.app, messages, el.dataset['mine'] === 'true', () => this.drawTimeline(false));
   }
 
   private cancelPress(): void {
     if (this.press) clearTimeout(this.press.timer);
     this.press = null;
-  }
-
-  private async copySelected(): Promise<void> {
-    const text = this.pickedMessages()[0]?.text ?? '';
-    try {
-      await navigator.clipboard.writeText(text);
-      Toaster.show(t('Copied.'));
-    } catch {
-      Toaster.show(t('Select the text to copy it.'));
-    }
-    this.clearSelection();
-  }
-
-  private async deleteSelected(): Promise<void> {
-    const ids = [...this.selected];
-    let done = 0;
-    for (const id of ids) {
-      const r = await this.app.attempt(() => this.app.store.api.delete(`/messages/${id}`));
-      if (r === null) break;
-      const m = this.thread?.messages.find((x) => x.id === id);
-      if (m) Object.assign(m, { deleted: true, text: undefined, files: [] });
-      done++;
-    }
-    this.selected.clear();
-    this.confirmDelete = false;
-    if (done) Toaster.show(n(done, '{n} message deleted.', '{n} messages deleted.'));
-    this.drawHead();
-    this.drawTimeline(false);
-  }
-
-  private async saveEdit(): Promise<void> {
-    const id = this.editing;
-    const box = this.find<HTMLTextAreaElement>('.edit-text');
-    if (id === null || !box) return;
-    const text = box.value.trim();
-    const m = this.thread?.messages.find((x) => x.id === id);
-    if (m && text === (m.text ?? '')) {
-      this.editing = null;
-      this.drawTimeline(false);
-      return;
-    }
-    const r = await this.app.attempt(() => this.app.store.api.patch(`/messages/${id}`, { text }));
-    if (r === null) return;
-    if (m) Object.assign(m, { text, edited: true });
-    this.editing = null;
-    this.drawTimeline(false);
   }
 
   private file(f: FileInfo): Html {
