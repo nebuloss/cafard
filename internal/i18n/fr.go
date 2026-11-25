@@ -47,10 +47,18 @@ var fr = map[string]string{
 	"That link no longer works already.":                                                                 "Ce lien ne fonctionne déjà plus.",
 
 	// service/access/phone.go
-	"Only people sign in; %s has a token.":                "Seules les personnes se connectent\u00a0; %s a un jeton.",
-	"This is not a sign-in code.":                         "Ce n'est pas un code de connexion.",
-	"This link was used a moment ago. Ask for a new one.": "Ce lien vient de servir. Demandez-en un nouveau.",
-	"Only the member who sent a file can delete it.":      "Seul le membre qui a envoyé un fichier peut le supprimer.",
+	"Only people sign in; %s has a token.":                                      "Seules les personnes se connectent\u00a0; %s a un jeton.",
+	"This is not a sign-in code.":                                               "Ce n'est pas un code de connexion.",
+	"This link was used a moment ago. Ask for a new one.":                       "Ce lien vient de servir. Demandez-en un nouveau.",
+	"Send the new text as {\"text\": \"…\"}.":                                   "Envoyez le nouveau texte sous la forme {\"text\": \"…\"}.",
+	"No such message.":                                                          "Aucun message de ce nom.",
+	"Only the member who sent a message can change or delete it.":               "Seul le membre qui a envoyé un message peut le modifier ou le supprimer.",
+	"A message with no file needs text: delete it instead.":                     "Un message sans fichier a besoin de texte\u00a0: supprimez-le plutôt.",
+	"That message is deleted.":                                                  "Ce message est supprimé.",
+	"No message %d.":                                                            "Aucun message %d.",
+	"That message is already deleted.":                                          "Ce message est déjà supprimé.",
+	"A file of that message is still arriving. Delete it once the upload ends.": "Un fichier de ce message est encore en cours d'envoi. Supprimez-le une fois l'envoi terminé.",
+	"Only the member who sent a file can delete it.":                            "Seul le membre qui a envoyé un fichier peut le supprimer.",
 
 	// service/access/signin.go
 	"You are signed out. Sign in again.": "Vous n'êtes plus connecté. Connectez-vous à nouveau.",

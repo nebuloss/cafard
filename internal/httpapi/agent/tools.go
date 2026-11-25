@@ -572,8 +572,16 @@ func writeMessage(b *strings.Builder, me access.Who, m store.Message) {
 	if m.Author.ID == me.ID {
 		kind += ", you"
 	}
-	fmt.Fprintf(b, "<message id=\"%d\" from=\"%s\" kind=\"%s\" at=\"%s\">\n", m.ID, m.Author.Name, kind,
-		m.CreatedAt.UTC().Format("2006-01-02 15:04Z"))
+	edited := ""
+	if m.EditedAt != nil {
+		edited = " edited=\"" + m.EditedAt.UTC().Format("2006-01-02 15:04Z") + "\""
+	}
+	fmt.Fprintf(b, "<message id=\"%d\" from=\"%s\" kind=\"%s\" at=\"%s\"%s>\n", m.ID, m.Author.Name, kind,
+		m.CreatedAt.UTC().Format("2006-01-02 15:04Z"), edited)
+	if m.DeletedAt != nil {
+		b.WriteString("(deleted by its sender)\n</message>\n")
+		return
+	}
 	if t := strings.TrimSpace(m.Text); t != "" {
 		b.WriteString(fence.ReplaceAllString(t, "‹$1$2"))
 		b.WriteString("\n")

@@ -117,6 +117,97 @@ func (s *Store) DeleteFile(ctx context.Context, id int64, a AuditEntry) (sha256 
 	return sha256, stillUsed, err
 }
 
+// EditMessage replaces a message's text, unless it was deleted. Not
+// audited: it changes no access, and the conversation shows it as edited.
+func (s *Store) EditMessage(ctx context.Context, id int64, text string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE messages SET text = ?, edited_at = ? WHERE id = ? AND deleted_at IS NULL`,
+		text, s.now().UnixMilli(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	var conv int64
+	if s.db.QueryRowContext(ctx, `SELECT conversation_id FROM messages WHERE id = ?`, id).Scan(&conv) == nil {
+		s.publishConversation(ctx, conv)
+	}
+	return nil
+}
+
+// ErrStillArriving is a message with a file still being uploaded: deleting
+// it would cut an upload off under its sender.
+var ErrStillArriving = errors.New("a file of the message is still arriving")
+
+// DeleteMessage deletes a message: its text, and its files, which it
+// returns the stored bytes of that no other message holds, for the blob
+// store to remove. The message stays, marked deleted.
+func (s *Store) DeleteMessage(ctx context.Context, id int64, a AuditEntry) (unused []string, err error) {
+	err = s.change(ctx, a, func(tx *sql.Tx) error {
+		var deleted sql.NullInt64
+		if err := tx.QueryRowContext(ctx, `SELECT deleted_at FROM messages WHERE id = ?`, id).Scan(&deleted); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+		if deleted.Valid {
+			return ErrNotFound
+		}
+		var live int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM files WHERE message_id = ? AND state = 'live'`, id).Scan(&live); err != nil {
+			return err
+		}
+		if live > 0 {
+			return ErrStillArriving
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT DISTINCT sha256 FROM files WHERE message_id = ? AND state = 'stored' AND sha256 IS NOT NULL`, id)
+		if err != nil {
+			return err
+		}
+		var sums []string
+		for rows.Next() {
+			var sum string
+			if err := rows.Scan(&sum); err != nil {
+				rows.Close()
+				return err
+			}
+			sums = append(sums, sum)
+		}
+		rows.Close()
+		if _, err := tx.ExecContext(ctx, `UPDATE files SET state = 'deleted' WHERE message_id = ? AND state IN ('stored', 'cut')`, id); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE messages SET text = '', deleted_at = ? WHERE id = ?`, s.now().UnixMilli(), id); err != nil {
+			return err
+		}
+		for _, sum := range sums {
+			var n int
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM files WHERE sha256 = ? AND state = 'stored'`, sum).Scan(&n); err != nil {
+				return err
+			}
+			if n == 0 {
+				unused = append(unused, sum)
+			}
+		}
+		return nil
+	})
+	if err == nil {
+		var conv int64
+		if s.db.QueryRowContext(ctx, `SELECT conversation_id FROM messages WHERE id = ?`, id).Scan(&conv) == nil {
+			s.publishConversation(ctx, conv)
+		}
+	}
+	return unused, err
+}
+
+// MessageFileCount is how many files a message still holds.
+func (s *Store) MessageFileCount(ctx context.Context, id int64) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM files WHERE message_id = ? AND state <> 'deleted'`, id).Scan(&n)
+	return n, err
+}
+
 // FileAuthor is who sent a file.
 func (s *Store) FileAuthor(ctx context.Context, fileID int64) (int64, error) {
 	var id int64
@@ -236,6 +327,7 @@ func (s *Store) Unseen(ctx context.Context, identityID, projectID int64, limit i
 		JOIN identities i ON i.id = m.author_id
 		LEFT JOIN reads r ON r.conversation_id = m.conversation_id AND r.identity_id = ?
 		WHERE c.project_id = ? AND c.closed_at IS NULL AND m.author_id <> ? AND m.id > COALESCE(r.message_id, 0)
+			AND m.deleted_at IS NULL
 		ORDER BY m.id DESC LIMIT ?) ORDER BY 1`, identityID, projectID, identityID, limit)
 	if err != nil {
 		return nil, err

@@ -321,6 +321,96 @@ func (s *Service) DeleteFile(ctx context.Context, who access.Who, id int64) erro
 	return nil
 }
 
+// EditMessage replaces the text of a message: its sender only, still in its
+// project, and not a message deleted. A message with files may lose its
+// text; one without may not, for it would be nothing.
+func (s *Service) EditMessage(ctx context.Context, who access.Who, id int64, text string) error {
+	m, err := s.st.MessageInfo(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return access.Refuse(access.NotFound, "No message %d.", id)
+	}
+	if err != nil {
+		return err
+	}
+	c, err := s.st.Conversation(ctx, m.ConversationID)
+	if err != nil {
+		return err
+	}
+	p, err := s.st.Project(ctx, c.ProjectID)
+	if err != nil {
+		return err
+	}
+	if err := s.acc.CanRead(ctx, who, p); err != nil && !access.Is(err, access.SendOnly) {
+		return err
+	}
+	if err := s.acc.CanChangeMessage(ctx, who, m.AuthorID); err != nil {
+		return err
+	}
+	text = strings.TrimSpace(text)
+	if len(text) > MaxText {
+		return access.Refuse(access.BadValue,
+			"The message is %d bytes; the most is %d. Send long text as a file, where it can be read by page.", len(text), MaxText)
+	}
+	if text == "" {
+		files, err := s.st.MessageFileCount(ctx, id)
+		if err != nil {
+			return err
+		}
+		if files == 0 {
+			return access.Refuse(access.BadValue, "A message with no file needs text: delete it instead.")
+		}
+	}
+	if err := s.st.EditMessage(ctx, id, text); errors.Is(err, store.ErrNotFound) {
+		return access.Refuse(Gone, "That message is deleted.")
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteMessage deletes a message: its sender only (access says), still in
+// its project. Its text and files go, the bytes of each file unless
+// another message holds the same; the message stays, marked deleted, so the
+// replies around it keep their place.
+func (s *Service) DeleteMessage(ctx context.Context, who access.Who, id int64) error {
+	m, err := s.st.MessageInfo(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return access.Refuse(access.NotFound, "No message %d.", id)
+	}
+	if err != nil {
+		return err
+	}
+	c, err := s.st.Conversation(ctx, m.ConversationID)
+	if err != nil {
+		return err
+	}
+	p, err := s.st.Project(ctx, c.ProjectID)
+	if err != nil {
+		return err
+	}
+	// A device reads nothing, but may take back what it sent.
+	if err := s.acc.CanRead(ctx, who, p); err != nil && !access.Is(err, access.SendOnly) {
+		return err
+	}
+	if err := s.acc.CanChangeMessage(ctx, who, m.AuthorID); err != nil {
+		return err
+	}
+	unused, err := s.st.DeleteMessage(ctx, id, store.AuditEntry{Actor: who.Name, Action: "deleted a message in",
+		Target: p.Name + "/" + c.Name, Origin: who.Origin})
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return access.Refuse(Gone, "That message is already deleted.")
+	case errors.Is(err, store.ErrStillArriving):
+		return access.Refuse(access.BadValue, "A file of that message is still arriving. Delete it once the upload ends.")
+	case err != nil:
+		return err
+	}
+	for _, sum := range unused {
+		s.bl.Remove(sum)
+	}
+	return nil
+}
+
 // fileName checks the name a file is sent under.
 func fileName(name string) (string, error) {
 	name = strings.TrimSpace(name)

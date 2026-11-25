@@ -47,6 +47,10 @@ export interface FileInfo {
 export interface Message {
   id: number;
   author: MemberRef;
+  /** Its sender deleted it: no text, no files, a line saying so. */
+  deleted?: boolean;
+  /** Its sender changed its text since it was sent. */
+  edited?: boolean;
   text?: string;
   at: string;
   files?: FileInfo[];

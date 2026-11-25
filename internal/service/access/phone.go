@@ -80,6 +80,20 @@ func (s *Service) Signins(ctx context.Context, who Who) ([]store.Signin, error) 
 }
 
 // CanDeleteFile is whether who may delete a file: its sender.
+// CanChangeMessage says whether who may edit or delete a message: its
+// sender, as for a file. Nobody changes another member's words, admins
+// included: what was said stays said, and a message that should not stay
+// as it is is its sender's to take back.
+func (s *Service) CanChangeMessage(ctx context.Context, who Who, authorID int64) error {
+	if err := active(who.Identity); err != nil {
+		return err
+	}
+	if who.ID == authorID {
+		return nil
+	}
+	return refuse(NotAllowed, "Only the member who sent a message can change or delete it.")
+}
+
 func (s *Service) CanDeleteFile(ctx context.Context, who Who, authorID int64) error {
 	if err := active(who.Identity); err != nil {
 		return err

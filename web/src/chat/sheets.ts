@@ -164,46 +164,80 @@ export class LogViewer extends Component {
 
 const LB_NAV = 'absolute top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/12 text-white';
 
-/** ImageViewer shows a message's photos full screen, one at a time. */
+/**
+ * ImageViewer shows photos full screen, one at a time: a message's, or an
+ * album's, the run of photos an agent sends one message at a time
+ * (album.ts). A swipe, the arrows or the keys go from one to the next, and
+ * a strip of them along the bottom shows the whole set at once and opens
+ * any of it.
+ */
 export class ImageViewer extends Component {
+  private swipeFrom: { x: number; y: number } | null = null;
+
   constructor(
     private readonly app: ChatApp,
-    private readonly images: FileInfo[],
+    private readonly photos: { file: FileInfo; message: Message }[],
     private index: number,
-    private readonly message: Message,
   ) {
     super('div');
     this.actions = {
       close: () => this.app.layer.close(),
       prev: () => this.step(-1),
       next: () => this.step(1),
+      goto: (el) => this.show(Number(el.dataset['v'])),
     };
     this.root.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowLeft') this.step(-1);
       if (e.key === 'ArrowRight') this.step(1);
     });
+    // A swipe: mostly sideways and long enough not to be a tap. Pinching
+    // to zoom moves two fingers and is left to the browser.
+    this.root.addEventListener('pointerdown', (e) => {
+      if ((e.target as Element).closest('.lb-stage') && e.isPrimary) this.swipeFrom = { x: e.clientX, y: e.clientY };
+    });
+    this.root.addEventListener('pointerup', (e) => {
+      const from = this.swipeFrom;
+      this.swipeFrom = null;
+      if (!from) return;
+      const dx = e.clientX - from.x;
+      const dy = e.clientY - from.y;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) this.step(dx < 0 ? 1 : -1);
+    });
+    this.root.addEventListener('pointercancel', () => (this.swipeFrom = null));
     this.root.tabIndex = -1;
   }
 
   private step(d: number): void {
-    this.index = (this.index + d + this.images.length) % this.images.length;
+    this.show((this.index + d + this.photos.length) % this.photos.length);
+  }
+
+  private show(i: number): void {
+    if (i < 0 || i >= this.photos.length || i === this.index) return;
+    this.index = i;
     this.render();
   }
 
   protected view(): Html {
-    const f = this.images[this.index];
-    if (!f) return Html.empty;
-    const by = `${this.message.author.display_name || this.message.author.name} · ${new Date(this.message.at).toLocaleString(i18n.locale, { dateStyle: 'short', timeStyle: 'short' })}`;
-    const nav = this.images.length > 1
-      ? html`<button class="${LB_NAV} left-[max(12px,env(safe-area-inset-left,0px))]" data-act="prev" aria-label="${t('Previous')}">${Icon.of('back')}</button><button class="${LB_NAV} right-[max(12px,env(safe-area-inset-right,0px))]" data-act="next" aria-label="${t('Next')}">${Icon.of('chev')}</button>`
+    const p = this.photos[this.index];
+    if (!p) return Html.empty;
+    const { file: f, message: m } = p;
+    const by = `${m.author.display_name || m.author.name} · ${new Date(m.at).toLocaleString(i18n.locale, { dateStyle: 'short', timeStyle: 'short' })}`;
+    const many = this.photos.length > 1;
+    const nav = many
+      ? html`<button class="${LB_NAV} left-[max(12px,env(safe-area-inset-left,0px))] max-[700px]:hidden" data-act="prev" aria-label="${t('Previous')}">${Icon.of('back')}</button><button class="${LB_NAV} right-[max(12px,env(safe-area-inset-right,0px))] max-[700px]:hidden" data-act="next" aria-label="${t('Next')}">${Icon.of('chev')}</button>`
       : Html.empty;
-    return html`<div class="flex items-center gap-2.5 pt-[calc(10px+env(safe-area-inset-top,0px))] pr-3 pb-2.5 pl-4"><div class="min-w-0 flex-1 text-[13px]"><b class="block text-sm">${f.name}</b>${by}${this.images.length > 1 ? ` · ${t('{i} of {total}', { i: this.index + 1, total: this.images.length })}` : ''}</div>
+    const strip = many
+      ? html`<div class="lb-strip flex shrink-0 justify-center gap-1.5 overflow-x-auto px-4 pt-1 pb-[calc(12px+env(safe-area-inset-bottom,0px))] [scrollbar-width:none]">${this.photos.map((x, i) =>
+          html`<button class="size-14 shrink-0 overflow-hidden rounded-md ${i === this.index ? 'ring-2 ring-white' : 'opacity-55'}" data-act="goto" data-v="${String(i)}" aria-label="${t('{i} of {total}', { i: i + 1, total: this.photos.length })}" ${Html.raw(i === this.index ? 'aria-current="true"' : '')}><img class="size-full object-cover" src="${x.file.url}" alt="" loading="lazy"></button>`)}</div>`
+      : Html.empty;
+    return html`<div class="flex items-center gap-2.5 pt-[calc(10px+env(safe-area-inset-top,0px))] pr-3 pb-2.5 pl-4"><div class="min-w-0 flex-1 text-[13px]"><b class="block truncate text-sm">${f.name}</b>${by}${many ? ` · ${t('{i} of {total}', { i: this.index + 1, total: this.photos.length })}` : ''}</div>
       <a class="${look.iconBtnDark}" href="${f.url}" download="${f.name}" aria-label="${t('Download')}">${Icon.of('folder')}</a>${closeButton(look.iconBtnDark)}</div>
-      <div class="relative grid min-h-0 flex-1 place-items-center px-4 pb-6"><img class="max-h-full max-w-full rounded-md object-contain" src="${f.url}" alt="${f.name}">${nav}</div>`;
+      <div class="lb-stage relative grid min-h-0 flex-1 touch-pan-y place-items-center px-4 pb-3 select-none"><img class="max-h-full max-w-full rounded-md object-contain" src="${f.url}" alt="${f.name}" draggable="false">${nav}</div>${strip}`;
   }
 
   protected override afterRender(): void {
     this.root.focus();
+    this.find('.lb-strip [aria-current]')?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 }
 

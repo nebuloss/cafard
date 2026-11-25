@@ -16,6 +16,7 @@ import (
 	"cafard/internal/httpapi/httpx"
 	"cafard/internal/live"
 	"cafard/internal/service/access"
+	"cafard/internal/service/chat"
 	"cafard/internal/store"
 )
 
@@ -214,6 +215,39 @@ func (a *API) directory(w http.ResponseWriter, r *http.Request, who access.Who) 
 }
 
 // Files.
+
+func (a *API) editMessage(w http.ResponseWriter, r *http.Request, who access.Who) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No such message."))
+		return
+	}
+	var in struct {
+		Text *string `json:"text"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, chat.MaxText+4096)).Decode(&in); err != nil || in.Text == nil {
+		writeError(w, http.StatusBadRequest, string(access.BadValue), say(r, "Send the new text as {\"text\": \"…\"}."))
+		return
+	}
+	if err := a.chat.EditMessage(r.Context(), who, id, *in.Text); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) deleteMessage(w http.ResponseWriter, r *http.Request, who access.Who) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusNotFound, string(access.NotFound), say(r, "No such message."))
+		return
+	}
+	if err := a.chat.DeleteMessage(r.Context(), who, id); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
 func (a *API) deleteFile(w http.ResponseWriter, r *http.Request, who access.Who) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)

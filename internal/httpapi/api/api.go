@@ -28,6 +28,8 @@
 //	POST   /api/v1/projects/{project}/members           {name}: people add existing people and agents
 //	DELETE /api/v1/projects/{project}/members/{name}
 //	GET    /api/v1/directory                            the people and agents a person can add
+//	PATCH  /api/v1/messages/{id}                        {text}: its sender changes it; it shows "edited"
+//	DELETE /api/v1/messages/{id}                        its sender: the text and files go, "deleted" stays
 //	GET    /api/v1/files/{id}                           a file's bytes
 //	GET    /api/v1/files/{id}/lines                     a page of a text file
 //	DELETE /api/v1/files/{id}                           its sender or an admin
@@ -106,6 +108,8 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/projects/{project}/members", a.auth(a.addMember))
 	mux.HandleFunc("DELETE /api/v1/projects/{project}/members/{name}", a.auth(a.removeMember))
 	mux.HandleFunc("GET /api/v1/directory", a.auth(a.directory))
+	mux.HandleFunc("PATCH /api/v1/messages/{id}", a.auth(a.editMessage))
+	mux.HandleFunc("DELETE /api/v1/messages/{id}", a.auth(a.deleteMessage))
 	mux.HandleFunc("GET /api/v1/files/{id}", a.auth(a.file))
 	mux.HandleFunc("DELETE /api/v1/files/{id}", a.auth(a.deleteFile))
 	mux.HandleFunc("GET /api/v1/files/{id}/lines", a.auth(a.lines))
@@ -249,15 +253,17 @@ func isText(ctype string) bool {
 }
 
 type messageJSON struct {
-	ID     int64      `json:"id"`
-	Author memberJSON `json:"author"`
-	Text   string     `json:"text,omitempty"`
-	At     time.Time  `json:"at"`
-	Files  []fileJSON `json:"files,omitempty"`
+	ID      int64      `json:"id"`
+	Author  memberJSON `json:"author"`
+	Deleted bool       `json:"deleted,omitempty"`
+	Edited  bool       `json:"edited,omitempty"`
+	Text    string     `json:"text,omitempty"`
+	At      time.Time  `json:"at"`
+	Files   []fileJSON `json:"files,omitempty"`
 }
 
 func message(m store.Message) messageJSON {
-	j := messageJSON{ID: m.ID, Author: member(m.Author), Text: m.Text, At: m.CreatedAt.UTC()}
+	j := messageJSON{ID: m.ID, Author: member(m.Author), Deleted: m.DeletedAt != nil, Edited: m.EditedAt != nil, Text: m.Text, At: m.CreatedAt.UTC()}
 	for _, f := range m.Files {
 		j.Files = append(j.Files, file(f))
 	}

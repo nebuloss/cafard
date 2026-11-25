@@ -37,7 +37,12 @@ type Message struct {
 	Author         Identity
 	Text           string
 	CreatedAt      time.Time
-	Files          []File
+	// DeletedAt is when its sender deleted it: its text is empty and its
+	// files deleted, and it shows as "deleted".
+	DeletedAt *time.Time
+	// EditedAt is when its sender last changed its text.
+	EditedAt *time.Time
+	Files    []File
 }
 
 // FileState is where a file's bytes are.
@@ -272,7 +277,7 @@ func (s *Store) File(ctx context.Context, id int64) (FileWhere, error) {
 // Messages returns up to limit messages of a conversation after the message
 // with id after (0 for the start), oldest first, with their authors and files.
 func (s *Store) Messages(ctx context.Context, conversationID, after int64, limit int) ([]Message, error) {
-	return s.messages(ctx, `SELECT m.id, m.text, m.created_at, `+prefixed("i", identityCols)+`
+	return s.messages(ctx, `SELECT m.id, m.text, m.created_at, m.deleted_at, m.edited_at, `+prefixed("i", identityCols)+`
 		FROM messages m JOIN identities i ON i.id = m.author_id
 		WHERE m.conversation_id = ? AND m.id > ? ORDER BY m.id LIMIT ?`, conversationID, conversationID, after, limit)
 }
@@ -280,7 +285,7 @@ func (s *Store) Messages(ctx context.Context, conversationID, after int64, limit
 // LatestMessages returns the last limit messages of a conversation, oldest
 // first: what a conversation opens on. Earlier ones come with Before.
 func (s *Store) LatestMessages(ctx context.Context, conversationID int64, limit int) ([]Message, error) {
-	return s.messages(ctx, `SELECT * FROM (SELECT m.id, m.text, m.created_at, `+prefixed("i", identityCols)+`
+	return s.messages(ctx, `SELECT * FROM (SELECT m.id, m.text, m.created_at, m.deleted_at, m.edited_at, `+prefixed("i", identityCols)+`
 		FROM messages m JOIN identities i ON i.id = m.author_id
 		WHERE m.conversation_id = ? ORDER BY m.id DESC LIMIT ?) ORDER BY 1`, conversationID, conversationID, limit)
 }
@@ -288,7 +293,7 @@ func (s *Store) LatestMessages(ctx context.Context, conversationID int64, limit 
 // MessagesBefore returns up to limit messages before the message with id
 // before, oldest first: scrolling back through a long conversation.
 func (s *Store) MessagesBefore(ctx context.Context, conversationID, before int64, limit int) ([]Message, error) {
-	return s.messages(ctx, `SELECT * FROM (SELECT m.id, m.text, m.created_at, `+prefixed("i", identityCols)+`
+	return s.messages(ctx, `SELECT * FROM (SELECT m.id, m.text, m.created_at, m.deleted_at, m.edited_at, `+prefixed("i", identityCols)+`
 		FROM messages m JOIN identities i ON i.id = m.author_id
 		WHERE m.conversation_id = ? AND m.id < ? ORDER BY m.id DESC LIMIT ?) ORDER BY 1`, conversationID, conversationID, before, limit)
 }
@@ -303,9 +308,9 @@ func (s *Store) messages(ctx context.Context, query string, conversationID int64
 	for rows.Next() {
 		var m Message
 		var created, iCreated int64
-		var deleted sql.NullInt64
+		var deleted, mDeleted, mEdited sql.NullInt64
 		a := &m.Author
-		if err := rows.Scan(&m.ID, &m.Text, &created, &a.ID, &a.Name, &a.Kind, &a.DisplayName, &a.Description,
+		if err := rows.Scan(&m.ID, &m.Text, &created, &mDeleted, &mEdited, &a.ID, &a.Name, &a.Kind, &a.DisplayName, &a.Description,
 			&a.Admin, &a.Enabled, &iCreated, &deleted); err != nil {
 			rows.Close()
 			return nil, err
@@ -314,6 +319,8 @@ func (s *Store) messages(ctx context.Context, query string, conversationID int64
 		m.CreatedAt = time.UnixMilli(created)
 		a.CreatedAt = time.UnixMilli(iCreated)
 		a.DeletedAt = fromMillis(deleted)
+		m.DeletedAt = fromMillis(mDeleted)
+		m.EditedAt = fromMillis(mEdited)
 		index[m.ID] = len(out)
 		out = append(out, m)
 	}
