@@ -39,6 +39,12 @@ token (CAFARD_URL and CAFARD_TOKEN, or ~/.config/cafard, which its setup link wr
         Windows, /dev/ttyUSB0 on Linux, /dev/cu.usbserial-… on macOS. A new
         log each time the device comes back (console-14h02.log); -time
         stamps each line; Ctrl-C stops
+  mouchard channel
+        a Claude Code channel (stdio MCP) that wakes the session when something
+        is addressed to its agent; set up once with
+          claude mcp add --scope user cafard-channel -- mouchard channel
+        and start sessions with
+          claude --dangerously-load-development-channels server:cafard-channel
   mouchard version
         print the build
 
@@ -47,7 +53,7 @@ The conversation is created by the first thing sent to it.
 
 // IsCommand reports whether name is one of the commands Command runs.
 func IsCommand(name string) bool {
-	return name == "say" || name == "send" || name == "log" || name == "run" || name == "serial"
+	return name == "say" || name == "send" || name == "log" || name == "run" || name == "serial" || name == "channel"
 }
 
 // partSize is how much one upload carries before a log goes on in a new
@@ -75,6 +81,8 @@ func Command(name string, args []string, stdin io.Reader, stdout, stderr io.Writ
 		return logCommand(ctx, c, args, stdin, stdout, stderr)
 	case "serial":
 		return serialCommand(ctx, c, args, stdout, stderr)
+	case "channel":
+		return channelCommand(ctx, c, stdin, stdout, stderr)
 	default:
 		return runCommand(c, args, stdout, stderr)
 	}

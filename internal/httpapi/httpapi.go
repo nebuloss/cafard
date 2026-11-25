@@ -81,7 +81,7 @@ func publicMux(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
 	if d.Access != nil && d.Chat != nil {
-		api.New(d.Log, d.Access, d.Chat, d.Hub, d.Admin.PublicURL).Register(mux)
+		api.New(d.Log, d.Access, d.Chat, d.Hub, d.Attention, d.Admin.PublicURL).Register(mux)
 	}
 	if d.Access != nil && d.Chat != nil && d.Attention != nil {
 		agent.New(d.Log, d.Access, d.Chat, d.Attention, d.Admin.PublicURL).Register(mux)

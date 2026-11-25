@@ -183,7 +183,7 @@ func runServer(ctx context.Context, cfg config.Config, log *slog.Logger, ready f
 	if err != nil {
 		return err
 	}
-	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Attention: attention.New(st, acc), Hub: hub, Admin: admin.Config{
+	srv := httpapi.New(httpapi.Deps{Log: log, Store: st, Access: acc, Chat: ch, Attention: attention.New(st, acc, hub), Hub: hub, Admin: admin.Config{
 		Listen: cfg.Listen, AdminListen: cfg.AdminListen, PublicURL: publicURL, StateDir: cfg.StateDir, MaxUpload: api.MaxUpload,
 		PasswordHash: cfg.AdminPasswordHash,
 	}, TrustedProxies: proxies})

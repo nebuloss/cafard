@@ -33,6 +33,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"cafard/internal/live"
 	"cafard/internal/service/access"
 	"cafard/internal/store"
 )
@@ -40,9 +41,14 @@ import (
 type Service struct {
 	st  *store.Store
 	acc *access.Service
+	// hub is where Wait hears that a project changed; nil hears nothing,
+	// and a wait then lasts its whole timeout.
+	hub *live.Hub
 }
 
-func New(st *store.Store, acc *access.Service) *Service { return &Service{st: st, acc: acc} }
+func New(st *store.Store, acc *access.Service, hub *live.Hub) *Service {
+	return &Service{st: st, acc: acc, hub: hub}
+}
 
 // Reason is why a conversation is in the inbox.
 type Reason string
@@ -65,6 +71,9 @@ type Entry struct {
 	// Tokens is about what reading the new messages costs, images fitted
 	// (internal/imagefit) included; logs are read by page and not counted.
 	Tokens int
+	// Latest is the newest unseen message's id: Wait tells by it what
+	// arrived during a call.
+	Latest int64
 }
 
 const (
@@ -103,6 +112,7 @@ func (s *Service) Inbox(ctx context.Context, who access.Who, p store.Project) ([
 			order = append(order, u.ConversationID)
 		}
 		e.New++
+		e.Latest = max(e.Latest, u.ID)
 		e.Files += u.Files - u.Images
 		e.Images += u.Images
 		e.Tokens += perMessage + utf8.RuneCountInString(u.Text)/4 + u.Images*imageTokens

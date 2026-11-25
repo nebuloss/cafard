@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"cafard/internal/blobs"
+	"cafard/internal/live"
 	"cafard/internal/service/access"
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
@@ -39,7 +40,10 @@ func newWorld(t *testing.T) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := &world{st: st, chat: chat.New(st, bl, acc), att: New(st, acc), guillaume: access.Who{Identity: g, Origin: "test"}}
+	hub := live.New()
+	t.Cleanup(hub.Close)
+	st.Announce(hub)
+	w := &world{st: st, chat: chat.New(st, bl, acc), att: New(st, acc, hub), guillaume: access.Who{Identity: g, Origin: "test"}}
 	mk := func(name string, kind store.Kind) access.Who {
 		i, err := acc.CreateIdentity(ctx, access.Admin("test"), access.NewIdentity{Kind: kind, Name: name})
 		if err != nil {

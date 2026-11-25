@@ -18,7 +18,7 @@ members, reads, file deletion, the profile), live notices through
 `internal/live` and `/api/v1/events`, `cafard admin` on the box, the admin
 UI, the chat app at the public listener's root, and the MCP server at `/mcp`
 (`internal/httpapi/agent`: sessions, `select_project`, `inbox`,
-`read_conversation`, `read_file`, `post`, `upload_link`, `members`) with
+`read_conversation`, `read_file`, `post`, `upload_link`, `members`, `wait`) with
 `internal/service/attention` deciding what an agent is offered. Step 6
 (claims, `wait`, `ask`, summaries) is next.
 [`docs/design.md`](docs/design.md)
@@ -120,7 +120,9 @@ Two binaries. `cafard` (`cmd/cafard`, Linux): `serve`,
 devices, projects, tokens; `cafard admin -h`), `passwd`, `version`.
 `mouchard` (`cmd/mouchard`, Linux, macOS and Windows), which sends
 to a cafard from any machine with an agent's or device's token: `say`,
-`send`, `log`, `run`, all in `internal/client` (docs/design.md, "Helpers");
+`send`, `log`, `run`, `serial`, and `channel`, the Claude Code channel that
+wakes an idle session (docs/design.md, "An idle session is woken by a
+channel"), all in `internal/client` (docs/design.md, "Helpers");
 it imports none of the server.
 `backup`, `restore` and `vacuum` come with the steps that need them.
 

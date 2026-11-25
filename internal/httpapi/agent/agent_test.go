@@ -14,9 +14,11 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"cafard/internal/blobs"
 	"cafard/internal/httpapi/httpx"
+	"cafard/internal/live"
 	"cafard/internal/service/access"
 	"cafard/internal/service/attention"
 	"cafard/internal/service/chat"
@@ -77,7 +79,10 @@ func newRig(t *testing.T) *rig {
 	srv := httptest.NewUnstartedServer(mux)
 	srv.Start()
 	t.Cleanup(srv.Close)
-	New(nil, acc, r.chat, attention.New(st, acc), httpx.NewPublicURL(srv.URL)).Register(mux)
+	hub := live.New()
+	t.Cleanup(hub.Close)
+	st.Announce(hub)
+	New(nil, acc, r.chat, attention.New(st, acc, hub), httpx.NewPublicURL(srv.URL)).Register(mux)
 	r.srv = srv
 	return r
 }
@@ -168,7 +173,7 @@ func TestOnlyAgentsConnect(t *testing.T) {
 func TestSelectProjectComesFirst(t *testing.T) {
 	r := newRig(t)
 	c := r.connect(t, r.agent)
-	for _, tool := range []string{"inbox", "members", "read_conversation", "post", "upload_link", "read_file"} {
+	for _, tool := range []string{"inbox", "wait", "members", "read_conversation", "post", "upload_link", "read_file"} {
 		text, isErr, res := c.call(tool, map[string]any{"conversation": "x", "text": "x", "file": 1, "filename": "a"})
 		sc, _ := res["structuredContent"].(map[string]any)
 		if !isErr || sc["error"] != "no_project_selected" || !strings.Contains(text, "select_project") || !strings.Contains(text, "be98, zeeos") {
@@ -320,5 +325,33 @@ func TestPostAndUploadLink(t *testing.T) {
 	}
 	if status, body := put(); status != http.StatusForbidden || !strings.Contains(body, "paused") {
 		t.Errorf("a paused agent's link: %d %s", status, body)
+	}
+}
+
+// wait answers "nothing new" when nothing comes, and wakes on a mention made
+// while it waits, with it in inbox lines.
+func TestWait(t *testing.T) {
+	r := newRig(t)
+	c := r.connect(t, r.agent)
+	c.call("select_project", map[string]any{"project": "be98", "task": "watching"})
+	if text, isErr, _ := c.call("wait", map[string]any{"timeout_s": 1}); isErr || !strings.Contains(text, "Nothing new arrived") {
+		t.Errorf("an idle wait: %v %q", isErr, text)
+	}
+	done := make(chan string, 1)
+	go func() {
+		text, _, _ := c.call("wait", map[string]any{"timeout_s": 20})
+		done <- text
+	}()
+	time.Sleep(300 * time.Millisecond)
+	if _, err := r.chat.SendText(ctx, r.guillaume, "be98", "flash-fail", "@dev-code the flash failed again"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case text := <-done:
+		if !strings.Contains(text, "Arrived while you waited") || !strings.Contains(text, "flash-fail") || !strings.Contains(text, "mentioned by guillaume") {
+			t.Errorf("woken: %q", text)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("wait was not woken by a mention")
 	}
 }

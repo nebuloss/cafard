@@ -101,6 +101,8 @@ var fr = map[string]string{
 	"No such sign-in.": "Cette connexion n'existe pas.",
 	"Only a person signed in to the chat app can sign in another phone.": "Seule une personne connectée au chat peut connecter un autre téléphone.",
 	"Too many attempts. Wait a minute.":                                  "Trop de tentatives. Attendez une minute.",
+	"This server cannot wait.":                                           "Ce serveur ne peut pas attendre.",
+	"No project %q among yours.":                                         "Aucun projet %q parmi les vôtres.",
 	"This server cannot stream events.":                                  "Ce serveur ne peut pas diffuser d'événements.",
 
 	// httpapi/admin/admin.go

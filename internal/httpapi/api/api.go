@@ -16,6 +16,7 @@
 //	DELETE /api/v1/me/signins/{id}
 //	POST   /api/v1/me/phone                             a QR code that signs in another phone
 //	GET    /api/v1/events                               what changed, as server-sent events (live)
+//	GET    /api/v1/wait?project=P&timeout=50            block until something is addressed to you (agents)
 //	PUT    /api/v1/send/{project}/{conversation}/{name} a file; `curl -T`; ?message=ID adds it to your message
 //	POST   /api/v1/send/{project}/{conversation}        text; `curl --data-binary`
 //	GET    /api/v1/projects                             my projects
@@ -52,6 +53,7 @@ import (
 	"cafard/internal/live"
 	"cafard/internal/ratelimit"
 	"cafard/internal/service/access"
+	"cafard/internal/service/attention"
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
 )
@@ -64,17 +66,20 @@ type API struct {
 	acc       *access.Service
 	chat      *chat.Service
 	hub       *live.Hub
+	att       *attention.Service
 	publicURL *httpx.PublicURL
 	limit     *ratelimit.Limiter
 }
 
-// New builds /api/v1. hub is where live notices come from; publicURL is
-// where this listener is reached, for the codes that sign in a phone.
-func New(log *slog.Logger, acc *access.Service, c *chat.Service, hub *live.Hub, publicURL *httpx.PublicURL) *API {
+// New builds /api/v1. hub is where live notices come from; att decides
+// what /api/v1/wait wakes on (nil: the route says it cannot wait);
+// publicURL is where this listener is reached, for the codes that sign in a
+// phone.
+func New(log *slog.Logger, acc *access.Service, c *chat.Service, hub *live.Hub, att *attention.Service, publicURL *httpx.PublicURL) *API {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &API{log: log, acc: acc, chat: c, hub: hub, publicURL: publicURL, limit: ratelimit.New(10, time.Minute)}
+	return &API{log: log, acc: acc, chat: c, hub: hub, att: att, publicURL: publicURL, limit: ratelimit.New(10, time.Minute)}
 }
 
 // Register adds the routes to mux.
@@ -85,6 +90,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/me/signins/{id}", a.auth(a.deleteMySignin))
 	mux.HandleFunc("POST /api/v1/me/phone", a.auth(a.phoneCode))
 	mux.HandleFunc("GET /api/v1/events", a.auth(a.events))
+	mux.HandleFunc("GET /api/v1/wait", a.auth(a.wait))
 	mux.HandleFunc("PUT /api/v1/send/{project}/{conversation}/{name}", a.auth(a.sendFile))
 	// `curl -T - …/wifi-drops/` sends no name: answered by SendFile with how
 	// to give one, rather than by a 404 that says nothing.

@@ -55,6 +55,19 @@ func (a *Agent) tools() []mcp.Tool {
 			Call:        a.inbox,
 		},
 		{
+			Name:  "wait",
+			Title: "Wait for a message",
+			Description: "Block until something addressed to you arrives in the selected project (an @mention, a reply where you posted), " +
+				"or until timeout_s passes (50 at most), and return it as inbox lines. " +
+				"Use it when you are told to keep an eye on cafard, or are waiting for an answer: call it again after each result, " +
+				"reading what it lists with read_conversation, until the user tells you to stop. \"Nothing new\" is a result, not an error.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{
+				"timeout_s":{"type":"integer","minimum":1,"maximum":50,"description":"How long to wait, in seconds; 50 by default."}},
+				"additionalProperties":false}`),
+			ReadOnly: true,
+			Call:     a.wait,
+		},
+		{
 			Name:  "read_conversation",
 			Title: "Read a conversation",
 			Description: "The messages of a conversation you have not read yet, oldest first; older ones a page at a time with `before`. " +
@@ -319,6 +332,38 @@ func (a *Agent) inbox(ctx context.Context, _ json.RawMessage) (any, error) {
 	writeInbox(&b, es)
 	if len(es) > 0 {
 		b.WriteString("\nRead one with read_conversation.")
+	}
+	return b.String(), nil
+}
+
+func (a *Agent) wait(ctx context.Context, raw json.RawMessage) (any, error) {
+	h, err := a.here(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var in struct {
+		TimeoutS int `json:"timeout_s"`
+	}
+	if len(raw) > 0 {
+		if err := args(raw, &in); err != nil {
+			return nil, err
+		}
+	}
+	timeout := time.Duration(in.TimeoutS) * time.Second
+	fresh, waiting, err := a.att.Wait(ctx, h.who, h.project, timeout)
+	if err != nil {
+		return nil, toolError(err)
+	}
+	var b strings.Builder
+	if len(fresh) == 0 {
+		b.WriteString("Nothing new arrived for you. Call wait again to keep listening.\n")
+	} else {
+		b.WriteString("Arrived while you waited:\n")
+		writeInbox(&b, fresh)
+		b.WriteString("Read it with read_conversation, then call wait again to keep listening.\n")
+	}
+	if len(waiting) > 0 {
+		fmt.Fprintf(&b, "\nStill waiting from before: %s (see inbox).\n", count(len(waiting), "conversation"))
 	}
 	return b.String(), nil
 }

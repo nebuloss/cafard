@@ -449,8 +449,29 @@ Every refusal has the same shape — `error`, a one-sentence `message`, `next`:
   context as base64. `upload_link` returns a URL; the agent runs `curl -T`
   with its own shell.
 - **`wait` and `ask` are long polls** bounded below the client's tool
-  timeout, so an agent loops on them. Push into a running session (Claude
-  Code's channels, which are also MCP) is a later step on the same server.
+  timeout (50 s), so an agent loops on them. `wait` returns what arrived
+  during the call, not what was already waiting, so an agent looping on it
+  is not woken again by what it chose to leave; `GET /api/v1/wait` is the
+  same for a client that is not MCP.
+- **An idle session is woken by a channel.** An agent waits only while it
+  is looping; asked nothing, a Claude Code session sits until a person
+  types. Claude Code's channels let an MCP server start a turn, but only a
+  local stdio one (code.claude.com/docs/en/channels-reference, read on
+  25 Nov 2026), so cafard's remote server cannot. `mouchard channel` is
+  that local server: Claude Code starts it, it long-polls `/api/v1/wait`
+  for each of the agent's projects with the machine's token, and each
+  thing addressed to the agent becomes a `notifications/claude/channel`
+  that starts a turn. It has no tools; the session answers through cafard's
+  MCP server. Set up once on the agent's machine:
+
+  ```sh
+  claude mcp add --scope user cafard-channel -- mouchard channel
+  claude --dangerously-load-development-channels server:cafard-channel
+  ```
+
+  The flag is the channels research preview's, for a channel not on
+  Anthropic's allowlist. Every session started so hears every event of its
+  agent until claims give sessions attention of their own.
 - **Every message returned says where it came from** — who, of which kind —
   inside a block the tool descriptions name as untrusted content. A log line
   saying "ignore your instructions" reaches an agent with a shell.

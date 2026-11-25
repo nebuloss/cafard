@@ -15,6 +15,7 @@ import (
 	"cafard/internal/httpapi/join"
 	"cafard/internal/live"
 	"cafard/internal/service/access"
+	"cafard/internal/service/attention"
 	"cafard/internal/service/chat"
 	"cafard/internal/store"
 	"cafard/internal/testenv"
@@ -74,7 +75,7 @@ func newRig(t *testing.T) *rig {
 	r.st, r.acc, r.admin, r.hub = st, acc, admin, live.New()
 	r.guillaume = access.Who{Identity: g, Origin: "test"}
 	st.Announce(r.hub)
-	New(nil, acc, chat.New(st, bl, acc), r.hub, httpx.NewPublicURL("http://cafard.example")).Register(mux)
+	New(nil, acc, chat.New(st, bl, acc), r.hub, attention.New(st, acc, r.hub), httpx.NewPublicURL("http://cafard.example")).Register(mux)
 	join.New(nil, acc, httpx.NewPublicURL("http://cafard.example")).Register(mux)
 	r.srv = httptest.NewServer(mux)
 	t.Cleanup(r.srv.Close)
