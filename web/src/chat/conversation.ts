@@ -69,7 +69,7 @@ export class ConversationView extends Component {
       placeholder: address ? t('Message, or drop a file') : t('Write the first message, or drop a file'),
     });
     this.actions = {
-      back: () => this.app.go('#'),
+      back: () => this.app.back(),
       rename: () => {
         this.renaming = true;
         this.drawHead();
@@ -138,7 +138,7 @@ export class ConversationView extends Component {
     if (this.address) {
       this.thread = await this.app.attempt(() => this.app.store.thread(this.address as Address));
       if (!this.thread) {
-        this.app.go('#');
+        this.app.replace(pathOf({ kind: 'list' }));
         return;
       }
       // Opening it read it: the list's unread count goes.

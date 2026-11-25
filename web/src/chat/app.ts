@@ -95,10 +95,29 @@ export class ChatApp {
     await this.route();
   }
 
-  /** Goes to a path of the app: a new entry in the history, then what it shows. */
+  /**
+   * Goes to a path of the app: a new entry in the history, marked as this
+   * app's, then what it shows.
+   */
   go(path: string): void {
-    if (location.pathname !== path) history.pushState(null, '', path);
+    if (location.pathname !== path) history.pushState({ inApp: true }, '', path);
     void this.route();
+  }
+
+  /** Goes to path in place of where the page is, as for a conversation that is gone. */
+  replace(path: string): void {
+    history.replaceState(null, '', path);
+    void this.route();
+  }
+
+  /**
+   * Back to the conversations, as a phone's own back does: one step back when
+   * the conversation was opened from the list, so going back again does not
+   * open it once more; the list in its place when it was opened from a link.
+   */
+  back(): void {
+    if ((history.state as { inApp?: boolean } | null)?.inApp) history.back();
+    else this.replace(pathOf({ kind: 'list' }));
   }
 
   /** Shows what the path names. */
