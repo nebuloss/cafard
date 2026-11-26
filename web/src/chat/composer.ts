@@ -33,6 +33,11 @@ export interface ComposerOptions {
   /** The members @ can name. */
   members: () => Member[];
   placeholder: string;
+  /**
+   * ↑ in an empty composer, as in Discord: edits the last message of mine.
+   * Says whether there was one.
+   */
+  editLast?: () => boolean;
 }
 
 /**
@@ -172,6 +177,10 @@ export class Composer extends Component {
 
   private onKey(e: KeyboardEvent): void {
     if ((e.target as HTMLElement).tagName !== 'TEXTAREA') return;
+    if (e.key === 'ArrowUp' && !this.mentions.length && this.textarea.value === '' && this.opts.editLast?.()) {
+      e.preventDefault();
+      return;
+    }
     if (this.mentions.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();

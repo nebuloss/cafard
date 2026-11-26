@@ -165,14 +165,13 @@ export class LogViewer extends Component {
 const LB_NAV = 'absolute top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/12 text-white';
 
 /**
- * MessageSheet is what a long press on a message opens (a right click on a
- * desktop): the message, and what can be done with it. Copy for any; Edit
- * and Delete for one's own, each going on in the same sheet, the text to
- * change or the question to confirm. A sheet from the bottom on a phone,
- * where the thumb is; a small dialog on a desktop.
+ * MessageSheet is what a long press on a message opens on a phone, as
+ * Discord's does: the message, then Copy, and Edit and Delete for one's own.
+ * Edit hands back to the conversation, which edits in the bubble; Delete asks
+ * in the sheet. On a desktop the hover toolbar's Delete opens it straight on
+ * that question, as a small dialog.
  */
 export class MessageSheet extends Component {
-  private mode: 'menu' | 'edit' | 'delete' = 'menu';
   private busy = false;
 
   constructor(
@@ -180,78 +179,84 @@ export class MessageSheet extends Component {
     /** The bubble's messages: one, or an album's. */
     private readonly messages: Message[],
     private readonly mine: boolean,
-    /** Called after a change, for the conversation to draw it. */
-    private readonly changed: () => void,
+    private readonly hooks: { changed: () => void; edit: (id: number) => void },
+    private mode: 'menu' | 'delete' = 'menu',
   ) {
     super('div');
     this.actions = {
       close: () => this.app.layer.close(),
       copy: () => void this.copy(),
-      edit: () => this.go('edit'),
-      delete: () => this.go('delete'),
-      back: () => this.go('menu'),
-      save: () => void this.save(),
+      edit: () => {
+        const m = this.one;
+        this.app.layer.close();
+        if (m) this.hooks.edit(m.id);
+      },
+      delete: () => {
+        this.mode = 'delete';
+        this.render();
+      },
+      // Cancel on the question goes back to the menu, or closes when the
+      // hover toolbar opened the question alone.
+      back: () => {
+        if (this.started === 'delete') return this.app.layer.close();
+        this.mode = 'menu';
+        this.render();
+      },
       'delete-yes': () => void this.remove(),
     };
-    this.root.addEventListener('keydown', (e) => {
-      if ((e.target as Element).classList.contains('msg-edit') && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        void this.save();
-      }
-    });
+    this.started = mode;
   }
 
-  /** Opens it the way the screen suits. */
-  static open(app: ChatApp, messages: Message[], mine: boolean, changed: () => void): void {
+  private readonly started: 'menu' | 'delete';
+
+  /** Opens it the way the screen suits: from the bottom on a phone, a dialog on a desktop. */
+  static open(app: ChatApp, messages: Message[], mine: boolean, hooks: { changed: () => void; edit: (id: number) => void }, mode: 'menu' | 'delete' = 'menu'): void {
     const wide = matchMedia('(min-width: 640px)').matches;
-    app.layer.open(new MessageSheet(app, messages, mine, changed), wide ? 'center' : 'bottom', undefined,
+    app.layer.open(new MessageSheet(app, messages, mine, hooks, mode), wide ? 'center' : 'bottom', undefined,
       wide ? 'flex w-full max-w-[440px] flex-col overflow-hidden rounded-md3-xl bg-surface [animation:pop_200ms_cubic-bezier(.2,0,0,1)]'
         : 'flex max-h-[90%] w-full flex-col rounded-t-md3-xl bg-surface pb-[env(safe-area-inset-bottom,0px)]');
+  }
+
+  /** Deletes messages, saying so; how many were deleted. */
+  static async deleteAll(app: ChatApp, messages: Message[]): Promise<number> {
+    let done = 0;
+    for (const m of messages) {
+      const r = await app.attempt(() => app.store.api.delete(`/messages/${m.id}`));
+      if (r === null) break;
+      Object.assign(m, { deleted: true, text: undefined, files: [] });
+      done++;
+    }
+    if (done) Toaster.show(n(done, 'Message deleted.', '{n} messages deleted.'));
+    return done;
   }
 
   private get one(): Message | undefined {
     return this.messages.length === 1 ? this.messages[0] : undefined;
   }
 
-  private go(mode: 'menu' | 'edit' | 'delete'): void {
-    this.mode = mode;
-    this.render();
-  }
-
   protected view(): Html {
     const m = this.messages[0];
     if (!m) return Html.empty;
-    const photos = this.messages.reduce((k, x) => k + (x.files?.length ?? 0), 0);
+    const files = this.messages.reduce((k, x) => k + (x.files?.length ?? 0), 0);
     const preview = this.one?.text
       ? html`<p class="line-clamp-3 text-[14px] whitespace-pre-wrap text-on-surface">${this.one.text}</p>`
-      : html`<p class="text-[14px] text-on-surface-variant">${n(photos, '{n} file', '{n} files')}</p>`;
+      : html`<p class="text-[14px] text-on-surface-variant">${n(files, '{n} file', '{n} files')}</p>`;
     const who = html`<div class="text-xs font-semibold text-on-surface-variant">${m.author.display_name || m.author.name}</div>`;
-    const head = html`<div class="flex items-start gap-3 border-b border-outline-variant/60 px-5 pt-4 pb-3"><div class="flex min-w-0 flex-1 flex-col gap-1">${who}${preview}</div>${closeButton()}</div>`;
-    if (this.mode === 'edit' && this.one) {
-      return html`${head}<div class="flex flex-col gap-3 p-5">
-        <textarea class="msg-edit ${ui.textarea} min-h-32" aria-label="${t('Edit message')}">${this.one.text ?? ''}</textarea>
-        <div class="flex justify-end gap-2"><button class="${ui.btn('text')}" data-act="back">${t('Cancel')}</button><button class="${ui.btn('filled')}" data-act="save" ${Html.raw(this.busy ? 'disabled' : '')}>${t('Save')}</button></div></div>`;
-    }
     if (this.mode === 'delete') {
-      return html`${head}<div class="flex flex-col gap-4 p-5">
-        <p class="text-[15px] font-semibold">${n(this.messages.length, 'Delete this message?', 'Delete these {n} messages?')}</p>
+      // Discord's question: the title, the message as it is, and the button.
+      return html`<div class="flex flex-col gap-3 p-5">
+        <h2 class="text-lg font-semibold">${n(this.messages.length, 'Delete message', 'Delete {n} messages')}</h2>
+        <div class="flex flex-col gap-1 rounded-xl bg-surface-container px-3.5 py-2.5">${who}${preview}</div>
         <div class="flex justify-end gap-2"><button class="${ui.btn('text')}" data-act="back">${t('Cancel')}</button><button class="${ui.btn('danger')}" data-act="delete-yes" ${Html.raw(this.busy ? 'disabled' : '')}>${t('Delete')}</button></div></div>`;
     }
+    const head = html`<div class="flex items-start gap-3 border-b border-outline-variant/60 px-5 pt-4 pb-3"><div class="flex min-w-0 flex-1 flex-col gap-1">${who}${preview}</div>${closeButton()}</div>`;
     const ROW = 'state-layer flex min-h-12 w-full items-center gap-4 px-5 text-left text-[15px] [&_.ic]:size-5 [&_.ic]:text-on-surface-variant';
     const rows: Html[] = [];
+    if (this.mine && this.one && !this.one.deleted && this.one.text !== undefined) rows.push(html`<button class="${ROW}" data-act="edit">${Icon.of('pencil')}${t('Edit')}</button>`);
     if (this.one?.text) rows.push(html`<button class="${ROW}" data-act="copy">${Icon.of('copy')}${t('Copy')}</button>`);
-    if (this.mine && this.one && !this.one.deleted) rows.push(html`<button class="${ROW}" data-act="edit">${Icon.of('pencil')}${t('Edit')}</button>`);
     if (this.mine && this.messages.every((x) => !x.deleted)) rows.push(html`<button class="${ROW} text-error [&_.ic]:!text-error" data-act="delete">${Icon.of('trash')}${t('Delete')}</button>`);
     if (!rows.length) rows.push(html`<p class="px-5 py-3 text-sm text-on-surface-variant">${t('Only your own messages can be changed or deleted')}</p>`);
     return html`${head}<div class="flex flex-col py-2">${rows}</div>`;
-  }
-
-  protected override afterRender(): void {
-    const box = this.find<HTMLTextAreaElement>('.msg-edit');
-    if (box) {
-      box.focus();
-      box.setSelectionRange(box.value.length, box.value.length);
-    }
   }
 
   private async copy(): Promise<void> {
@@ -264,39 +269,14 @@ export class MessageSheet extends Component {
     this.app.layer.close();
   }
 
-  private async save(): Promise<void> {
-    const m = this.one;
-    const box = this.find<HTMLTextAreaElement>('.msg-edit');
-    if (!m || !box || this.busy) return;
-    const text = box.value.trim();
-    if (text === (m.text ?? '').trim()) {
-      this.app.layer.close();
-      return;
-    }
-    this.busy = true;
-    const r = await this.app.attempt(() => this.app.store.api.patch(`/messages/${m.id}`, { text }));
-    this.busy = false;
-    if (r === null) return;
-    Object.assign(m, { text, edited: true });
-    this.app.layer.close();
-    this.changed();
-  }
-
   private async remove(): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     this.render();
-    let done = 0;
-    for (const m of this.messages) {
-      const r = await this.app.attempt(() => this.app.store.api.delete(`/messages/${m.id}`));
-      if (r === null) break;
-      Object.assign(m, { deleted: true, text: undefined, files: [] });
-      done++;
-    }
+    await MessageSheet.deleteAll(this.app, this.messages);
     this.busy = false;
     this.app.layer.close();
-    if (done) Toaster.show(n(done, 'Message deleted.', '{n} messages deleted.'));
-    this.changed();
+    this.hooks.changed();
   }
 }
 

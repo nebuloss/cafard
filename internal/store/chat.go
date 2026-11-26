@@ -126,10 +126,11 @@ func (s *Store) Conversations(ctx context.Context, projectID int64) ([]Conversat
 	// The last message's author, text and files come from correlated
 	// subqueries on messages_by_conversation: a project lists tens of
 	// conversations, not thousands, and one query keeps the list one read.
+	// A deleted message is not the last one: the list shows what is there.
 	rows, err := s.db.QueryContext(ctx, `SELECT `+prefixed("c", conversationCols)+`, COUNT(m.id), MAX(m.created_at),
-		(SELECT i.name FROM messages lm JOIN identities i ON i.id = lm.author_id WHERE lm.conversation_id = c.id ORDER BY lm.id DESC LIMIT 1),
-		(SELECT substr(lm.text, 1, 160) FROM messages lm WHERE lm.conversation_id = c.id ORDER BY lm.id DESC LIMIT 1),
-		(SELECT COUNT(*) FROM files f WHERE f.message_id = (SELECT MAX(lm.id) FROM messages lm WHERE lm.conversation_id = c.id)),
+		(SELECT i.name FROM messages lm JOIN identities i ON i.id = lm.author_id WHERE lm.conversation_id = c.id AND lm.deleted_at IS NULL ORDER BY lm.id DESC LIMIT 1),
+		(SELECT substr(lm.text, 1, 160) FROM messages lm WHERE lm.conversation_id = c.id AND lm.deleted_at IS NULL ORDER BY lm.id DESC LIMIT 1),
+		(SELECT COUNT(*) FROM files f WHERE f.message_id = (SELECT MAX(lm.id) FROM messages lm WHERE lm.conversation_id = c.id AND lm.deleted_at IS NULL)),
 		EXISTS (SELECT 1 FROM files f JOIN messages fm ON fm.id = f.message_id WHERE fm.conversation_id = c.id AND f.state = 'live')
 		FROM conversations c LEFT JOIN messages m ON m.conversation_id = c.id
 		WHERE c.project_id = ? GROUP BY c.id ORDER BY COALESCE(MAX(m.created_at), c.created_at) DESC, c.id DESC`, projectID)

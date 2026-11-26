@@ -58,6 +58,8 @@ export class ConversationView extends Component {
   /** Each bubble's photos, by its first message's id, for the viewer. */
   private readonly photoSets = new Map<number, ReturnType<typeof Albums.photos>>();
   private press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
+  /** The message being edited in its bubble, if any. */
+  private editing: number | null = null;
   /** A long press just selected: the click that ends it opens nothing. */
   private pressed = false;
 
@@ -72,6 +74,7 @@ export class ConversationView extends Component {
       send: (text, files) => this.send(text, files),
       members: () => this.members.filter((m) => m.name !== this.app.store.me?.name),
       placeholder: address ? t('Message, or drop a file') : t('Write the first message, or drop a file'),
+      editLast: () => this.editLast(),
     });
     this.actions = {
       back: () => this.app.back(),
@@ -87,6 +90,17 @@ export class ConversationView extends Component {
         this.drawTimeline(false);
       },
       img: (el) => this.openImage(Number(el.dataset['g']), Number(el.dataset['v'])),
+      // The hover toolbar, as Discord's.
+      'm-copy': (el) => void this.copyText(Number(el.dataset['v'])),
+      'm-edit': (el) => this.startEdit(Number(el.dataset['v'])),
+      'm-delete': (el, e) => {
+        const msgs = this.messagesOf(el.dataset['v'] ?? '');
+        // Shift skips the question, as in Discord.
+        if ((e as MouseEvent).shiftKey) void MessageSheet.deleteAll(this.app, msgs).then(() => this.drawTimeline(false));
+        else MessageSheet.open(this.app, msgs, true, this.sheetHooks(), 'delete');
+      },
+      'edit-save': () => void this.saveEdit(),
+      'edit-cancel': () => this.cancelEdit(),
 
       log: (el) => this.openLog(Number(el.dataset['v'])),
       target: (el) => {
@@ -112,7 +126,7 @@ export class ConversationView extends Component {
       // with the next touch instead, or it would swallow that one.
       this.pressed = false;
       const el = (e.target as Element).closest<HTMLElement>('[data-ids]');
-      if (!el || !e.isPrimary) return;
+      if (!el || !e.isPrimary || this.editing !== null || (e.target as Element).closest('.msg-tools')) return;
       this.cancelPress();
       this.press = { x: e.clientX, y: e.clientY, timer: setTimeout(() => {
         this.press = null;
@@ -130,6 +144,20 @@ export class ConversationView extends Component {
       if (!el) return;
       e.preventDefault();
       this.openSheet(el);
+    });
+    // In the bubble being edited: Enter saves and Escape cancels, as in
+    // Discord; on a phone Enter makes a new line and the button saves.
+    this.root.addEventListener('keydown', (e) => {
+      if (!(e.target as Element).classList.contains('edit-text')) return;
+      const touch = matchMedia('(pointer: coarse)').matches;
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touch) {
+        e.preventDefault();
+        void this.saveEdit();
+      }
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        this.cancelEdit();
+      }
     });
     // The click that ends a long press opens nothing under the finger.
     this.root.addEventListener('click', (e) => {
@@ -270,10 +298,20 @@ export class ConversationView extends Component {
       return;
     }
     const keepFrom = tl.scrollHeight - tl.scrollTop;
+    // A live notice redraws while a message is edited: what was typed stays.
+    const old = this.find<HTMLTextAreaElement>('.edit-text');
+    const draft = old && Number(old.dataset['v']) === this.editing ? old.value : undefined;
     tl.innerHTML = this.timeline(this.thread).value;
     Component.sizeBars(tl);
     if (toEnd) tl.scrollTop = tl.scrollHeight;
     else tl.scrollTop = tl.scrollHeight - keepFrom;
+    const box = this.find<HTMLTextAreaElement>('.edit-text');
+    if (box) {
+      if (draft !== undefined) box.value = draft;
+      box.focus();
+      box.setSelectionRange(box.value.length, box.value.length);
+      box.closest('[data-ids]')?.scrollIntoView({ block: 'nearest' });
+    }
     void this.loadTails();
   }
 
@@ -282,11 +320,14 @@ export class ConversationView extends Component {
     const text = new MessageText(new Set(this.members.map((m) => m.name)));
     const parts: Html[] = [];
     if (th.hasEarlier) parts.push(html`<button class="${ui.btn('tonal')} mt-1 mb-3 self-center" data-act="earlier">${t('Earlier messages')}</button>`);
-    if (!th.messages.length) parts.push(html`<div class="${look.empty}"><h2>${t('Nothing here yet')}</h2></div>`);
-    const myLast = [...th.messages].reverse().find((m) => m.author.name === me);
+    // A deleted message goes from the timeline, as in Discord; agents are
+    // still told that it was there (agent.writeMessage).
+    const shown = th.messages.filter((m) => !m.deleted);
+    if (!shown.length) parts.push(html`<div class="${look.empty}"><h2>${t('Nothing here yet')}</h2></div>`);
+    const myLast = [...shown].reverse().find((m) => m.author.name === me);
     this.photoSets.clear();
     let prev: Message | undefined;
-    for (const item of Albums.group(th.messages)) {
+    for (const item of Albums.group(shown)) {
       const m = item.messages[0] as Message;
       const newDay = !prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString();
       if (newDay) parts.push(html`<div class="my-2.5 self-center rounded-full bg-surface-container px-3 py-[3px] text-xs text-on-surface-variant">${dayLabel(m.at)}</div>`);
@@ -320,14 +361,16 @@ export class ConversationView extends Component {
     const edited = item.messages.length === 1 && m.edited ? html`<span>${t('edited')}</span> · ` : '';
     const timeOnly = html`<span class="self-end text-[11px] ${mine ? 'opacity-70' : 'text-on-surface-variant'}">${edited}${hhmm(last.at)}</span>`;
     let body: Html;
-    if (m.deleted) {
-      body = html`<div class="text-[14px] italic opacity-70">${t('Message deleted')}</div>`;
+    if (this.editing === m.id) {
+      body = html`<textarea data-v="${String(m.id)}" class="edit-text min-h-16 w-[min(480px,72vw)] resize-y rounded-lg border border-outline bg-surface-lowest px-2.5 py-2 text-[14.5px] text-on-surface outline-none focus:border-primary" aria-label="${t('Edit message')}">${m.text ?? ''}</textarea>
+        <div class="flex items-center justify-end gap-2 text-xs"><span class="mr-auto opacity-70 pointer-coarse:hidden">${t('Escape to cancel · Enter to save')}</span><button class="${ui.btn('text', 'sm')}" data-act="edit-cancel">${t('Cancel')}</button><button class="${ui.btn('filled', 'sm')}" data-act="edit-save">${t('Save')}</button></div>`;
     } else {
       body = html`${m.text ? html`<div class="${TEXT} ${mine ? TEXT_MINE : TEXT_THEIRS}">${text.render(m.text)}</div>` : ''}${imgs}${others}`;
     }
     // On a touch screen a press is the bubble's, not the browser's text
     // selection: copying is in MessageSheet.
-    return html`<div class="flex max-w-full items-end gap-2 ${mine ? 'justify-end' : ''} ${spaced ? 'mt-2.5' : ''}" data-ids="${item.messages.map((x) => x.id).join(',')}" data-mine="${String(mine)}">${avatar}<div class="relative flex max-w-[min(560px,84%)] min-w-0 flex-col gap-1.5 rounded-2xl border px-3 py-2 pointer-coarse:select-none [-webkit-touch-callout:none] ${bubble}">${meta}${body}${!first || mine ? timeOnly : ''}</div></div>`;
+    const tools = this.tools(item, mine);
+    return html`<div class="group flex max-w-full items-end gap-2 ${mine ? 'justify-end' : ''} ${spaced ? 'mt-2.5' : ''}" data-ids="${item.messages.map((x) => x.id).join(',')}" data-mine="${String(mine)}">${avatar}<div class="relative flex max-w-[min(560px,84%)] min-w-0 flex-col gap-1.5 rounded-2xl border px-3 py-2 pointer-coarse:select-none [-webkit-touch-callout:none] ${bubble}">${tools}${meta}${body}${!first || mine ? timeOnly : ''}</div></div>`;
   }
 
   /**
@@ -347,11 +390,83 @@ export class ConversationView extends Component {
     })}</div>`;
   }
 
+  /**
+   * The toolbar a mouse finds over a message, as in Discord: Copy, and Edit
+   * and Delete on one's own. Not on a touch screen, where a long press opens
+   * the same as a sheet.
+   */
+  private tools(item: Item, mine: boolean): Html {
+    const m = item.messages[0] as Message;
+    if (m.deleted || this.editing === m.id) return Html.empty;
+    const one = item.messages.length === 1 ? m : undefined;
+    const BTN = 'state-layer grid size-8 place-items-center rounded-md text-on-surface-variant [&_.ic]:size-[18px]';
+    const ids = item.messages.map((x) => x.id).join(',');
+    const buttons = [
+      one?.text ? html`<button class="${BTN}" data-act="m-copy" data-v="${String(m.id)}" title="${t('Copy')}" aria-label="${t('Copy')}">${Icon.of('copy')}</button>` : '',
+      mine && one && one.text !== undefined ? html`<button class="${BTN}" data-act="m-edit" data-v="${String(m.id)}" title="${t('Edit')}" aria-label="${t('Edit')}">${Icon.of('pencil')}</button>` : '',
+      mine ? html`<button class="${BTN} [&_.ic]:text-error" data-act="m-delete" data-v="${ids}" title="${t('Delete')}" aria-label="${t('Delete')}">${Icon.of('trash')}</button>` : '',
+    ];
+    if (!buttons.some(Boolean)) return Html.empty;
+    return html`<div class="msg-tools absolute right-2 bottom-full -mb-2 z-[2] hidden items-center gap-0.5 rounded-lg border border-outline-variant bg-surface p-0.5 elevation-1 group-hover:flex pointer-coarse:!hidden">${buttons}</div>`;
+  }
+
+  private messagesOf(ids: string): Message[] {
+    const set = new Set(ids.split(',').map(Number));
+    return (this.thread?.messages ?? []).filter((m) => set.has(m.id));
+  }
+
+  private sheetHooks(): { changed: () => void; edit: (id: number) => void } {
+    return { changed: () => this.drawTimeline(false), edit: (id) => this.startEdit(id) };
+  }
+
+  private startEdit(id: number): void {
+    this.editing = id;
+    this.drawTimeline(false);
+  }
+
+  private cancelEdit(): void {
+    this.editing = null;
+    this.drawTimeline(false);
+    this.composer.focus();
+  }
+
+  /** ↑ in an empty composer: the last message of mine that has text. */
+  private editLast(): boolean {
+    const me = this.app.store.me?.name;
+    const last = [...(this.thread?.messages ?? [])].reverse().find((m) => m.author.name === me && !m.deleted && m.text);
+    if (!last) return false;
+    this.startEdit(last.id);
+    return true;
+  }
+
+  private async saveEdit(): Promise<void> {
+    const id = this.editing;
+    const box = this.find<HTMLTextAreaElement>('.edit-text');
+    if (id === null || !box) return;
+    const text = box.value.trim();
+    const m = this.thread?.messages.find((x) => x.id === id);
+    if (m && text === (m.text ?? '').trim()) return this.cancelEdit();
+    const r = await this.app.attempt(() => this.app.store.api.patch(`/messages/${id}`, { text }));
+    if (r === null) return;
+    if (m) Object.assign(m, { text, edited: true });
+    this.cancelEdit();
+  }
+
+  private async copyText(id: number): Promise<void> {
+    const text = this.thread?.messages.find((m) => m.id === id)?.text ?? '';
+    try {
+      await navigator.clipboard.writeText(text);
+      Toaster.show(t('Copied.'));
+    } catch {
+      Toaster.show(t('Select the text to copy it.'));
+    }
+  }
+
   /** Opens what can be done with a bubble's messages. */
   private openSheet(el: HTMLElement): void {
     const ids = new Set((el.dataset['ids'] ?? '').split(',').map(Number));
     const messages = (this.thread?.messages ?? []).filter((m) => ids.has(m.id));
-    if (messages.length) MessageSheet.open(this.app, messages, el.dataset['mine'] === 'true', () => this.drawTimeline(false));
+    if (messages.length) MessageSheet.open(this.app, messages, el.dataset['mine'] === 'true', this.sheetHooks());
   }
 
   private cancelPress(): void {
